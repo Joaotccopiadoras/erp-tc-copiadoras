@@ -1,8 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import PortalPage from "./pages/PortalPage";
-import FinanceiroPage from "./pages/FinanceiroPage";
-import AgendaPage from "./pages/AgendaPage"
-// Importar as outras páginas conforme for criando:
+//import FinanceiroPage from "./pages/FinanceiroPage";
+//import AgendaPage from "./pages/AgendaPage"
 
 export default function App() {
   return (
