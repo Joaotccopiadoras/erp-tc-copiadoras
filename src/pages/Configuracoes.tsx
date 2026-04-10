@@ -4,26 +4,52 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, UserPlus, Trash2 } from "lucide-react";
+import { Shield, UserPlus, Trash2, Lock, ShieldAlert } from "lucide-react";
 
 type Permissao = {
   id: string;
   email: string;
   acesso_financeiro: boolean;
+  is_admin: boolean;
 };
 
 export default function ConfiguracoesPage() {
   const [permissoes, setPermissoes] = useState<Permissao[]>([]);
   const [novoEmail, setNovoEmail] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState<boolean | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    carregarPermissoes();
+    verificarAcessoAdmin();
   }, []);
 
+    const verificarAcessoAdmin = async () => {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user?.email) {
+        setIsCurrentUserAdmin(false);
+        setLoading(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("permissoes")
+        .select("is_admin")
+        .eq("email", user.email)
+        .single();
+
+      if (data?.is_admin) {
+        setIsCurrentUserAdmin(true);
+        carregarPermissoes();
+      } else {
+        setIsCurrentUserAdmin(false);
+        setLoading(false);
+      };
+    }
+
   const carregarPermissoes = async () => {
-    setLoading(true);
     const { data, error } = await supabase.from("permissoes").select("*").order("criado_em", { ascending: true });
     if (!error && data) {
       setPermissoes(data);
@@ -35,7 +61,11 @@ export default function ConfiguracoesPage() {
     e.preventDefault();
     if (!novoEmail.includes("@")) return;
 
-    const { error } = await supabase.from("permissoes").insert([{ email: novoEmail.toLowerCase(), acesso_financeiro: false }]);
+    const { error } = await supabase.from("permissoes").insert([{
+      email: novoEmail.toLowerCase(),
+      acesso_financeiro: false,
+      is_admin: false
+    }]);
     
     if (error) {
       toast({ title: "Erro", description: "Este e-mail já está cadastrado ou houve uma falha.", variant: "destructive" });
@@ -46,12 +76,14 @@ export default function ConfiguracoesPage() {
     }
   };
 
-  const alternarAcessoFinanceiro = async (id: string, valorAtual: boolean) => {
-    const { error } = await supabase.from("permissoes").update({ acesso_financeiro: !valorAtual }).eq("id", id);
-    if (!error) {
-      carregarPermissoes(); // Recarrega a lista para mostrar o botão atualizado
-    }
-  };
+  const alternarPermissao = async (
+    id: string,
+    campo: 'acesso_financeiro' | 'is_admin',
+    valorAtual: boolean) => {
+    const { error } = await supabase.from("permissoes").update({ [campo]: !valorAtual }).eq("id", id);
+    if (!error)
+      carregarPermissoes();
+    };
 
   const removerUsuario = async (id: string) => {
     const { error } = await supabase.from("permissoes").delete().eq("id", id);
@@ -61,15 +93,33 @@ export default function ConfiguracoesPage() {
     }
   };
 
+  //tela de espera
+  if (isCurrentUserAdmin === false) {
+    return (
+    <AppLayout>
+        <div className="flex flex-col justify-center items-center h-[70vh] max-w-md mx-auto text-center space-y-4">
+          <div className="bg-red-50 p-4 rounded-full">
+            <ShieldAlert className="w-16 h-16 text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Acesso Restrito</h1>
+          <p className="text-slate-600">
+            Você não tem permissão de Administrador para visualizar ou alterar as configurações do sistema.
+          </p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+//tela liberada p/ mim e outros admin
   return (
     <AppLayout>
       <div className="space-y-6 max-w-4xl mx-auto">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Shield className="w-6 h-6 text-primary" />
-            Controle de Acessos
+            <Lock className="w-6 h-6 text-primary" />
+            Central de Segurança
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Gerencie quais usuários podem acessar cada módulo do ERP.</p>
+          <p className="text-sm text-slate-500 mt-1">Gerenciamento de usuários, administradores e permissões de módulos.</p>
         </div>
 
         {/* Formulário para adicionar novo e-mail */}
@@ -78,7 +128,7 @@ export default function ConfiguracoesPage() {
           <form onSubmit={adicionarUsuario} className="flex gap-3">
             <Input 
               type="email" 
-              placeholder="Ex: joao@tccopiadoras.com.br" 
+              placeholder="Ex: financeiro@tccopiadoras.com.br" 
               value={novoEmail}
               onChange={(e) => setNovoEmail(e.target.value)}
               className="max-w-md"
@@ -97,7 +147,8 @@ export default function ConfiguracoesPage() {
               <tr>
                 <th className="px-6 py-4 font-medium">E-mail do Usuário</th>
                 <th className="px-6 py-4 font-medium text-center">Acesso Financeiro</th>
-                <th className="px-6 py-4 font-medium text-right">Ações</th>
+                <th className="px-6 py-4 font-medium text-center border-l border-slate-200">É Administrador?</th>
+                <th className="px-6 py-4 font-medium text-right border-l border-slate-200">Remover</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -111,7 +162,7 @@ export default function ConfiguracoesPage() {
                     <td className="px-6 py-4 text-slate-800 font-medium">{p.email}</td>
                     <td className="px-6 py-4 text-center">
                       <button 
-                        onClick={() => alternarAcessoFinanceiro(p.id, p.acesso_financeiro)}
+                        onClick={() => alternarPermissao(p.id, 'acesso_financeiro', p.acesso_financeiro)}
                         className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                           p.acesso_financeiro 
                             ? "bg-green-100 text-green-700 hover:bg-green-200" 
@@ -121,8 +172,20 @@ export default function ConfiguracoesPage() {
                         {p.acesso_financeiro ? "LIBERADO" : "BLOQUEADO"}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => removerUsuario(p.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                    <td className="px-8 py-4 text-center border-l border-slate-100">
+                      <button
+                        onClick={() => alternarPermissao(p.id, 'is_admin', p.is_admin)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            p.is_admin ? "bg-primary/20 text-primary hover:bg-primary/30" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                          }`}
+                        >
+                          {p.is_admin ? "ADMINISTRADOR" : "USUÁRIO COMUM"}
+                        </button>
+                    </td>
+                    <td className="px-6 py-4 text-right border-l border-slate-100">
+                      <Button variant="ghost" size="icon" 
+                        onClick={() => removerUsuario(p.id)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </td>
