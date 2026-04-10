@@ -1,5 +1,5 @@
 import { Wrench, DollarSign, CalendarDays, LayoutDashboard } from "lucide-react";
-import { Link } from "react-router-dom"; // Importando o Link mágico do React Router
+import { Link } from "react-router-dom";
 
 export default function PortalPage() {
   const sistemas = [
