@@ -326,8 +326,8 @@ const FinanceiroPage = () => {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
+      <div className="p-8 bg-slate-50 min-h-screen w-full">
+        <div className="space-y-6"></div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Dashboard Financeiro</h1>
@@ -491,7 +491,6 @@ const FinanceiroPage = () => {
           </div>
         )}
       </div>
-    </AppLayout>
   );
 };
 
