@@ -5,6 +5,7 @@ import { supabase } from "./integrations/supabase/client"
 import PortalPage from "./pages/PortalPage";
 import Financeiro from "./pages/Financeiro";
 import Login from "./pages/Login";
+import Configuracoes from "./pages/Configuracoes"
 //import AgendaPage from "./pages/AgendaPage"
 //import TecnicaPage from "./pages/TecnicaPage"
 
@@ -62,6 +63,7 @@ export default function App() {
           {/* A Rota do inicio */}
           <Route path="/login" element={<Login />} />
           <Route path="/interno" element={<RotaProtegida><PortalPage /></RotaProtegida>} />
+          <Route path="/configuracoes" element={<RotaProtegida><Configuracoes /></RotaProtegida>} />
 
           {/* As Rotas dos Módulos*/}
           <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />

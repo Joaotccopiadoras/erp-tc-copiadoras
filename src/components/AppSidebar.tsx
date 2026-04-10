@@ -67,17 +67,8 @@ const AppSidebar = () => {
         })}
       </nav>
 
-      {/* RODAPÉ COM CONFIGURAÇÕES E voltar */}
+      {/* RODAPÉ COM Cvoltar */}
       <div className="p-3 border-t border-sidebar-border flex flex-col gap-1">
-        <button
-          onClick={() => navigate("/settings")}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-primary-foreground transition-all"
-        >
-          <Settings className="w-4 h-4" />
-          Configurações
-        </button>
-        
-        {/* NOVO BOTÃO DE voltar */}
         <button
           onClick={handleVoltar}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 hover:text-destructive transition-all font-medium mt-1"

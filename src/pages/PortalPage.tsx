@@ -1,4 +1,4 @@
-import { Wrench, DollarSign, CalendarDays, LayoutDashboard, LogOut } from "lucide-react";
+import { Wrench, DollarSign, CalendarDays, LayoutDashboard, LogOut, Settings } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client"
 
@@ -76,6 +76,13 @@ export default function PortalPage() {
       <div className="mt-auto pt-16 text-sm text-slate-400 font-medium">
         &copy; {new Date().getFullYear()} TC Copiadoras. ERP Interno - v1.0
       </div>
+
+      <button
+        onClick={() => navigate("/configuracoes")}
+        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-primary-foreground transition-all">
+        <Settings className="w-4 h-4" />
+        Configurações
+      </button>
 
       <button 
         onClick={handleLogout}
