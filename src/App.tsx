@@ -7,7 +7,7 @@ import Financeiro from "./pages/Financeiro";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes"
 import Agenda from "./pages/Agenda"
-//import TecnicaPage from "./pages/TecnicaPage"
+import Tecnica from "./pages/Tecnica"
 
 const queryClient = new QueryClient();
 export default function App() {
@@ -68,6 +68,7 @@ export default function App() {
           {/* As Rotas dos Módulos*/}
           <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
           <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
+          <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route
