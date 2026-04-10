@@ -8,7 +8,7 @@ export default function PortalPage() {
       nome: "Assistência Técnica",
       descricao: "Painel de produtividade e controle de atendimentos técnicos.",
       icone: <Wrench className="h-10 w-10 text-blue-600" />,
-      // Rota interna do nosso ERP unificado
+      // Rota interna unificado
       link: "/tecnica",
       corBorda: "border-blue-200 hover:border-blue-500",
       corFundo: "hover:bg-blue-50",
@@ -16,9 +16,8 @@ export default function PortalPage() {
     {
       id: 2,
       nome: "Financeiro",
-      descricao: "Acompanhamento de faturamento, contratos e saúde financeira.",
+      descricao: "Acompanhamento de faturamento, centros de custo e saúde financeira para planilha de custos.",
       icone: <DollarSign className="h-10 w-10 text-emerald-600" />,
-      // Rota interna do nosso ERP unificado
       link: "/financeiro",
       corBorda: "border-emerald-200 hover:border-emerald-500",
       corFundo: "hover:bg-emerald-50",
@@ -28,7 +27,6 @@ export default function PortalPage() {
       nome: "Agendas Administrativas",
       descricao: "Gestão de projetos, processos e programação de equipes.",
       icone: <CalendarDays className="h-10 w-10 text-red-600" />,
-      // Rota interna do nosso ERP unificado
       link: "/agenda",
       corBorda: "border-red-200 hover:border-red-500",
       corFundo: "hover:bg-red-50",
@@ -38,20 +36,20 @@ export default function PortalPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center py-16 px-4 font-sans">
       
-      {/* CABEÇALHO DO PORTAL */}
+      {/* Cabeçalho*/}
       <div className="text-center mb-16">
         <div className="bg-white p-4 rounded-2xl inline-block shadow-sm mb-6 border border-slate-100">
-          <LayoutDashboard className="h-12 w-12 text-slate-800" />
+          <img src="/logo.png" alt="TC Copiadoras" className="h-16 w-auto object-contain" />
         </div>
         <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">
-          Portal TC Copiadoras
+          ERP TC Copiadoras
         </h1>
         <p className="text-slate-500 text-lg max-w-lg mx-auto">
-          Central de acessos rápidos do ERP. Selecione abaixo o módulo que deseja acessar.
+          Central de Módulos. Selecione abaixo o módulo que deseja acessar.
         </p>
       </div>
 
-      {/* GRID DE MÓDULOS */}
+      {/* Grid módulos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full">
         {sistemas.map((sistema) => (
           <Link
@@ -68,7 +66,7 @@ export default function PortalPage() {
         ))}
       </div>
 
-      {/* RODAPÉ */}
+      {/* Rodapé */}
       <div className="mt-auto pt-16 text-sm text-slate-400 font-medium">
         &copy; {new Date().getFullYear()} TC Copiadoras. ERP Interno - v1.0
       </div>
