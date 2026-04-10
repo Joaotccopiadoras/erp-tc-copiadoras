@@ -131,7 +131,7 @@ const getDimensionValue = (row: Record<string, unknown>, dimension: AnalysisDime
   return val && String(val).trim() !== "" ? String(val) : "Não Informado / Outros";
 };
 
-const FinanceiroPage = () => {
+const Financeiro = () => {
   console.log("A PÁGINA DO FINANCEIRO TENTOU RENDERIZAR")
   const { data, isLoading } = useCsvData();
   const [regimeFilter, setRegimeFilter] = useState<RegimeFilter>("caixa");
@@ -495,4 +495,4 @@ const FinanceiroPage = () => {
   );
 };
 
-export default FinanceiroPage;
+export default Financeiro;
