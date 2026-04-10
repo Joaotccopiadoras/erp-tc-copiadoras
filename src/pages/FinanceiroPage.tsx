@@ -132,6 +132,7 @@ const getDimensionValue = (row: Record<string, unknown>, dimension: AnalysisDime
 };
 
 const FinanceiroPage = () => {
+  console.log("A PÁGINA DO FINANCEIRO TENTOU RENDERIZAR")
   const { data, isLoading } = useCsvData();
   const [regimeFilter, setRegimeFilter] = useState<RegimeFilter>("caixa");
   const [typeFilter, setTypeFilter] = useState<TransactionFilter>("all");
