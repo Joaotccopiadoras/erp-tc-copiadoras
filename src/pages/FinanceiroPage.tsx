@@ -327,7 +327,7 @@ const FinanceiroPage = () => {
   };
 
   return (
-      <div className="p-8 bg-slate-50 min-h-screen w-full">
+      <AppLayout>
         <div className="space-y-6"></div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -491,7 +491,7 @@ const FinanceiroPage = () => {
             </div>
           </div>
         )}
-      </div>
+    </AppLayout>
   );
 };
 
