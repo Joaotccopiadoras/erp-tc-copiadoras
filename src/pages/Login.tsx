@@ -31,7 +31,7 @@ const Login = () => {
           title: "Bem-vindo de volta!",
           description: "Login realizado com sucesso.",
         });
-        navigate("/"); // Redireciona para o Dashboard financeiro
+        navigate("/interno");
       }
     } catch (error: any) {
       toast({
