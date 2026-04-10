@@ -1,27 +1,28 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
 import PortalPage from "./pages/PortalPage";
 import FinanceiroPage from "./pages/FinanceiroPage";
-import AgendaPage from "./pages/AgendaPage";
-import TecnicaPage from "./pages/TecnicaPage";
+import AgendaPage from "./pages/AgendaPage"
+// Importar as outras páginas conforme for criando:
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rota raiz: Futuramente será o seu Site. Por enquanto, joga pro Login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* Joga direto pro Portal */}
+        <Route path="/" element={<Navigate to="/interno" replace />} />
         
-        {/* O Login Único */}
-        <Route path="/login" element={<LoginPage />} />
-
-        {/* O Portal Interno (após logar) */}
+        {/* A Rota do Portal */}
         <Route path="/interno" element={<PortalPage />} />
 
-        {/* Os Módulos do ERP */}
-        <Route path="/financeiro" element={<FinanceiroPage />} />
-        <Route path="/agenda" element={<AgendaPage />} />
-        <Route path="/tecnica" element={<TecnicaPage />} />
+        {/* As Rotas dos Módulos*/}
+        {/* <Route path="/financeiro" element={<FinanceiroPage />} /> */}
+        {/* <Route path="/agenda" element={<AgendaPage />} /> */}
+        
+        <Route path="*" element={
+          <div className="flex h-screen items-center justify-center text-2xl font-bold text-gray-600">
+            Página não encontrada.
+          </div>
+        } />
       </Routes>
     </BrowserRouter>
   );
