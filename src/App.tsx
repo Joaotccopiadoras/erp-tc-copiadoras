@@ -6,7 +6,7 @@ import PortalPage from "./pages/PortalPage";
 import Financeiro from "./pages/Financeiro";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes"
-//import AgendaPage from "./pages/AgendaPage"
+import Agenda from "./pages/Agenda"
 //import TecnicaPage from "./pages/TecnicaPage"
 
 const queryClient = new QueryClient();
@@ -67,7 +67,7 @@ export default function App() {
 
           {/* As Rotas dos Módulos*/}
           <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
-          {/* <Route path="/agenda" element={<AgendaPage />} /> */}
+          <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route
