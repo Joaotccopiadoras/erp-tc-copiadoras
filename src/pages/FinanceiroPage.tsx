@@ -131,7 +131,7 @@ const getDimensionValue = (row: Record<string, unknown>, dimension: AnalysisDime
   return val && String(val).trim() !== "" ? String(val) : "Não Informado / Outros";
 };
 
-const Dashboard = () => {
+const FinanceiroPage = () => {
   const { data, isLoading } = useCsvData();
   const [regimeFilter, setRegimeFilter] = useState<RegimeFilter>("caixa");
   const [typeFilter, setTypeFilter] = useState<TransactionFilter>("all");
@@ -495,4 +495,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default FinanceiroPage;
