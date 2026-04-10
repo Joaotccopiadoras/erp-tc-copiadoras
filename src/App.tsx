@@ -60,6 +60,7 @@ export default function App() {
             } />
           
           {/* A Rota do inicio */}
+          <Route path="/login" element={<Login />} />
           <Route path="/interno" element={<RotaProtegida><PortalPage /></RotaProtegida>} />
 
           {/* As Rotas dos Módulos*/}
