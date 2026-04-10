@@ -62,7 +62,7 @@ const Login = () => {
             }}
           />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">TC Copiadoras</h1>
-          <p className="text-sm text-muted-foreground mt-1">Acesso ao Painel Financeiro</p>
+          <p className="text-sm text-muted-foreground mt-1">Acesso ao ERP interno</p>
         </div>
 
         {/* Formulário */}

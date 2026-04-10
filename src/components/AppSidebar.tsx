@@ -3,7 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft } from "lucide-react";
 
+const navigate = useNavigate();
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Upload, label: "Upload CSV", path: "/upload" },
@@ -14,29 +16,9 @@ const AppSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  // Função que encerra a sessão
-  const handleLogout = async () => {
-    try {
-      // Pede ao Supabase para invalidar o acesso
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      toast({
-        title: "Sessão encerrada",
-        description: "Você saiu do sistema com segurança.",
-      });
-      
-      // Obs: Não precisamos dar um navigate("/login") aqui, porque o nosso 
-      // arquivo App.tsx vai notar que a sessão caiu e fará isso sozinho!
-    } catch (error: any) {
-      toast({
-        title: "Erro ao sair",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
+  const handleVoltar = () => {
+    navigate("/interno");
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar-bg border-r border-sidebar-border flex flex-col z-50">
@@ -86,7 +68,7 @@ const AppSidebar = () => {
         })}
       </nav>
 
-      {/* RODAPÉ COM CONFIGURAÇÕES E SAIR */}
+      {/* RODAPÉ COM CONFIGURAÇÕES E voltar */}
       <div className="p-3 border-t border-sidebar-border flex flex-col gap-1">
         <button
           onClick={() => navigate("/settings")}
@@ -96,13 +78,13 @@ const AppSidebar = () => {
           Configurações
         </button>
         
-        {/* NOVO BOTÃO DE LOGOUT */}
+        {/* NOVO BOTÃO DE voltar */}
         <button
-          onClick={handleLogout}
+          onClick={handleVoltar}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 hover:text-destructive transition-all font-medium mt-1"
         >
           <LogOut className="w-4 h-4" />
-          Sair do Sistema
+          Voltar ao Início
         </button>
       </div>
     </aside>
