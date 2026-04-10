@@ -1,4 +1,4 @@
-import { Printer, Upload, LayoutDashboard, Settings, Database, LogOut } from "lucide-react";
+import { Printer, Upload, Banknote, Settings, Database, LogOut, Calendar } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,9 +6,10 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: Banknote, label: "Financeiro", path: "/financeiro" },
   { icon: Upload, label: "Upload CSV", path: "/upload" },
   { icon: Database, label: "Registros", path: "/records" },
+  { icon: Calendar, label: "Agenda", path: "/agenda"}
 ];
 
 const AppSidebar = () => {
