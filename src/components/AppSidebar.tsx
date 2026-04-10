@@ -67,7 +67,7 @@ const AppSidebar = () => {
         })}
       </nav>
 
-      {/* RODAPÉ COM Cvoltar */}
+      {/* RODAPÉ voltar */}
       <div className="p-3 border-t border-sidebar-border flex flex-col gap-1">
         <button
           onClick={handleVoltar}

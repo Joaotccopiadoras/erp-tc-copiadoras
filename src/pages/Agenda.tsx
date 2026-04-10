@@ -129,6 +129,10 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
+  const handleVoltar = () => {
+    navigate("/interno")
+  }
+
   const excluirRegistro = async (id: number) => {
     const confirmar = window.confirm("Tem certeza que deseja excluir este registro definitivamente?");
     if (!confirmar) return;
@@ -386,8 +390,10 @@ const formatarData = (dataStr: string) => {
           )}
           
           {/* BOTÃO DE SAIR */}
-          <Button variant="outline" onClick={HandleSair} className="text-red-600 hover:bg-red-50 border-red-200">
-            <LogOut className="h-4 w-4 mr-2" /> Sair
+          <Button
+            onClick={handleVoltar}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 hover:text-destructive transition-all font-medium mt-1"
+        >
           </Button>
         </div>
       </div>
