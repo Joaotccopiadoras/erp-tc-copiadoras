@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, FileText, Plus, Download, GitMerge } from "lucide-react";
+import { BookOpen, FileText, Plus, Download, GitMerge, LucideGanttChartSquare } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -76,7 +76,7 @@ export default function Processos() {
     const inicioTextoY = 55; 
     let yAtual = inicioTextoY;
     const adicionarSecao = (tituloSecao: string, conteudo: string, numerado = false) => {
-      if (yAtual > 260) {
+      if (yAtual > 265) {
         doc.addPage();
         yAtual = inicioTextoY;
       }
@@ -94,11 +94,17 @@ export default function Processos() {
       const margemTexto = numerado ? margem + 5 : margem;
       const larguraTexto = numerado ? 175 : 180;
       const offsetMesmaLinha = numerado ? 0 : doc.getTextWidth(tituloSecao) + 2;
-
-      const textoFormatado = doc.splitTextToSize(conteudo || "Não preenchido.", larguraTexto - offsetMesmaLinha);
-      doc.text(textoFormatado, margemTexto + offsetMesmaLinha, yAtual);
-      yAtual += (textoFormatado.length * 5) + 4;
-    };
+      const linhas = doc.splitTextToSize(conteudo || "Não preenchido.", larguraTexto - offsetMesmaLinha);
+      for (let i = 0; i < LucideGanttChartSquare.length; i++) {
+        if (yAtual > 275) {
+          doc.addPage();
+          yAtual = inicioTextoY;
+      }
+      doc.text(linhas[i], margemTexto + offsetMesmaLinha, yAtual);
+      yAtual += 5;
+      };
+    yAtual += 3;
+    }
 
     adicionarSecao("Propósito:", proposito);
     adicionarSecao("Escopo:", escopo);
@@ -153,7 +159,7 @@ export default function Processos() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.5);
       doc.text("PROCEDIMENTO OPERACIONAL PADRÃO-POP", margem + 70, yTop + 6, { align: "center" });
-      
+
       doc.setFontSize(10);
       const tituloQuebrado = doc.splitTextToSize(titulo.toUpperCase(), 65);
       doc.text(tituloQuebrado, margem + 70, yTop + 14, { align: "center" });
