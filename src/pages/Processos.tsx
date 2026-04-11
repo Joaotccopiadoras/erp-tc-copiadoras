@@ -162,13 +162,13 @@ export default function Processos() {
       yAtual += 4;
     };
 
-    adicionarSecao("Propósito:", proposito);
-    adicionarSecao("Escopo:", escopo);
-    adicionarSecao("1. Objetivo:", objetivo, true);
-    adicionarSecao("2. Funções e Responsabilidades:", funcoes, true);
-    adicionarSecao("3. Procedimentos:", procedimentos, true);
-    adicionarSecao("4. Instruções Complementares:", instrucoes, true);
-    adicionarSecao("5. Documentos de Referência:", referencias, true);
+    adicionarSecao("Propósito:", proposito, true);
+    adicionarSecao("Escopo:", escopo, true);
+    adicionarSecao("1. Objetivo:", objetivo);
+    adicionarSecao("2. Funções e Responsabilidades:", funcoes);
+    adicionarSecao("3. Procedimentos:", procedimentos);
+    adicionarSecao("4. Instruções Complementares:", instrucoes);
+    adicionarSecao("5. Documentos de Referência:", referencias);
 
     if (yAtual > 220) { doc.addPage(); yAtual = inicioTextoY; } 
     doc.setFont("helvetica", "bold");
@@ -190,8 +190,8 @@ export default function Processos() {
     
     yAtual = (doc as any).lastAutoTable.finalY + 10;
 
-    adicionarSecao("7. Controles e Indicadores:", indicadores, true);
-    adicionarSecao("8. Histórico de Revisões:", historico, true);
+    adicionarSecao("7. Controles e Indicadores:", indicadores);
+    adicionarSecao("8. Histórico de Revisões:", historico);
 
     const totalPaginas = (doc as any).internal.getNumberOfPages();
 
