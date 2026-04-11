@@ -210,7 +210,7 @@ export default function Processos() {
               </Select>
             </div>
             
-          //renderizar lista
+          {/*renderizar lista*/}
             <div className="space-y-3">
               {documentosFiltrados.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">Nenhum documento encontrado.</div>
@@ -237,7 +237,7 @@ export default function Processos() {
           </div>
         )}
 
-        {/* MODO EDITAR / NOVO DOCUMENTO */}
+//editar doc
         {modo === "editar" && (
           <div className="bg-white rounded-xl border shadow-sm">
             <Tabs defaultValue="cabecalho" className="w-full">
