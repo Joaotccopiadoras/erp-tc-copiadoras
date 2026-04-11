@@ -75,38 +75,99 @@ export default function Processos() {
     const margem = 15;
     const inicioTextoY = 55; 
     let yAtual = inicioTextoY;
-    const adicionarSecao = (tituloSecao: string, conteudo: string, numerado = false) => {
+    // Função blindada de paginação e recuo automático (Hanging Indent)
+    const adicionarSecao = (tituloSecao: string, conteudo: string, mesmaLinha = false) => {
       if (yAtual > 265) {
         doc.addPage();
         yAtual = inicioTextoY;
       }
-      
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      if(numerado) {
+
+      const textoSeguro = conteudo ? String(conteudo) : "Não preenchido.";
+
+      if (mesmaLinha) {
+        // Lógica intacta para "Propósito" e "Escopo" (Mesma linha)
+        doc.setFont("helvetica", "bold");
         doc.text(tituloSecao, margem, yAtual);
-        yAtual += 6;
-      } else {
-        doc.text(tituloSecao, margem, yAtual);
+
         doc.setFont("helvetica", "normal");
+        let linhas = doc.splitTextToSize(textoSeguro, 160);
+        if (!Array.isArray(linhas)) linhas = [linhas];
+
+        for (let i = 0; i < linhas.length; i++) {
+          if (yAtual > 275) {
+            doc.addPage();
+            yAtual = inicioTextoY;
+            doc.setFont("helvetica", "normal");
+          }
+          doc.text(linhas[i], margem + 20, yAtual);
+          yAtual += 5;
+        }
+      } else {
+        // LÓGICA NOVA: Tópicos numerados com análise de recuo
+        doc.setFont("helvetica", "bold");
+        doc.text(tituloSecao, margem, yAtual);
+        yAtual += 6; 
+
+        doc.setFont("helvetica", "normal");
+        
+        // Divide o conteúdo por parágrafos (onde o usuário deu "Enter")
+        const paragrafos = textoSeguro.split('\n');
+
+        for (let p = 0; p < paragrafos.length; p++) {
+          const paragrafo = paragrafos[p];
+          if (!paragrafo.trim()) continue; // Pula linhas vazias
+
+          // Identifica a numeração no início da frase (ex: "1.1.", "3.1.2. ")
+          const match = paragrafo.match(/^(\d+\.)+\s*/);
+          let recuoNivel = 0;
+          let textoDoNumero = "";
+          let textoDoConteudo = paragrafo;
+
+          if (match) {
+            textoDoNumero = match[0]; // Pega apenas a parte do número (ex: "3.1.1. ")
+            
+            // Conta os pontos para descobrir a profundidade do recuo
+            const numPontos = (textoDoNumero.match(/\./g) || []).length;
+            
+            // "1.1" (2 pontos) = 0mm extra | "1.1.1" (3 pontos) = 5mm extra | etc.
+            recuoNivel = Math.max(0, numPontos - 2) * 5; 
+            
+            // Separa o texto do número para o jsPDF quebrar as linhas perfeitamente
+            textoDoConteudo = paragrafo.substring(textoDoNumero.length);
+          }
+
+          // A Matemática do Recuo Perfeito
+          const margemBaseParagrafo = margem + 5 + recuoNivel;
+          const larguraNumero = textoDoNumero ? doc.getTextWidth(textoDoNumero) : 0;
+          const margemLinhasSeguintes = margemBaseParagrafo + larguraNumero;
+          
+          // Largura da folha A4 (210mm) - 15mm da margem direita - a margem esquerda atual
+          const larguraDisponivel = 195 - margemLinhasSeguintes; 
+
+          let linhas = doc.splitTextToSize(textoDoConteudo, larguraDisponivel);
+          if (!Array.isArray(linhas)) linhas = [linhas];
+
+          // Loop de impressão das linhas daquele parágrafo
+          for (let i = 0; i < linhas.length; i++) {
+            if (yAtual > 275) {
+              doc.addPage();
+              yAtual = inicioTextoY;
+              doc.setFont("helvetica", "normal");
+            }
+            
+            if (i === 0) {
+              // Primeira linha: Imprime o Número + Texto juntos
+              doc.text(textoDoNumero + linhas[i], margemBaseParagrafo, yAtual);
+            } else {
+              // Linhas seguintes (O "Pulo do Gato"): Imprime só o texto com o recuo esticado
+              doc.text(linhas[i], margemLinhasSeguintes, yAtual);
+            }
+            yAtual += 5;
+          }
+        }
       }
-      doc.setFont("helvetica", "normal");
-      
-      const margemTexto = numerado ? margem + 5 : margem;
-      const larguraTexto = numerado ? 175 : 180;
-      const offsetMesmaLinha = numerado ? 0 : doc.getTextWidth(tituloSecao) + 2;
-      let linhas = doc.splitTextToSize(conteudo || "Não preenchido.", larguraTexto - offsetMesmaLinha);
-      if (!Array.isArray(linhas)) linhas = [linhas];
-      for (let i = 0; i < linhas.length; i++) {
-        if (yAtual > 275) {
-          doc.addPage();
-          yAtual = inicioTextoY;
-      }
-      doc.text(linhas[i], margemTexto + offsetMesmaLinha, yAtual);
-      yAtual += 5;
-      };
-    yAtual += 3;
-    }
+      yAtual += 4; // Respiro maior entre os tópicos grandes
+    };
 
     adicionarSecao("Propósito:", proposito);
     adicionarSecao("Escopo:", escopo);
