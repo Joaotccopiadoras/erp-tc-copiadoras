@@ -75,7 +75,7 @@ export default function Processos() {
     const margem = 15;
     const inicioTextoY = 55; 
     let yAtual = inicioTextoY;
-    // Função blindada de paginação e recuo automático (Hanging Indent)
+    // (Hanging Indent)
     const adicionarSecao = (tituloSecao: string, conteudo: string, mesmaLinha = false) => {
       if (yAtual > 265) {
         doc.addPage();
@@ -85,7 +85,6 @@ export default function Processos() {
       const textoSeguro = conteudo ? String(conteudo) : "Não preenchido.";
 
       if (mesmaLinha) {
-        // Lógica intacta para "Propósito" e "Escopo" (Mesma linha)
         doc.setFont("helvetica", "bold");
         doc.text(tituloSecao, margem, yAtual);
 
@@ -103,21 +102,18 @@ export default function Processos() {
           yAtual += 5;
         }
       } else {
-        // LÓGICA NOVA: Tópicos numerados com análise de recuo
         doc.setFont("helvetica", "bold");
         doc.text(tituloSecao, margem, yAtual);
         yAtual += 6; 
 
         doc.setFont("helvetica", "normal");
         
-        // Divide o conteúdo por parágrafos (onde o usuário deu "Enter")
         const paragrafos = textoSeguro.split('\n');
 
         for (let p = 0; p < paragrafos.length; p++) {
           const paragrafo = paragrafos[p];
           if (!paragrafo.trim()) continue; // Pula linhas vazias
 
-          // Identifica a numeração no início da frase (ex: "1.1.", "3.1.2. ")
           const match = paragrafo.match(/^(\d+\.)+\s*/);
           let recuoNivel = 0;
           let textoDoNumero = "";
@@ -126,28 +122,22 @@ export default function Processos() {
           if (match) {
             textoDoNumero = match[0]; // Pega apenas a parte do número (ex: "3.1.1. ")
             
-            // Conta os pontos para descobrir a profundidade do recuo
             const numPontos = (textoDoNumero.match(/\./g) || []).length;
             
-            // "1.1" (2 pontos) = 0mm extra | "1.1.1" (3 pontos) = 5mm extra | etc.
             recuoNivel = Math.max(0, numPontos - 2) * 5; 
             
-            // Separa o texto do número para o jsPDF quebrar as linhas perfeitamente
             textoDoConteudo = paragrafo.substring(textoDoNumero.length);
           }
 
-          // A Matemática do Recuo Perfeito
           const margemBaseParagrafo = margem + 5 + recuoNivel;
           const larguraNumero = textoDoNumero ? doc.getTextWidth(textoDoNumero) : 0;
           const margemLinhasSeguintes = margemBaseParagrafo + larguraNumero;
           
-          // Largura da folha A4 (210mm) - 15mm da margem direita - a margem esquerda atual
           const larguraDisponivel = 195 - margemLinhasSeguintes; 
 
           let linhas = doc.splitTextToSize(textoDoConteudo, larguraDisponivel);
           if (!Array.isArray(linhas)) linhas = [linhas];
 
-          // Loop de impressão das linhas daquele parágrafo
           for (let i = 0; i < linhas.length; i++) {
             if (yAtual > 275) {
               doc.addPage();
@@ -156,17 +146,15 @@ export default function Processos() {
             }
             
             if (i === 0) {
-              // Primeira linha: Imprime o Número + Texto juntos
               doc.text(textoDoNumero + linhas[i], margemBaseParagrafo, yAtual);
             } else {
-              // Linhas seguintes (O "Pulo do Gato"): Imprime só o texto com o recuo esticado
               doc.text(linhas[i], margemLinhasSeguintes, yAtual);
             }
             yAtual += 5;
           }
         }
       }
-      yAtual += 4; // Respiro maior entre os tópicos grandes
+      yAtual += 4;
     };
 
     adicionarSecao("Propósito:", proposito);
