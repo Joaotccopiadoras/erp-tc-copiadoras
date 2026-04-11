@@ -28,6 +28,114 @@ export default function ProcessosPage() {
   };
 
   const exportarPDF = () => {
+    const doc = new jsPDF ("p", "mm", "a4")
+    const margem = 15
+    let yAtual = margem;
+
+    //cabecalho
+    doc.rect(margem, yAtual, 180, 30);
+
+    //linhas verticais
+    doc.line(margem + 40, yAtual, margem + 40, yAtual + 30); // Separa a Logo do Título
+    doc.line(margem + 130, yAtual, margem + 130, yAtual + 30); // Separa o Título das Informações
+    doc.line(margem + 180, yAtual, margem + 180, yAtual + 30);
+
+    //logo
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("TC", margem + 20, yAtual + 12, { align: "center" });
+    doc.text("COPIADORAS", margem + 20, yAtual + 20, { align: "center" });
+
+    //titulo
+    doc.setFontSize(10);
+    doc.text("PROCEDIMENTO OPERACIONAL PADRÃO-POP", margem + 85, yAtual + 10, { align: "center" });
+    doc.setFontSize(12);
+    // Quebra o título se for muito grande
+    const tituloQuebrado = doc.splitTextToSize(titulo.toUpperCase() || "AQUISIÇÃO DE RELATÓRIOS DE USO DE EQUIPAMENTOS", 80);
+    doc.text(tituloQuebrado, margem + 85, yAtual + 18, { align: "center" });
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+
+    // Coluna 3A
+    doc.text("CÓDIGO:", margem + 132, yAtual + 5);
+    doc.setFont("helvetica", "bold");
+    doc.text(codigo || "PO/TEC/00-01", margem + 132, yAtual + 9);
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("Centro de Custo:", margem + 132, yAtual + 15);
+    doc.setFont("helvetica", "bold");
+    doc.text(centroCusto.toUpperCase() || "ASSISTÊNCIA TÉCNICA", margem + 132, yAtual + 19);
+
+    // Linha horizontal separadora dentro do bloco de infos
+    doc.line(margem + 130, yAtual + 22, margem + 180, yAtual + 22);
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("Aprovado por:", margem + 132, yAtual + 26);
+    doc.setFont("helvetica", "bold");
+    doc.text("João Gaia", margem + 132, yAtual + 29);
+
+    // Coluna 3B (Datas e Versão)
+    doc.line(margem + 160, yAtual, margem + 160, yAtual + 22);
+    doc.setFont("helvetica", "normal");
+    doc.text("Data Emissão:", margem + 162, yAtual + 5);
+    doc.text("09/04/2026", margem + 162, yAtual + 9);
+    
+    doc.text("Data Revisão:", margem + 162, yAtual + 15);
+    doc.text("06/07/2026", margem + 162, yAtual + 19);
+
+    yAtual += 40;
+
+    //corpo
+    const adicionarSecao = (tituloSecao: string, conteudo: string) => {
+      // Verifica se precisa de uma nova página
+      if (yAtual > 270) {
+        doc.addPage();
+        yAtual = margem;
+      }
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(tituloSecao, margem, yAtual);
+      
+      doc.setFont("helvetica", "normal");
+      const textoFormatado = doc.splitTextToSize(conteudo || "Não preenchido.", 180);
+      doc.text(textoFormatado, margem, yAtual + 5);
+      
+      // Calcula o novo Y baseado na quantidade de linhas geradas
+      yAtual += 10 + (textoFormatado.length * 4); 
+    };
+
+    // Preenchendo as seções baseadas no seu estado React
+    adicionarSecao("Propósito:", proposito);
+    adicionarSecao("Escopo:", escopo);
+    
+    // Para os procedimentos, um texto longo (Ex: 1. Objetivo, 2. Funções, 3. Procedimentos...)
+    adicionarSecao("Procedimentos e Detalhamento:", procedimentos);
+
+    //controle de registros
+    if (yAtual > 220) { doc.addPage(); yAtual = margem; } // Previne corte
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("Controle dos Registros:", margem, yAtual);
+    yAtual += 5;
+
+    autoTable(doc, {
+      startY: yAtual,
+      head: [['Identificação', 'Local do Arquivo', 'Tipo de Arquivo', 'Retenção', 'Descarte']],
+      body: [
+        ['RGU', 'Servidor Local (Gestão dos Contratos)', '.pdf', '5 anos', 'Exclusão'],
+        ['MTV + MTCS', 'Servidor Local (Gestão dos Contratos)', '.xlsx', '30 dias', 'Atualização'],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [40, 40, 40], fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 2 },
+    });
+
+    //exportacao
+    const nomeArquivo = `${codigo || 'POP'}_${(titulo || 'Documento').substring(0, 20).replace(/\s+/g, '_')}.pdf`;
+    doc.save(nomeArquivo);
+    
     alert("Gerando PDF nos moldes ISO 9001...");
   };
 
