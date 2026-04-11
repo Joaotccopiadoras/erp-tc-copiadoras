@@ -12,7 +12,7 @@ import autoTable from "jspdf-autotable";
 export default function Processos() {
   const [modo, setModo] = useState<"lista" | "visualizar" | "editar">("lista");
 
-  //estados de filtro
+  {/*estados de filtro*/}
   const [busca, setBusca] = useState("todos");
   const [filtroSetor, setFiltroSetor] = useState("todos");
   const [documentos, setDocumentos] = useState([
@@ -22,7 +22,7 @@ export default function Processos() {
         versao: "02",
         data: "06/07/2026",
         titulo: "Aquisição de Relatórios de Uso de Equipamentos",
-        setor: "tecnica", // valor que bate com o Select
+        setor: "tecnica",
         nomeSetor: "Assistência Técnica"
       },
       {
@@ -42,18 +42,17 @@ export default function Processos() {
     return bateSetor && bateBusca; 
   });
   
-  //estados formularios
+  {/*estados formularios*/}
   const [codigo, setCodigo] = useState("");
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState("POP");
   const [centroCusto, setCentroCusto] = useState("Assistência Técnica");
   const [proposito, setProposito] = useState("");
   const [escopo, setEscopo] = useState("");
-  const [procedimentos, setProcedimentos] = useState(""); // Num V2, isso pode ser um editor de texto rico ou um array dinâmico
+  const [procedimentos, setProcedimentos] = useState("");
 
   const salvarDocumento = async () => {
     console.log("Salvando no Supabase:", { codigo, titulo, tipo, centroCusto, proposito, escopo });
-    // Após salvar, volta para a lista
     setModo("lista");
   };
 
@@ -62,32 +61,32 @@ export default function Processos() {
     const margem = 15
     let yAtual = margem;
 
-    //cabecalho
+    {/*cabecalho*/
     doc.rect(margem, yAtual, 180, 30);
 
-    //linhas verticais
+    {/*linhas verticais*/}
     doc.line(margem + 40, yAtual, margem + 40, yAtual + 30); // Separa a Logo do Título
     doc.line(margem + 130, yAtual, margem + 130, yAtual + 30); // Separa o Título das Informações
     doc.line(margem + 180, yAtual, margem + 180, yAtual + 30);
 
-    //logo
+    {/*logo*/}
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.text("TC", margem + 20, yAtual + 12, { align: "center" });
     doc.text("COPIADORAS", margem + 20, yAtual + 20, { align: "center" });
 
-    //titulo
+    {/*titulo*/}
     doc.setFontSize(10);
     doc.text("PROCEDIMENTO OPERACIONAL PADRÃO-POP", margem + 85, yAtual + 10, { align: "center" });
     doc.setFontSize(12);
-    // Quebra o título se for muito grande
+    {/*Quebra o título se for muito grande*/}
     const tituloQuebrado = doc.splitTextToSize(titulo.toUpperCase() || "AQUISIÇÃO DE RELATÓRIOS DE USO DE EQUIPAMENTOS", 80);
     doc.text(tituloQuebrado, margem + 85, yAtual + 18, { align: "center" });
 
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
 
-    // Coluna 3A
+    {/*Coluna 3A*/}
     doc.text("CÓDIGO:", margem + 132, yAtual + 5);
     doc.setFont("helvetica", "bold");
     doc.text(codigo || "PO/TEC/00-01", margem + 132, yAtual + 9);
@@ -97,7 +96,7 @@ export default function Processos() {
     doc.setFont("helvetica", "bold");
     doc.text(centroCusto.toUpperCase() || "ASSISTÊNCIA TÉCNICA", margem + 132, yAtual + 19);
 
-    // Linha horizontal separadora dentro do bloco de infos
+    {/*Linha horizontal separadora dentro do bloco de infos*/}
     doc.line(margem + 130, yAtual + 22, margem + 180, yAtual + 22);
     
     doc.setFont("helvetica", "normal");
@@ -105,7 +104,7 @@ export default function Processos() {
     doc.setFont("helvetica", "bold");
     doc.text("João Gaia", margem + 132, yAtual + 29);
 
-    // Coluna 3B (Datas e Versão)
+    {/*Coluna 3B (Datas e Versão)*/}
     doc.line(margem + 160, yAtual, margem + 160, yAtual + 22);
     doc.setFont("helvetica", "normal");
     doc.text("Data Emissão:", margem + 162, yAtual + 5);
@@ -116,36 +115,25 @@ export default function Processos() {
 
     yAtual += 40;
 
-    //corpo
+    {/*corpo*/}
     const adicionarSecao = (tituloSecao: string, conteudo: string) => {
-      // Verifica se precisa de uma nova página
       if (yAtual > 270) {
         doc.addPage();
         yAtual = margem;
       }
-      
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.text(tituloSecao, margem, yAtual);
-      
       doc.setFont("helvetica", "normal");
       const textoFormatado = doc.splitTextToSize(conteudo || "Não preenchido.", 180);
       doc.text(textoFormatado, margem, yAtual + 5);
-      
-      // Calcula o novo Y baseado na quantidade de linhas geradas
       yAtual += 10 + (textoFormatado.length * 4); 
     };
 
-    // Preenchendo as seções baseadas no seu estado React
     adicionarSecao("Propósito:", proposito);
     adicionarSecao("Escopo:", escopo);
-    
-    // Para os procedimentos, um texto longo (Ex: 1. Objetivo, 2. Funções, 3. Procedimentos...)
     adicionarSecao("Procedimentos e Detalhamento:", procedimentos);
-
-    //controle de registros
     if (yAtual > 220) { doc.addPage(); yAtual = margem; } // Previne corte
-    
     doc.setFont("helvetica", "bold");
     doc.text("Controle dos Registros:", margem, yAtual);
     yAtual += 5;
@@ -162,7 +150,7 @@ export default function Processos() {
       styles: { fontSize: 8, cellPadding: 2 },
     });
 
-    //exportacao
+    {/*exportacao*/}
     const nomeArquivo = `${codigo || 'POP'}_${(titulo || 'Documento').substring(0, 20).replace(/\s+/g, '_')}.pdf`;
     doc.save(nomeArquivo);
 
@@ -329,4 +317,4 @@ export default function Processos() {
       </div>
     </AppLayout>
   );
-}
+}}
