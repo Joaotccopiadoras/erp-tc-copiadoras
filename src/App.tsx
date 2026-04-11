@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes"
 import Agenda from "./pages/Agenda"
 import Tecnica from "./pages/Tecnica"
+import Processos from "./pages/Processos"
 
 const queryClient = new QueryClient();
 export default function App() {
