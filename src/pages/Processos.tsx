@@ -80,6 +80,7 @@ export default function Processos() {
         doc.addPage();
         yAtual = inicioTextoY;
       }
+      
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       if(numerado) {
@@ -94,8 +95,9 @@ export default function Processos() {
       const margemTexto = numerado ? margem + 5 : margem;
       const larguraTexto = numerado ? 175 : 180;
       const offsetMesmaLinha = numerado ? 0 : doc.getTextWidth(tituloSecao) + 2;
-      const linhas = doc.splitTextToSize(conteudo || "Não preenchido.", larguraTexto - offsetMesmaLinha);
-      for (let i = 0; i < LucideGanttChartSquare.length; i++) {
+      let linhas = doc.splitTextToSize(conteudo || "Não preenchido.", larguraTexto - offsetMesmaLinha);
+      if (!Array.isArray(linhas)) linhas = [linhas];
+      for (let i = 0; i < linhas.length; i++) {
         if (yAtual > 275) {
           doc.addPage();
           yAtual = inicioTextoY;
