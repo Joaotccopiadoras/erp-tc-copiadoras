@@ -75,7 +75,7 @@ export default function Processos() {
     const margem = 15;
     const inicioTextoY = 55; 
     let yAtual = inicioTextoY;
-    // (Hanging Indent)
+    // (Hanging Indent) Corrigido com as Fontes Blindadas
     const adicionarSecao = (tituloSecao: string, conteudo: string, mesmaLinha = false) => {
       if (yAtual > 265) {
         doc.addPage();
@@ -83,6 +83,9 @@ export default function Processos() {
       }
 
       const textoSeguro = conteudo ? String(conteudo) : "Não preenchido.";
+
+      // A CORREÇÃO ESTÁ AQUI: Força a fonte para 10 antes de fazer qualquer cálculo de largura!
+      doc.setFontSize(10);
 
       if (mesmaLinha) {
         doc.setFont("helvetica", "bold");
@@ -97,6 +100,7 @@ export default function Processos() {
             doc.addPage();
             yAtual = inicioTextoY;
             doc.setFont("helvetica", "normal");
+            doc.setFontSize(10); // Garante a fonte 10 na nova página
           }
           doc.text(linhas[i], margem + 20, yAtual);
           yAtual += 5;
@@ -143,6 +147,7 @@ export default function Processos() {
               doc.addPage();
               yAtual = inicioTextoY;
               doc.setFont("helvetica", "normal");
+              doc.setFontSize(10); // Garante a fonte 10 na nova página
             }
             
             if (i === 0) {
