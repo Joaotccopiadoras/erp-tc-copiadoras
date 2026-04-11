@@ -190,7 +190,7 @@ export default function Processos() {
           )}
         </div>
 
-//visao de todos
+{/*visao de todos*/}
         {modo === "lista" && (
           <div className="bg-white rounded-xl border p-4 shadow-sm">
             <div className="flex gap-4 mb-6">
@@ -237,7 +237,7 @@ export default function Processos() {
           </div>
         )}
 
-//editar doc
+{/*editar doc*/}
         {modo === "editar" && (
           <div className="bg-white rounded-xl border shadow-sm">
             <Tabs defaultValue="cabecalho" className="w-full">
