@@ -9,7 +9,7 @@ import { BookOpen, FileText, Plus, Download, GitMerge } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-export default function ProcessosPage() {
+export default function Processos() {
   const [modo, setModo] = useState<"lista" | "visualizar" | "editar">("lista");
   
   // Estados do Formulário
@@ -135,7 +135,7 @@ export default function ProcessosPage() {
     //exportacao
     const nomeArquivo = `${codigo || 'POP'}_${(titulo || 'Documento').substring(0, 20).replace(/\s+/g, '_')}.pdf`;
     doc.save(nomeArquivo);
-    
+
     alert("Gerando PDF nos moldes ISO 9001...");
   };
 

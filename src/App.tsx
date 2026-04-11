@@ -69,6 +69,7 @@ export default function App() {
           <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
           <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
           <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
+          <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route
