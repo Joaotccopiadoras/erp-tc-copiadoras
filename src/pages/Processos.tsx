@@ -115,7 +115,7 @@ export default function Processos() {
 
     autoTable(doc, {
       startY: yAtual,
-      head: [['IDENTIFICAÇÃO', 'LOCAL DO ARQUIVO', 'TIPO DE ARQUIVO', 'TEMPO DE RETENÇÃO', 'DESCARTE']],
+      head: [['IDENTIFICAÇÃO', 'LOCAL DO ARQUIVO', 'ENDEREÇO DO ARQUIVO', 'TIPO DE ARQUIVO', 'TEMPO DE RETENÇÃO', 'DESCARTE']],
       body: [
         ['RGU', 'Servidor Local', '\\\\192.168.1.2\\Tecnica...', '.pdf', '5 anos', 'Exclusão'],
         ['MTV + MTCS', 'Servidor Local', '\\\\192.168.1.2\\Tecnica...', '.xlsx', '30 dias', 'Atualização'],
@@ -354,7 +354,7 @@ export default function Processos() {
           </div>
         )}
 
-        {/* --- MODO VISUALIZAR --- */}
+        {/* --- visualiz --- */}
         {modo === "visualizar" && (
            <div className="bg-white rounded-xl border p-8 shadow-sm max-w-4xl mx-auto">
               <div className="flex justify-end mb-4 gap-2 border-b pb-4">
