@@ -11,8 +11,38 @@ import autoTable from "jspdf-autotable";
 
 export default function Processos() {
   const [modo, setModo] = useState<"lista" | "visualizar" | "editar">("lista");
+
+  //estados de filtro
+  const [busca, setBusca] = useState("todos");
+  const [filtroSetor, setFiltroSetor] = useState("todos");
+  const [documentos, setDocumentos] = useState([
+    {
+        id: "1",
+        codigo: "PO/TEC/00-01",
+        versao: "02",
+        data: "06/07/2026",
+        titulo: "Aquisição de Relatórios de Uso de Equipamentos",
+        setor: "tecnica", // valor que bate com o Select
+        nomeSetor: "Assistência Técnica"
+      },
+      {
+        id: "2",
+        codigo: "PO/FIN/00-01",
+        versao: "01",
+        data: "10/08/2026",
+        titulo: "Faturamento Mensal de Contratos",
+        setor: "financeiro",
+        nomeSetor: "Financeiro"
+      }
+  ]);
+  const documentosFiltrados = documentos.filter(doc => {
+    const bateSetor = filtroSetor === "todos" || doc.setor === filtroSetor;
+    const bateBusca = doc.titulo.toLowerCase().includes(busca.toLowerCase()) ||
+                      doc.codigo.toLowerCase().includes(busca.toLowerCase());
+    return bateSetor && bateBusca; 
+  });
   
-  // Estados do Formulário
+  //estados formularios
   const [codigo, setCodigo] = useState("");
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState("POP");
@@ -160,12 +190,17 @@ export default function Processos() {
           )}
         </div>
 
-        {/* MODO LISTA (Visão de todos os funcionários) */}
+//visao de todos
         {modo === "lista" && (
           <div className="bg-white rounded-xl border p-4 shadow-sm">
             <div className="flex gap-4 mb-6">
-              <Input placeholder="Buscar por código ou título..." className="max-w-sm" />
-              <Select defaultValue="todos">
+              <Input
+              placeholder="Buscar por código ou título..."
+              className="max-w-sm"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              />
+              <Select value={filtroSetor} onValueChange={setFiltroSetor}>
                 <SelectTrigger className="w-[200px]"><SelectValue placeholder="Centro de Custo" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os Setores</SelectItem>
@@ -175,20 +210,29 @@ export default function Processos() {
               </Select>
             </div>
             
-            {/* Exemplo de Card de Documento */}
-            <div 
-              className="p-4 border rounded-lg hover:border-primary cursor-pointer transition-colors flex justify-between items-center"
-              onClick={() => setModo("visualizar")}
-            >
-              <div>
-                <div className="flex gap-2 items-center mb-1">
-                  <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded">PO/TEC/00-01</span>
-                  <span className="text-xs text-slate-500">v02 • 06/07/2026</span>
-                </div>
-                <h3 className="font-semibold text-slate-800">Aquisição de Relatórios de Uso de Equipamentos</h3>
-                <p className="text-sm text-slate-500">Assistência Técnica</p>
-              </div>
-              <Button variant="ghost" size="icon"><FileText className="w-5 h-5 text-slate-400" /></Button>
+          //renderizar lista
+            <div className="space-y-3">
+              {documentosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">Nenhum documento encontrado.</div>
+              ) : (
+                documentosFiltrados.map(doc => (
+                  <div 
+                    key={doc.id}
+                    className="p-4 border rounded-lg hover:border-primary cursor-pointer transition-colors flex justify-between items-center bg-white"
+                    onClick={() => setModo("visualizar")}
+                  >
+                    <div>
+                      <div className="flex gap-2 items-center mb-1">
+                        <span className="text-xs font-bold bg-slate-100 px-2 py-1 rounded">{doc.codigo}</span>
+                        <span className="text-xs text-slate-500">v{doc.versao} • {doc.data}</span>
+                      </div>
+                      <h3 className="font-semibold text-slate-800">{doc.titulo}</h3>
+                      <p className="text-sm text-slate-500">{doc.nomeSetor}</p>
+                    </div>
+                    <Button variant="ghost" size="icon"><FileText className="w-5 h-5 text-slate-400" /></Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
