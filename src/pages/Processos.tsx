@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BookOpen, FileText, Plus, Download, GitMerge, LucideGanttChartSquare } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import FluxogramaEditor from "@/components/FluxogramaEditor";
 
 export default function Processos() {
   const [modo, setModo] = useState<"lista" | "visualizar" | "editar">("lista");
@@ -399,10 +400,12 @@ export default function Processos() {
                    <Textarea value={historico} onChange={e => setHistorico(e.target.value)} rows={5} className="font-mono text-sm" />
                 </TabsContent>
 
-                <TabsContent value="fluxograma" className="space-y-4 text-center py-10">
-                   <GitMerge className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                   <h3 className="text-lg font-medium">Editor de Fluxograma</h3>
-                   <Button variant="outline">Anexar Imagem do Fluxograma (Temporário)</Button>
+                <TabsContent value="fluxograma" className="space-y-4 pt-4">
+                   <div className="flex justify-between items-center mb-2">
+                     <h3 className="text-lg font-medium">Mapeamento Visual do Processo</h3>
+                     <p className="text-sm text-slate-500">Arraste as caixas, conecte os pontos e desenhe o fluxo.</p>
+                   </div>
+                   <FluxogramaEditor />
                 </TabsContent>
 
                 <div className="mt-8 flex justify-end gap-2 pt-4 border-t">
