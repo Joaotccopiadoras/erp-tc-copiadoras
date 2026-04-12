@@ -17,24 +17,16 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Plus, Trash2 } from 'lucide-react';
 
-const initialNodes: Node[] = [
-  { id: '1', position: { x: 250, y: 50 }, data: { label: 'Início do Processo' }, type: 'input' },
-  { id: '2', position: { x: 250, y: 150 }, data: { label: 'Triagem' } },
-];
+interface FluxogramaProps {
+    nodes: Node[];
+    setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+    edges: Edge[];
+    setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
+}
 
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', animated: true },
-];
-
-export default function FluxogramaEditor() {
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
-  
-  // Estado para saber qual caixinha está selecionada no momento
+export default function FluxogramaEditor({ nodes, setNodes, edges, setEdges }: FluxogramaProps) {
   const [noSelecionado, setNoSelecionado] = useState<Node | null>(null);
-  
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  let idRef = useRef(3);
+  let idRef = useRef(Date.now());
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -51,12 +43,10 @@ export default function FluxogramaEditor() {
     []
   );
 
-  // Deteta quando o usuário clica em uma caixinha
   const onNodeClick = (_: any, node: Node) => {
     setNoSelecionado(node);
   };
 
-  // Limpa a seleção se clicar no fundo vazio
   const onPaneClick = () => {
     setNoSelecionado(null);
   };
@@ -96,9 +86,7 @@ export default function FluxogramaEditor() {
   };
 
   return (
-    <div className="w-full h-[500px] border rounded-md bg-slate-50 relative flex flex-col" ref={reactFlowWrapper}>
-      
-      {/* Barra de Ferramentas Condicional (Só aparece se clicar numa caixa) */}
+    <div className="w-full h-[500px] border rounded-md bg-slate-50 relative flex flex-col area-fluxograma">      
       {noSelecionado && (
         <div className="absolute top-4 left-4 z-10 bg-white p-2 rounded-md border shadow-sm flex items-center gap-2">
           <Input 

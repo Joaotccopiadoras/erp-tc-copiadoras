@@ -1,14 +1,17 @@
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
+import { BookOpen, FileText, Plus, Download, GitMerge, LucideGanttChartSquare } from "lucide-react";
+import { Node, Edge } from 'reactflow';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { toPng } from "html-to-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, FileText, Plus, Download, GitMerge, LucideGanttChartSquare } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import AppLayout from "@/components/AppLayout";
 import FluxogramaEditor from "@/components/FluxogramaEditor";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Processos() {
   const [modo, setModo] = useState<"lista" | "visualizar" | "editar">("lista");
@@ -65,6 +68,11 @@ export default function Processos() {
   const [indicadores, setIndicadores] = useState("7.1. (%) Coleta Dentro do Prazo (CDP);\n7.2. (%) Atualização de Demonstrativos (AD);\n7.3. (%) Publicação de Informações (PI).");
   const [historico, setHistorico] = useState("8.1. Emissão em 06/04/2026.\n8.2. Alteração em 09/04/2026.\n8.2.1. Reescrita do Centro de Custo.");
 
+  const [nodes, setNodes] = useState<Node[]>([
+    { id: '1', position: { x: 250, y: 50}, data: { labes: 'Início do Processo'}, type: 'input' }
+  ]);
+  const [edges, setEdges] = useState<Edge[]>([]);
+  const [fluxoImagem, setFluxoImagem] = useState<string>("");
   const salvarDocumento = async () => {
     console.log("Salvando no Supabase:", { codigo, titulo, tipo, centroCusto, proposito, escopo });
     setModo("lista");
