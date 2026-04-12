@@ -19,29 +19,24 @@ export default function Processos() {
   // --- estados filtro ---
   const [busca, setBusca] = useState("");
   const [filtroSetor, setFiltroSetor] = useState("todos");
-  const [documentos, setDocumentos] = useState([
-    {
-        id: "1",
-        codigo: "PO/TEC/00-01",
-        versao: "02",
-        data: "06/07/2026",
-        titulo: "Aquisição de Relatórios de Uso de Equipamentos",
-        setor: "tecnica",
-        nomeSetor: "Assistência Técnica"
-      },
-      {
-        id: "2",
-        codigo: "PO/FIN/00-01",
-        versao: "01",
-        data: "10/08/2026",
-        titulo: "Faturamento Mensal de Contratos",
-        setor: "financeiro",
-        nomeSetor: "Financeiro"
-      }
-  ]);
+  const [documentos, setDocumentos] = useState<any[]>([]);
+  
+  useEffect(() => {
+    fetchDocumentos ();
+  }, []);
 
+  const fetchDocumentos = async () => {
+    const { data, error } = await supabase
+      .from('sgq_documentos')
+      .select('*')
+      .order('criado_em', { ascending: false});
+
+  if (data) setDocumentos(data);
+  if (error) console.error("Erro ao buscar Documentos", error)
+  };
+    
   const documentosFiltrados = documentos.filter(doc => {
-    const bateSetor = filtroSetor === "todos" || doc.setor === filtroSetor;
+    const bateSetor = filtroSetor === "todos" || doc.centro_custo === filtroSetor;
     const bateBusca = doc.titulo.toLowerCase().includes(busca.toLowerCase()) ||
                       doc.codigo.toLowerCase().includes(busca.toLowerCase());
     return bateSetor && bateBusca; 
@@ -73,6 +68,39 @@ export default function Processos() {
   ]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [fluxoImagem, setFluxoImagem] = useState<string>("");
+
+  const abrirDocumento = (doc: any) => {
+    setCodigo(doc.codigo || "");
+    setTitulo(doc.titulo || "");
+    setTipo(doc.tipo_documento || "POP");
+    setCentroCusto(doc.centro_custo || "");
+    setVersao(doc.versao || "01");
+    setDataEmissao(doc.data_emissao || "");
+    setDataRevisao(doc.data_revisao || "");
+    setAprovador(doc.aprovado_por || "");
+
+    setProposito(doc.proposito || "");
+    setEscopo(doc.escopo || "");
+    setObjetivo(doc.objetivo || "");
+    setFuncoes(doc.responsabilidades || "");
+    setProcedimentos(doc.procedimentos || "");
+    setInstrucoes(doc.instrucoes_complementares || "");
+    setReferencias(doc.documentos_referencia || "");
+    setIndicadores(doc.indicadores || "");
+    setHistorico(doc.historico_revisoes || "");
+
+    if (doc.fluxograma_dados) {
+      setNodes(doc.fluxograma_dados.nodes || []);
+      setEdges(doc.fluxograma_dados.edges || []);
+    } else {
+      setNodes([{ id: '1', position: { x: 250, y: 50 }, data: { label: 'Início do Processo' }, type: 'input' }]);
+      setEdges([]);
+    }
+
+    setFluxoImagem(doc.fluxograma_imagem || "");
+
+    setModo("visualizar")
+  };
 
   const salvarDocumento = async () => {
     let imgData = fluxoImagem;
@@ -348,7 +376,7 @@ export default function Processos() {
                   <div 
                     key={doc.id}
                     className="p-4 border rounded-lg hover:border-primary cursor-pointer transition-colors flex justify-between items-center bg-white"
-                    onClick={() => setModo("visualizar")}
+                    onClick={() => abrirDocumento(doc)}
                   >
                     <div>
                       <div className="flex gap-2 items-center mb-1">
