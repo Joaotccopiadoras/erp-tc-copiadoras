@@ -73,9 +73,34 @@ export default function Processos() {
   ]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [fluxoImagem, setFluxoImagem] = useState<string>("");
+
   const salvarDocumento = async () => {
-    console.log("Salvando no Supabase:", { codigo, titulo, tipo, centroCusto, proposito, escopo });
-    setModo("lista");
+    let imgData = fluxoImagem;
+    const flowElement = document.querySelector('.area-fluxograma') as HTMLElement;
+    if (flowElement) {
+      try {
+        imgData = await toPng(flowElement, { backgroundColor: '#f8fafc' });
+        setFluxoImagem(imgData);
+    } catch (error) {
+      console.error("Erro ao salvar fluxograma", error)
+    }
+    const { error } = await supabase.from('sgq_documentos').insert([{
+        codigo, titulo, tipo, centro_custo: centroCusto, versao, 
+        data_emissao: dataEmissao, data_revisao: dataRevisao, aprovado_por: aprovador,
+        proposito, escopo, objetivo, responsabilidades: funcoes, 
+        procedimentos, instrucoes_complementares: instrucoes, 
+        documentos_referencia: referencias, indicadores, historico_revisoes: historico,
+        fluxograma_dados: { nodes, edges },
+        fluxograma_imagem: imgData
+    }]);
+
+    if (error) {
+      alert("Erro ao salvar no banco: " + error.message);
+    } else {
+      alert("Documento salvo com sucesso no banco de dados!");
+      setModo("visualizar");
+    }
+  };
   };
 
   // --- pdf ---
@@ -201,6 +226,15 @@ export default function Processos() {
 
     adicionarSecao("7. Controles e Indicadores:", indicadores);
     adicionarSecao("8. Histórico de Revisões:", historico);
+
+    if (fluxoImagem) {
+      doc.addPage();
+      yAtual = inicioTextoY;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("9. Fluxograma do Processo:", margem, yAtual);
+      doc.addImage(fluxoImagem, 'PNG', margem, yAtual + 5, 180, 110);
+    }
 
     const totalPaginas = (doc as any).internal.getNumberOfPages();
 
@@ -413,7 +447,7 @@ export default function Processos() {
                      <h3 className="text-lg font-medium">Mapeamento Visual do Processo</h3>
                      <p className="text-sm text-slate-500">Arraste as caixas, conecte os pontos e desenhe o fluxo.</p>
                    </div>
-                   <FluxogramaEditor />
+                   <FluxogramaEditor nodes={nodes} setNodes={setNodes} edges={edges} setEdges={setEdges} />
                 </TabsContent>
 
                 <div className="mt-8 flex justify-end gap-2 pt-4 border-t">
