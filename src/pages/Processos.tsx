@@ -85,7 +85,7 @@ export default function Processos() {
       console.error("Erro ao salvar fluxograma", error)
     }
     const { error } = await supabase.from('sgq_documentos').insert([{
-        codigo, titulo, tipo, centro_custo: centroCusto, versao, 
+        codigo, titulo, tipo_documento: tipo, centro_custo: centroCusto, versao, 
         data_emissao: dataEmissao, data_revisao: dataRevisao, aprovado_por: aprovador,
         proposito, escopo, objetivo, responsabilidades: funcoes, 
         procedimentos, instrucoes_complementares: instrucoes, 
