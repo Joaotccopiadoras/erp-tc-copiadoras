@@ -117,7 +117,7 @@ export default function PortalPage() {
          onClick={() => navigate("/configuracoes")}
           className="group w-full flex justify-center items-center gap-3 px-5 py-3.5 rounded-xl text-sm font-bold text-slate-600 bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 hover:text-slate-900 transition-all duration-300 active:scale-95">
           <Settings className="w-5 h-5 text-slate-400 group-hover:text-slate-800 group-hover:rotate-90 transition-all duration-500" />
-         Configurações do Sistema
+         Configurações do Sistema 
         </button>
        </div>
 
