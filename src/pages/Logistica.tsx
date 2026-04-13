@@ -186,7 +186,6 @@ export default function Logistica() {
 
     const dadosIA = await resposta.json();
     setNcm(dadosIA.ncm);
-    setCest(dadosIA.cest);
 }
 
   const cotarNoMercadoComIA = async () => {
