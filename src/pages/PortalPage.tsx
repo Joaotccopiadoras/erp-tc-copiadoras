@@ -39,7 +39,7 @@ export default function PortalPage() {
     {
       id: 4,
       nome: "Departamento Pessoal",
-      descricao: "Gestão de Pessoas, controle de jornada, recibos, declarações, folha.",
+      descricao: "Gestão de pessoas, controle de jornada, recibos, declarações, folha.",
       icone: <UsersRound className="h-10 w-10 text-orange-600"/>,
       link: "/deppessoal",
       corBorda: "border-orange-200 hover:border-orange-500",
@@ -48,7 +48,7 @@ export default function PortalPage() {
     {
       id: 5,
       nome: "Comercial",
-      descricao: "Gestão de Clientes, contratos, vendas e locações",
+      descricao: "Gestão de clientes, contratos, vendas e locações",
       icone: <TrendingUp className="h-10 w-10 text-yellow-600"/>,
       link: "/comercial",
       corBorda: "border-yellow-200 hover:border-yellow-500",
@@ -96,7 +96,7 @@ export default function PortalPage() {
           <Link
             key={sistema.id}
             to={sistema.link}
-            className={`flex flex-col items-center text-center p-10 bg-white rounded-2xl border-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer transform hover:-translate-y-1 ${sistema.corBorda} ${sistema.corFundo}`}
+            className={`flex flex-col items-center text-center p-10 bg-white rounded-2xl border-2 transition-all duration-300 shadow-sm hover:shadow-xl cursor-pointer transform hover:-translate-y-1 ${sistema.corBorda} ${sistema.corFundo} ${sistema.id === 7 ? 'md:col-start-2' : ''}`}
           >
             <div className="mb-6 bg-white p-4 rounded-full shadow-sm border border-slate-100">
               {sistema.icone}
