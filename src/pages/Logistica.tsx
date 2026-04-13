@@ -171,7 +171,7 @@ export default function Logistica() {
             <div className="p-4 border-b flex gap-4 bg-slate-50">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Buscar por Nome ou SKU..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Buscar por Nome ou PartNumber..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
                 <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -182,6 +182,18 @@ export default function Logistica() {
                   <SelectItem value="Suprimento">Suprimentos</SelectItem>
                   <SelectItem value="Insumo Gráfico">Insumos Gráficos</SelectItem>
                   <SelectItem value="Uso e Consumo">Uso e Consumo</SelectItem>
+                  <SelectItem value="Serviço">Serviço</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* filtro fabricantes */}
+              <Select value={filtroFabricante} onValueChange={setFiltroFabricante}>
+                <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Fabricante" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os Fabricantes</SelectItem>
+                  {fabricantesUnicos.map((fab, idx) => (
+                    <SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
