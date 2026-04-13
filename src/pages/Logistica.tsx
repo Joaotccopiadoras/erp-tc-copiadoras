@@ -177,7 +177,7 @@ export default function Logistica() {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAFiscal(true);
     
-    const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook-test/fiscal-ai", {
+    const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ produto: nome, categoria })
