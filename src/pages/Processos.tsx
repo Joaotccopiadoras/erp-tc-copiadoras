@@ -18,6 +18,7 @@ export default function Processos() {
 
   // --- estados filtro ---
   const [busca, setBusca] = useState("");
+  const [documentoId, setDocumentoId] = useState<string | null>(null);
   const [filtroSetor, setFiltroSetor] = useState("todos");
   const [documentos, setDocumentos] = useState<any[]>([]);
   
@@ -70,6 +71,7 @@ export default function Processos() {
   const [fluxoImagem, setFluxoImagem] = useState<string>("");
 
   const abrirDocumento = (doc: any) => {
+    setDocumentoId(doc.id);
     setCodigo(doc.codigo || "");
     setTitulo(doc.titulo || "");
     setTipo(doc.tipo_documento || "POP");
@@ -112,24 +114,42 @@ export default function Processos() {
     } catch (error) {
       console.error("Erro ao salvar fluxograma", error)
     }
-    const { error } = await supabase.from('sgq_documentos').insert([{
+  }
+    const payload = {
         codigo, titulo, tipo_documento: tipo, centro_custo: centroCusto, versao, 
         data_emissao: dataEmissao, data_revisao: dataRevisao, aprovado_por: aprovador,
         proposito, escopo, objetivo, responsabilidades: funcoes, 
         procedimentos, instrucoes_complementares: instrucoes, 
         documentos_referencia: referencias, indicadores, historico_revisoes: historico,
-        fluxograma_dados: { nodes, edges },
-        fluxograma_imagem: imgData
-    }]);
+        fluxograma_dados: { nodes, edges }, 
+        fluxograma_imagem: imgData 
+    };
 
-    if (error) {
-      alert("Erro ao salvar no banco: " + error.message);
+    let erroBanco;
+
+    if (documentoId) {
+      // update
+      const { error } = await supabase
+        .from('sgq_documentos')
+        .update(payload)
+        .eq('id', documentoId);
+      erroBanco = error;
+    } else {
+      // insert
+      const { error } = await supabase
+        .from('sgq_documentos')
+        .insert([payload]);
+      erroBanco = error;
+    }
+
+    if (erroBanco) {
+      alert("Erro ao salvar no banco: " + erroBanco.message);
     } else {
       alert("Documento salvo com sucesso no banco de dados!");
-      setModo("visualizar");
+      fetchDocumentos();
+      setModo("visualizar"); 
     }
-  };
-  };
+    };
 
   // --- pdf ---
   const exportarPDF = () => {
@@ -339,7 +359,7 @@ export default function Processos() {
             <p className="text-slate-500">Consulta e padronização de procedimentos internos</p>
           </div>
           {modo === "lista" && (
-            <Button onClick={() => setModo("editar")} className="gap-2">
+            <Button onClick={() => { setDocumentoId(null); setModo("editar"); }} className="gap-2">
               <Plus className="w-4 h-4" /> Novo Documento
             </Button>
           )}
