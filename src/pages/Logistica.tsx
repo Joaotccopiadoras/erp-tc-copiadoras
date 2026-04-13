@@ -23,6 +23,11 @@ export default function Logistica() {
   const [modelo, setModelo] = useState("");
   const [categoria, setCategoria] = useState("Peça");
   const [rastreiaSerie, setRastreiaSerie] = useState(false);
+  const [imagemUrl, setImagemUrl] = useState("");
+  const [cicloRecomendado, setCicloRecomendado] = useState("");
+  const [cicloMaximo, setCicloMaximo] = useState("");
+  const [rendimentoVolume, setRendimentoVolume] = useState("");
+  const [vidaUtilEstimada, setVidaUtilEstimada] = useState("");
   const [custoBase, setCustoBase] = useState("");
   const [precoVenda, setPrecoVenda] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState("");
@@ -52,6 +57,7 @@ export default function Logistica() {
     setProdutoId(null);
     setSku(""); setNome(""); setFabricante(""); setModelo("");
     setCategoria("Peça"); setRastreiaSerie(false);
+    setCicloRecomendado(""); setCicloMaximo(""); setRendimentoVolume(""); setVidaUtilEstimada("");
     setCustoBase(""); setPrecoVenda("");
     setEstoqueMinimo(""); setPontoPedido("");
     setNcm(""); setCest("");
@@ -67,6 +73,11 @@ export default function Logistica() {
     setModelo(prod.modelo || "");
     setCategoria(prod.categoria || "Peça");
     setRastreiaSerie(prod.rastreia_serie || false);
+    setImagemUrl(prod.imagem_url || "");
+    setCicloRecomendado(prod.ciclo_mensal_recomendado?.toString() || "");
+    setCicloMaximo(prod.ciclo_mensal_maximo?.toString() || "");
+    setRendimentoVolume(prod.rendimento_volume?.toString() || "");
+    setVidaUtilEstimada(prod.vida_util_estimada?.toString() || "");
     setCustoBase(prod.custo_base?.toString() || "");
     setPrecoVenda(prod.preco_venda?.toString() || "");
     setEstoqueMinimo(prod.estoque_minimo?.toString() || "");
@@ -85,6 +96,11 @@ export default function Logistica() {
       modelo,
       categoria,
       rastreia_serie: rastreiaSerie,
+      imagem_url: imagemUrl,
+      ciclo_mensal_recomendado: parseInt(cicloRecomendado) || 0,
+      ciclo_mensal_maximo: parseInt(cicloMaximo) || 0,
+      rendimento_volume: parseInt(rendimentoVolume) || 0,
+      vida_util_estimada: parseInt(vidaUtilEstimada) || 0,
       custo_base: parseFloat(custoBase.replace(',', '.')) || 0,
       preco_venda: parseFloat(precoVenda.replace(',', '.')) || 0,
       estoque_minimo: parseInt(estoqueMinimo) || 0,
@@ -126,12 +142,11 @@ export default function Logistica() {
     <AppLayout>
       <div className="space-y-6 max-w-6xl mx-auto">
         
-        {/* Cabeçalho */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
               <Package className="w-6 h-6 text-stone-600" />
-              Catálogo de Produtos (Logística)
+              Catálogo de Produtos
             </h1>
             <p className="text-slate-500">Gestão unificada de equipamentos, peças e insumos.</p>
           </div>
@@ -144,18 +159,13 @@ export default function Logistica() {
           )}
         </div>
 
-        {/* modo lista catalogo */}
+        {/* lista */}
         {modo === "lista" && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
             <div className="p-4 border-b flex gap-4 bg-slate-50">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input 
-                  placeholder="Buscar por Nome ou SKU/Partnumber..." 
-                  className="pl-9"
-                  value={busca}
-                  onChange={e => setBusca(e.target.value)}
-                />
+                <Input placeholder="Buscar por Nome ou SKU..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
                 <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -166,8 +176,6 @@ export default function Logistica() {
                   <SelectItem value="Suprimento">Suprimentos</SelectItem>
                   <SelectItem value="Insumo Gráfico">Insumos Gráficos</SelectItem>
                   <SelectItem value="Uso e Consumo">Uso e Consumo</SelectItem>
-                  <SelectItem value="Ferramenta">Ferramentas</SelectItem>
-                  <SelectItem value="Serviço">Serviços</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -179,8 +187,13 @@ export default function Logistica() {
                 produtosFiltrados.map(prod => (
                   <div key={prod.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0">
-                        <Package className="w-6 h-6 text-stone-400" />
+                      {/* se tiver imagem mostra, senao padrao */}
+                      <div className="h-14 w-14 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {prod.imagem_url ? (
+                          <img src={prod.imagem_url} alt={prod.nome} className="h-full w-full object-cover" />
+                        ) : (
+                          <Package className="w-6 h-6 text-stone-400" />
+                        )}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
@@ -196,10 +209,6 @@ export default function Logistica() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="text-right hidden md:block">
-                        <p className="text-sm font-semibold text-emerald-600">R$ {Number(prod.preco_venda).toFixed(2)}</p>
-                        <p className="text-xs text-slate-400">Custo: R$ {Number(prod.custo_base).toFixed(2)}</p>
-                      </div>
                       <Button variant="ghost" size="icon" onClick={() => editarProduto(prod)} className="text-slate-400 hover:text-stone-700">
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -211,7 +220,7 @@ export default function Logistica() {
           </div>
         )}
 
-        {/* edicao formul */}
+        {/* edicao */}
         {modo === "editar" && (
           <div className="bg-white rounded-xl border shadow-sm">
             <Tabs defaultValue="geral" className="w-full">
@@ -224,60 +233,110 @@ export default function Logistica() {
               </div>
 
               <div className="p-6">
-                <TabsContent value="geral" className="space-y-4 mt-0">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Nome do Produto <span className="text-red-500">*</span></label>
-                      <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Toner Brother TN-3472" />
+                <TabsContent value="geral" className="space-y-6 mt-0">
+                  
+                  {/* bloco sup */}
+                  <div className="flex flex-col md:flex-row gap-6">
+                    <div className="flex flex-col items-center gap-2 w-full md:w-1/4">
+                      <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center text-slate-400 overflow-hidden relative">
+                        {imagemUrl ? (
+                          <img src={imagemUrl} alt="Preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <ImageIcon className="w-8 h-8 mb-2 text-slate-300" />
+                            <span className="text-xs">Sem Imagem</span>
+                          </>
+                        )}
+                      </div>
+                      <Input value={imagemUrl} onChange={e => setImagemUrl(e.target.value)} placeholder="Cole a URL da Imagem aqui" className="text-xs" />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">SKU / Partnumber</label>
-                      <Input value={sku} onChange={e => setSku(e.target.value)} placeholder="Ex: TN3472-BR" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Fabricante</label>
-                      <Input value={fabricante} onChange={e => setFabricante(e.target.value)} placeholder="Ex: Brother" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Modelos Compatíveis</label>
-                      <Input value={modelo} onChange={e => setModelo(e.target.value)} placeholder="Ex: DCP-L5652, MFC-L6702" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Categoria <span className="text-red-500">*</span></label>
-                      <Select value={categoria} onValueChange={setCategoria}>
-                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Equipamento">Equipamento</SelectItem>
-                          <SelectItem value="Peça">Peça</SelectItem>
-                          <SelectItem value="Suprimento">Suprimento</SelectItem>
-                          <SelectItem value="Insumo para Recondicionamento">Insumo para Recondicionamento</SelectItem>
-                          <SelectItem value="Ferramenta">Ferramenta</SelectItem>
-                          <SelectItem value="EPI">EPI</SelectItem>
-                          <SelectItem value="Acessório">Acessório</SelectItem>
-                          <SelectItem value="Produto Final Gráfico">Produto Final (Gráfica)</SelectItem>
-                          <SelectItem value="Insumo Gráfico">Insumo (Gráfica)</SelectItem>
-                          <SelectItem value="Uso e Consumo">Materiais de Uso e Consumo</SelectItem>
-                          <SelectItem value="Serviço">Serviço</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2 flex flex-col justify-center pt-6">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={rastreiaSerie} 
-                          onChange={(e) => setRastreiaSerie(e.target.checked)}
-                          className="w-5 h-5 rounded border-slate-300 text-stone-600 focus:ring-stone-600"
-                        />
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">Rastrear Número de Série</p>
-                          <p className="text-xs text-slate-500">Exige serial na entrada e saída (Equipamentos/Placas)</p>
-                        </div>
-                      </label>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full md:w-3/4">
+                      <div className="space-y-2 col-span-2">
+                        <label className="text-sm font-medium">Nome do Produto <span className="text-red-500">*</span></label>
+                        <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Toner Brother TN-3472" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">SKU / Partnumber</label>
+                        <Input value={sku} onChange={e => setSku(e.target.value)} placeholder="Ex: TN3472-BR" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Categoria <span className="text-red-500">*</span></label>
+                        <Select value={categoria} onValueChange={setCategoria}>
+                          <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Equipamento">Equipamento</SelectItem>
+                            <SelectItem value="Peça">Peça</SelectItem>
+                            <SelectItem value="Suprimento">Suprimento</SelectItem>
+                            <SelectItem value="Insumo Gráfico">Insumo (Gráfica)</SelectItem>
+                            <SelectItem value="Uso e Consumo">Materiais de Uso e Consumo</SelectItem>
+                            <SelectItem value="Serviço">Serviço</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Fabricante</label>
+                        <Input value={fabricante} onChange={e => setFabricante(e.target.value)} placeholder="Ex: Brother" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Modelos Compatíveis</label>
+                        <Input value={modelo} onChange={e => setModelo(e.target.value)} placeholder="Ex: DCP-L5652, MFC-L6702" />
+                      </div>
                     </div>
                   </div>
+
+                  {/* renderi p categ */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-700 mb-4 border-b pb-2">Especificações Técnicas</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      
+                      {/* aparece tudo */}
+                      <div className="space-y-2 flex flex-col justify-center">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input type="checkbox" checked={rastreiaSerie} onChange={(e) => setRastreiaSerie(e.target.checked)} className="w-5 h-5 rounded border-slate-300 text-stone-600 focus:ring-stone-600" />
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">Rastrear Série</p>
+                            <p className="text-xs text-slate-500">Bipar serial no estoque</p>
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* aparece quando equip */}
+                      {categoria === "Equipamento" && (
+                        <>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-blue-700">Ciclo Mensal Recomendado</label>
+                            <Input type="number" value={cicloRecomendado} onChange={e => setCicloRecomendado(e.target.value)} placeholder="Ex: 5000" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-red-700">Ciclo Mensal Máximo</label>
+                            <Input type="number" value={cicloMaximo} onChange={e => setCicloMaximo(e.target.value)} placeholder="Ex: 20000" />
+                          </div>
+                        </>
+                      )}
+
+                      {/* aparece quando supr */}
+                      {categoria === "Suprimento" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-emerald-700">Rendimento de Volume (Qtd Páginas)</label>
+                          <Input type="number" value={rendimentoVolume} onChange={e => setRendimentoVolume(e.target.value)} placeholder="Ex: 25000" />
+                        </div>
+                      )}
+
+                      {/* aparece quando peca */}
+                      {categoria === "Peça" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-orange-700">Vida Útil Estimada (Qtd Páginas)</label>
+                          <Input type="number" value={vidaUtilEstimada} onChange={e => setVidaUtilEstimada(e.target.value)} placeholder="Ex: 200000" />
+                        </div>
+                      )}
+
+                    </div>
+                  </div>
+
                 </TabsContent>
 
+                {/* restante */}
                 <TabsContent value="financeiro" className="space-y-4 mt-0">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
