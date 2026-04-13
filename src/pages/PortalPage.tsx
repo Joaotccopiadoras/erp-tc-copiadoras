@@ -60,8 +60,8 @@ export default function PortalPage() {
       descricao: "Gestão de estoque, produtos, entradas e saídas.",
       icone: <Package className="h-10 w-10 text-brown-600"/>,
       link: "/logistica",
-      corBorda: "border-brown-200 hover:border-brown-500",
-      corFundo: "hover:bg-brown-50",
+      corBorda: "border-stone-200 hover:border-stone-500",
+      corFundo: "hover:bg-stone-50",
     },
     {
       id: 7,
