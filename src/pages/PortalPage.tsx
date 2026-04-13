@@ -1,4 +1,4 @@
-import { Wrench, DollarSign, CalendarDays, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { Wrench, DollarSign, CalendarDays, LayoutDashboard, LogOut, Settings, IceCreamCone, UsersRound, TrendingUp, Package, Printer } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client"
 
@@ -11,13 +11,12 @@ export default function PortalPage() {
   const sistemas = [
     {
       id: 1,
-      nome: "Assistência Técnica",
-      descricao: "Painel de produtividade e controle de atendimentos técnicos.",
-      icone: <Wrench className="h-10 w-10 text-blue-600" />,
-      // Rota interna unificado
-      link: "/tecnica",
-      corBorda: "border-blue-200 hover:border-blue-500",
-      corFundo: "hover:bg-blue-50",
+      nome: "Administrativo",
+      descricao: "Gestão de projetos, processos e programação de equipes.",
+      icone: <CalendarDays className="h-10 w-10 text-red-600" />,
+      link: "/agenda",
+      corBorda: "border-red-200 hover:border-red-500",
+      corFundo: "hover:bg-red-50",
     },
     {
       id: 2,
@@ -30,12 +29,48 @@ export default function PortalPage() {
     },
     {
       id: 3,
-      nome: "Agendas Administrativas",
-      descricao: "Gestão de projetos, processos e programação de equipes.",
-      icone: <CalendarDays className="h-10 w-10 text-red-600" />,
-      link: "/agenda",
-      corBorda: "border-red-200 hover:border-red-500",
-      corFundo: "hover:bg-red-50",
+      nome: "Assistência Técnica",
+      descricao: "Painel de produtividade e controle de atendimentos técnicos.",
+      icone: <Wrench className="h-10 w-10 text-blue-600" />,
+      link: "/tecnica",
+      corBorda: "border-blue-200 hover:border-blue-500",
+      corFundo: "hover:bg-blue-50",
+    },
+    {
+      id: 4,
+      nome: "Departamento Pessoal",
+      descricao: "Gestão de Pessoas, controle de jornada, recibos, declarações, folha.",
+      icone: <UsersRound className="h-10 w-10 text-orange-600"/>,
+      link: "/deppessoal",
+      corBorda: "border-orange-200 hover:border-orange-500",
+      corFundo: "hover:bg-orange-50",
+    },
+    {
+      id: 5,
+      nome: "Comercial",
+      descricao: "Gestão de Clientes, contratos, vendas e locações",
+      icone: <TrendingUp className="h-10 w-10 text-yellow-600"/>,
+      link: "/comercial",
+      corBorda: "border-yellow-200 hover:border-yellow-500",
+      corFundo: "hover:bg-yellow-50",
+    },
+    {
+      id: 6,
+      nome: "Logística",
+      descricao: "Gestão de estoque, produtos, entradas e saídas.",
+      icone: <Package className="h-10 w-10 text-brown-600"/>,
+      link: "/logistica",
+      corBorda: "border-brown-200 hover:border-brown-500",
+      corFundo: "hover:bg-brown-50",
+    },
+    {
+      id: 7,
+      nome: "Gráfica",
+      descricao: "Painel de produção, orçamentos e acabamentos.",
+      icone: <Printer className="h-10 w-10 text-pink-600"/>,
+      link: "/grafica",
+      corBorda: "border-pink-200 hover:border-pink-500",
+      corFundo:"hover:bg-pink-50",
     }
   ];
 
