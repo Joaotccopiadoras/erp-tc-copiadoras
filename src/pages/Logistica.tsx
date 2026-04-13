@@ -36,6 +36,41 @@ export default function Logistica() {
   const [ncm, setNcm] = useState("");
   const [cest, setCest] = useState("");
 
+  useEffect(() => {
+    const rascunhoSalvo = sessionStorage.getItem("logistica_rascunho");
+    if (rascunhoSalvo) {
+      try {
+        const draft = JSON.parse(rascunhoSalvo);
+        if (draft.modo === "editar") {
+          setProdutoId(draft.produtoId); setSku(draft.sku); setNome(draft.nome);
+          setFabricante(draft.fabricante); setModelo(draft.modelo); setCategoria(draft.categoria);
+          setRastreiaSerie(draft.rastreiaSerie); setImagemUrl(draft.imagemUrl);
+          setCicloRecomendado(draft.cicloRecomendado); setCicloMaximo(draft.cicloMaximo);
+          setRendimentoVolume(draft.rendimentoVolume); setVidaUtilEstimada(draft.vidaUtilEstimada);
+          setCustoBase(draft.custoBase); setPrecoVenda(draft.precoVenda);
+          setEstoqueMinimo(draft.estoqueMinimo); setPontoPedido(draft.pontoPedido);
+          setNcm(draft.ncm); setCest(draft.cest);
+          setModo("editar"); // Força a tela a ficar no modo edição!
+        }
+      } catch (e) {
+        console.error("Erro ao recuperar rascunho", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (modo === "editar") {
+      const draft = {
+        modo, produtoId, sku, nome, fabricante, modelo, categoria, rastreiaSerie, imagemUrl,
+        cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada,
+        custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest
+      };
+      sessionStorage.setItem("logistica_rascunho", JSON.stringify(draft));
+    } else {
+        sessionStorage.removeItem("logistica_rascunho");
+    }
+  }, [modo, produtoId, sku, nome, fabricante, modelo, categoria, rastreiaSerie, imagemUrl, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada, custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest]);
+
   // busca produtos
   useEffect(() => {
     if (modo === "lista") {
