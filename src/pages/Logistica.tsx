@@ -177,25 +177,21 @@ export default function Logistica() {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAFiscal(true);
     
-    // AQUI VOCÊ VAI PLUGAR O SEU n8n NO FUTURO:
-    // const resposta = await fetch("SUA_URL_DO_WEBHOOK_N8N_AQUI", {
-    //   method: "POST", body: JSON.stringify({ produto: nome, categoria })
-    // });
-    // const dadosIA = await resposta.json();
-    
-    // SIMULADOR PARA TESTE (Apague quando plugar o n8n)
-    setTimeout(() => {
-      setNcm("8443.99.33"); // Simula a resposta da OpenAI
-      setCest("21.050.00");
-      setCarregandoIAFiscal(false);
-    }, 2000);
-  };
+    const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook-test/fiscal-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto: nome, categoria })
+    });
+
+    const dadosIA = await resposta.json();
+    setNcm(dadosIA.ncm);
+    setCest(dadosIA.cest);
 
   const cotarNoMercadoComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAMercado(true);
 
-    // SIMULADOR DO N8N SCRAPER
+    // n8n rasp
     setTimeout(() => {
       setCotacoesMercado([
         { loja: "Mercado Livre", preco: "R$ 145,90", link: "#" },
@@ -455,7 +451,9 @@ export default function Logistica() {
                           <div className="space-y-2">
                             {cotacoesMercado.map((cot, idx) => (
                               <div key={idx} className="flex justify-between items-center bg-white p-2 rounded text-sm border shadow-sm">
-                                <span className="font-medium text-slate-700">{cot.loja}</span>
+                                <a href={cot.link} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                                  {cot.loja}
+                                </a>
                                 <span className="text-emerald-600 font-bold">{cot.preco}</span>
                               </div>
                             ))}
@@ -490,4 +488,5 @@ export default function Logistica() {
       </div>
     </AppLayout>
   );
+}
 }
