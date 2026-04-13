@@ -14,6 +14,7 @@ export default function Logistica() {
   const [produtos, setProdutos] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
+  const [filtroFabricante, setFiltroFabricante] = useState("todos");
 
   // --- estados de formularios ---
   const [produtoId, setProdutoId] = useState<string | null>(null);
@@ -130,12 +131,17 @@ export default function Logistica() {
   };
 
   // filtro na tela
+  const fabricantesUnicos = Array.from(
+    new Set(produtos.map(p => p.fabricante).filter(f => f && f.trim() !== ""))
+  ).sort();
+  
   const produtosFiltrados = produtos.filter(prod => {
     const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
+    const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
     const termoBusca = busca.toLowerCase();
     const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || 
                       (prod.sku?.toLowerCase() || "").includes(termoBusca);
-    return bateCategoria && bateBusca;
+    return bateCategoria && bateFabricante && bateBusca;
   });
 
   return (
