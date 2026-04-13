@@ -183,9 +183,11 @@ export default function Logistica() {
         body: JSON.stringify({ produto: nome, categoria })
     });
 
+
     const dadosIA = await resposta.json();
     setNcm(dadosIA.ncm);
     setCest(dadosIA.cest);
+}
 
   const cotarNoMercadoComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
@@ -201,6 +203,7 @@ export default function Logistica() {
       setCarregandoIAMercado(false);
     }, 3000);
   };
+
 
   // filtro na tela
   const fabricantesUnicos = Array.from(
@@ -488,5 +491,4 @@ export default function Logistica() {
       </div>
     </AppLayout>
   );
-}
 }
