@@ -6,7 +6,8 @@ import {
   UploadCloud, 
   Calendar, 
   LayoutDashboard,
-  Boxes
+  Boxes,
+  CalendarClock
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const path = location.pathname;
 
   const modulos = [
+    {
+      titulo: "Geral",
+      menus: [
+        { nome: "Central", url: "/", icone: LayoutDashboard },
+        { nome: "Agenda", url: "/agenda", icone: Calendar },
+      ]
+    },
+    {
+      titulo: "Financeiro",
+      menus: [
+        { nome: "Dashboard Financeiro", url: "/financeiro", icone: Receipt },
+        { nome: "Upload CSV", url: "/upload-csv", icone: UploadCloud },
+      ]
+    },
     {
       titulo: "Logística e Estoque",
       menus: [
@@ -23,17 +38,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       ]
     },
     {
-      titulo: "Gestão Financeira",
+      titulo: "Assistência Técnica",
       menus: [
-        { nome: "Registros", url: "/registros", icone: Receipt },
-        { nome: "Upload CSV", url: "/upload-csv", icone: UploadCloud },
-      ]
-    },
-    {
-      titulo: "Geral",
-      menus: [
-        { nome: "Dashboard", url: "/", icone: LayoutDashboard },
-        { nome: "Agenda", url: "/agenda", icone: Calendar },
+        { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
       ]
     }
   ];

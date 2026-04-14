@@ -8,6 +8,7 @@ import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import AppLayout from "@/components/AppLayout";
 import { X } from "lucide-react";
 
 const PAGE_SIZE = 15;
@@ -120,17 +121,15 @@ export default function TabelaPage() {
     }
   };
 
-  //APLICA FILTROS
+  //filtros
   const filtered = useMemo(() => {
     let result = allData.filter((a) => {
-      // Filtros em Grade (Múltiplos)
       if (filterTecnicos.length > 0 && !filterTecnicos.includes(a.tecnico)) return false;
       if (filterFabricantes.length > 0 && !filterFabricantes.includes(a.fabricante)) return false;
       if (filterModelos.length > 0 && !filterModelos.includes(a.modelo)) return false;
       if (filterTipos.length > 0 && !filterTipos.includes(a.tipo_atividade)) return false;
       if (filterStatus.length > 0 && !filterStatus.includes(formatarStatus(a.status))) return false;
       
-      // Filtros de Data por Período (Adiciona T23:59:59 no Fim para cobrir o dia todo)
       if (dataEntradaInicio && a.data_entrada < dataEntradaInicio) return false;
       if (dataEntradaFim && a.data_entrada > dataEntradaFim + "T23:59:59") return false;
       if (dataPrevisaoInicio && a.data_previsao < dataPrevisaoInicio) return false;
@@ -141,13 +140,11 @@ export default function TabelaPage() {
       return true;
     });
 
-    //APLICA ORDENAÇÃO NA TELA
     if (sortConfig) {
       result.sort((a, b) => {
         let valA = a[sortConfig.key];
         let valB = b[sortConfig.key];
         
-        // Trata status traduzido se a coluna for status
         if (sortConfig.key === 'status') {
           valA = formatarStatus(a.status);
           valB = formatarStatus(b.status);
@@ -185,7 +182,6 @@ export default function TabelaPage() {
     });
   };
 
-  // Geradores de Listas Únicas
   const uniqueTecnicos = [...new Set(allData.map((a) => a.tecnico).filter(Boolean))].sort();
   const uniqueFabricantes = [...new Set(allData.map((a) => a.fabricante).filter(Boolean))].sort();
   const uniqueModelos = [...new Set(allData.map((a) => a.modelo).filter(Boolean))].sort();
@@ -208,7 +204,6 @@ export default function TabelaPage() {
     });
   };
 
-  // PDF COM ORDENAÇÃO DE 3 NÍVEIS
   const exportarPDF = async () => {
     try {
       const doc = new jsPDF("landscape"); 
@@ -228,20 +223,20 @@ export default function TabelaPage() {
       };
 
       const dadosOrdenados = [...filtered].sort((a, b) => {
-        // 1. ORDENA POR TÉCNICO (Ordem Alfabética)
+        // ordem alfab nome tec
         const tecA = a.tecnico || "Sem Técnico";
         const tecB = b.tecnico || "Sem Técnico";
         if (tecA < tecB) return -1;
         if (tecA > tecB) return 1;
         
-        // 2. ORDENA POR STATUS (Concluído > Andamento > Aguardando)
+        // ordem Concluído > Andamento > Aguardando
         const stA = formatarStatus(a.status);
         const stB = formatarStatus(b.status);
         const ordemA = pesoStatus[stA] || 99; // Se não tiver peso, joga pro fim
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
 
-        // 3. ORDENA POR DATA DE ENTRADA (Crescente)
+        // ordem data entr crescente
         const dataA = new Date(a.data_entrada || 0).getTime();
         const dataB = new Date(b.data_entrada || 0).getTime();
         return dataA - dataB;
@@ -319,7 +314,7 @@ export default function TabelaPage() {
     } catch (error) { console.error("Erro ao gerar Excel:", error); alert("Erro ao gerar Excel."); }
   };
 
-  // Ícone de ordenação (Seta Cima/Baixo)
+  // ordenacao
   const renderSortIcon = (key: string) => {
     if (sortConfig?.key === key) {
       return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;
@@ -328,144 +323,146 @@ export default function TabelaPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 mb-6">
-        <img src="/logo.png" alt="Logo da Empresa" className="h-12 object-contain" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Tabela de Produtividade</h1>
-          <p className="text-muted-foreground text-sm mt-1">Filtre, cruze, ordene e exporte dados de atendimentos</p>
-        </div>
-      </div>
-
-      <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-foreground">Filtros Múltiplos e Períodos</span>
-          {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-              <X className="h-4 w-4 mr-1" /> Limpar Tudo
-            </Button>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <MultiSelectDropdown title="Técnico" options={uniqueTecnicos} selected={filterTecnicos} onChange={setFilterTecnicos} />
-          <MultiSelectDropdown title="Fabricante" options={uniqueFabricantes} selected={filterFabricantes} onChange={setFilterFabricantes} />
-          <MultiSelectDropdown title="Modelo" options={uniqueModelos} selected={filterModelos} onChange={setFilterModelos} />
-          <MultiSelectDropdown title="Atividade" options={uniqueTipos} selected={filterTipos} onChange={setFilterTipos} />
-          <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
-        </div>
-
-        {/* COMPONENTES DE FILTRO DE DATA */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4">
-          <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-            <span className="text-xs font-semibold text-gray-700 uppercase">Período de Entrada</span>
-            <div className="flex gap-2 items-center">
-              <Input type="date" className="text-xs h-8" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
-              <span className="text-xs text-gray-400">até</span>
-              <Input type="date" className="text-xs h-8" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
-            </div>
-          </div>
-          <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-            <span className="text-xs font-semibold text-gray-700 uppercase">Período de Previsão</span>
-            <div className="flex gap-2 items-center">
-              <Input type="date" className="text-xs h-8" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
-              <span className="text-xs text-gray-400">até</span>
-              <Input type="date" className="text-xs h-8" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
-            </div>
-          </div>
-          <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-            <span className="text-xs font-semibold text-gray-700 uppercase">Período de Conclusão</span>
-            <div className="flex gap-2 items-center">
-              <Input type="date" className="text-xs h-8" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
-              <span className="text-xs text-gray-400">até</span>
-              <Input type="date" className="text-xs h-8" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
-            </div>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="flex items-center gap-4 mb-6">
+          <img src="/logo.png" alt="Logo da Empresa" className="h-12 object-contain" />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Tabela de Produtividade</h1>
+            <p className="text-muted-foreground text-sm mt-1">Filtre, cruze, ordene e exporte dados de atendimentos</p>
           </div>
         </div>
-      </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-        <span className="text-muted-foreground">
-          <strong className="text-foreground text-lg">{filtered.length}</strong> atendimentos processados
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-green-600 text-green-600 hover:bg-green-50">
-            <TableIcon className="h-4 w-4 mr-2" /> Exportar Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-red-600 text-red-600 hover:bg-red-50">
-            <FileText className="h-4 w-4 mr-2" /> Exportar PDF
-          </Button>
+        <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-foreground">Filtros Múltiplos e Períodos</span>
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                <X className="h-4 w-4 mr-1" /> Limpar Tudo
+              </Button>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <MultiSelectDropdown title="Técnico" options={uniqueTecnicos} selected={filterTecnicos} onChange={setFilterTecnicos} />
+            <MultiSelectDropdown title="Fabricante" options={uniqueFabricantes} selected={filterFabricantes} onChange={setFilterFabricantes} />
+            <MultiSelectDropdown title="Modelo" options={uniqueModelos} selected={filterModelos} onChange={setFilterModelos} />
+            <MultiSelectDropdown title="Atividade" options={uniqueTipos} selected={filterTipos} onChange={setFilterTipos} />
+            <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
+          </div>
+
+          {/* COMPONENTES DE FILTRO DE DATA */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4">
+            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
+              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Entrada</span>
+              <div className="flex gap-2 items-center">
+                <Input type="date" className="text-xs h-8" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-gray-400">até</span>
+                <Input type="date" className="text-xs h-8" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
+              </div>
+            </div>
+            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
+              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Previsão</span>
+              <div className="flex gap-2 items-center">
+                <Input type="date" className="text-xs h-8" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-gray-400">até</span>
+                <Input type="date" className="text-xs h-8" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
+              </div>
+            </div>
+            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
+              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Conclusão</span>
+              <div className="flex gap-2 items-center">
+                <Input type="date" className="text-xs h-8" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-gray-400">até</span>
+                <Input type="date" className="text-xs h-8" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-gray-50">
-              <TableRow>
-                {/* Cabeçalhos Clicáveis para Ordenação */}
-                <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Entrada {renderSortIcon('data_entrada')}</TableHead>
-                <TableHead onClick={() => handleSort('data_previsao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Previsão {renderSortIcon('data_previsao')}</TableHead>
-                <TableHead onClick={() => handleSort('cliente_os_modelo_numero')} className="cursor-pointer hover:bg-gray-100">Cliente/OS {renderSortIcon('cliente_os_modelo_numero')}</TableHead>
-                <TableHead onClick={() => handleSort('tipo_atividade')} className="cursor-pointer hover:bg-gray-100">Atividade {renderSortIcon('tipo_atividade')}</TableHead>
-                <TableHead onClick={() => handleSort('fabricante')} className="cursor-pointer hover:bg-gray-100">Fabricante {renderSortIcon('fabricante')}</TableHead>
-                <TableHead onClick={() => handleSort('modelo')} className="cursor-pointer hover:bg-gray-100">Modelo {renderSortIcon('modelo')}</TableHead>
-                <TableHead onClick={() => handleSort('tecnico')} className="cursor-pointer hover:bg-gray-100">Técnico {renderSortIcon('tecnico')}</TableHead>
-                <TableHead onClick={() => handleSort('status')} className="cursor-pointer hover:bg-gray-100">Status {renderSortIcon('status')}</TableHead>
-                <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
-                <TableHead>Resumo</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Analisando banco de dados...</TableCell></TableRow>
-              ) : paginated.length === 0 ? (
-                <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow>
-              ) : (
-                paginated.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="whitespace-nowrap">{formatarData(a.data_entrada)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatarData(a.data_previsao)}</TableCell>
-                    <TableCell className="font-medium text-xs">{a.cliente_os_modelo_numero || "—"}</TableCell>
-                    <TableCell className="text-xs">{a.tipo_atividade || "—"}</TableCell>
-                    <TableCell className="text-xs">{a.fabricante || "—"}</TableCell>
-                    <TableCell className="text-xs">{a.modelo || "—"}</TableCell>
-                    <TableCell className="text-xs">{a.tecnico || "—"}</TableCell>
-                    <TableCell>
-                      <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
-                        a.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        a.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-blue-100 text-blue-700'
-                      }`}>
-                        {formatarStatus(a.status)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{formatarData(a.data_conclusao)}</TableCell>
-                    <TableCell className="max-w-[150px] truncate text-xs text-gray-500" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => excluirAtendimento(a.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border">
-          <span className="text-muted-foreground font-medium pl-2">Página {page + 1} de {totalPages}</span>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
+          <span className="text-muted-foreground">
+            <strong className="text-foreground text-lg">{filtered.length}</strong> atendimentos processados
+          </span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Anterior</Button>
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Próxima</Button>
+            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-green-600 text-green-600 hover:bg-green-50">
+              <TableIcon className="h-4 w-4 mr-2" /> Exportar Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-red-600 text-red-600 hover:bg-red-50">
+              <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+            </Button>
           </div>
         </div>
-      )}
-    </div>
+
+        <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-gray-50">
+                <TableRow>
+                  {/* Cabeçalhos Clicáveis para Ordenação */}
+                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Entrada {renderSortIcon('data_entrada')}</TableHead>
+                  <TableHead onClick={() => handleSort('data_previsao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Previsão {renderSortIcon('data_previsao')}</TableHead>
+                  <TableHead onClick={() => handleSort('cliente_os_modelo_numero')} className="cursor-pointer hover:bg-gray-100">Cliente/OS {renderSortIcon('cliente_os_modelo_numero')}</TableHead>
+                  <TableHead onClick={() => handleSort('tipo_atividade')} className="cursor-pointer hover:bg-gray-100">Atividade {renderSortIcon('tipo_atividade')}</TableHead>
+                  <TableHead onClick={() => handleSort('fabricante')} className="cursor-pointer hover:bg-gray-100">Fabricante {renderSortIcon('fabricante')}</TableHead>
+                  <TableHead onClick={() => handleSort('modelo')} className="cursor-pointer hover:bg-gray-100">Modelo {renderSortIcon('modelo')}</TableHead>
+                  <TableHead onClick={() => handleSort('tecnico')} className="cursor-pointer hover:bg-gray-100">Técnico {renderSortIcon('tecnico')}</TableHead>
+                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer hover:bg-gray-100">Status {renderSortIcon('status')}</TableHead>
+                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
+                  <TableHead>Resumo</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Analisando banco de dados...</TableCell></TableRow>
+                ) : paginated.length === 0 ? (
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow>
+                ) : (
+                  paginated.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell className="whitespace-nowrap">{formatarData(a.data_entrada)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatarData(a.data_previsao)}</TableCell>
+                      <TableCell className="font-medium text-xs">{a.cliente_os_modelo_numero || "—"}</TableCell>
+                      <TableCell className="text-xs">{a.tipo_atividade || "—"}</TableCell>
+                      <TableCell className="text-xs">{a.fabricante || "—"}</TableCell>
+                      <TableCell className="text-xs">{a.modelo || "—"}</TableCell>
+                      <TableCell className="text-xs">{a.tecnico || "—"}</TableCell>
+                      <TableCell>
+                        <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
+                          a.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          a.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {formatarStatus(a.status)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{formatarData(a.data_conclusao)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-xs text-gray-500" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => excluirAtendimento(a.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border">
+            <span className="text-muted-foreground font-medium pl-2">Página {page + 1} de {totalPages}</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Próxima</Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
   );
 }
