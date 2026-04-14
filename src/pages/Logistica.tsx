@@ -321,9 +321,10 @@ export default function Logistica() {
       }
 
       autoTable(doc, {
-        startY: 34,
+        startY: 35,
+        margin: { top: 35},
         head: [['FOTO', 'SKU', 'NOME', 'CATEGORIA', 'FAMÍLIA', 'PERFIL', 'FABRICANTE', 'CUSTO BASE', 'PREÇO VENDA']],
-        body: bodyDataParaTabela, // Tabela pura com 9 colunas certinhas
+        body: bodyDataParaTabela,
         theme: 'grid',
         headStyles: { fillColor: [41, 37, 36], textColor: [255,255,255], valign: 'middle', halign: 'center' },
         styles: { fontSize: 7, cellPadding: 2, valign: 'middle' },
