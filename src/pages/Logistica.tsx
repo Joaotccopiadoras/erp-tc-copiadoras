@@ -4,17 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2 } from "lucide-react";
+import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Logistica() {
-  const [modo, setModo] = useState<"lista" | "editar">("lista");
+  const [modo, setModo] = useState<"lista" | "editar" | "lote">("lista");
 
   // --- estados de lista e filtros ---
   const [produtos, setProdutos] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
+
+  // --- estados edicao lote ---
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [loteCampo, setLoteCampo] = useState("");
+  const [loteValor, setLoteValor] = useState("");
 
   // --- estados de formularios ---
   const [produtoId, setProdutoId] = useState<string | null>(null);
@@ -173,6 +178,29 @@ export default function Logistica() {
     }
   };
 
+  const toggleSelecao = (id: string) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const aplicarEdicaoLote = async () => {
+    if (!loteCampo) return alert("Selecione qual campo deseja alterar!");
+    if (!loteValor && loteCampo !== 'condicao') return alert("Informe o novo valor!");
+    const payload = { [loteCampo]: loteValor };
+    const { error } = await supabase
+      .from('log_produtos')
+      .update(payload)
+      .in('id', selecionados);
+      if (error) {
+      alert("Erro ao atualizar produtos: " + error.message);
+    } else {
+      alert(`${selecionados.length} produtos atualizados com sucesso!`);
+      setModo("lista");
+      setSelecionados([]);
+      setLoteCampo("");
+      setLoteValor("");
+    }
+  };
+
   const sugerirFiscalComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAFiscal(true);
@@ -241,6 +269,82 @@ export default function Logistica() {
             <Button variant="outline" onClick={() => setModo("lista")}>Voltar ao Catálogo</Button>
           )}
         </div>
+
+        {/* modo lote */}
+        {modo === "lote" && (
+          <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto mt-8">
+            <div className="flex items-center gap-4 mb-6 border-b pb-4">
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <ListChecks className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Edição em Massa</h2>
+                <p className="text-slate-500">Você está alterando <strong>{selecionados.length} produtos</strong> simultaneamente.</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Qual campo deseja alterar em todos?</label>
+                <Select value={loteCampo} onValueChange={(val) => { setLoteCampo(val); setLoteValor(""); }}>
+                  <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione o campo..." /></SelectTrigger>
+                  <SelectContent className="bg-white z-50">
+                    <SelectItem value="fabricante">Fabricante (Marca)</SelectItem>
+                    <SelectItem value="categoria">Categoria do Produto</SelectItem>
+                    <SelectItem value="condicao">Condição (Novo/Recondicionado)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* input dinamico */}
+              {loteCampo === "fabricante" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Digite o novo Fabricante para todos:</label>
+                  <Input value={loteValor} onChange={e => setLoteValor(e.target.value)} placeholder="Ex: BROTHER" />
+                </div>
+              )}
+
+              {loteCampo === "categoria" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Selecione a nova Categoria para todos:</label>
+                  <Select value={loteValor} onValueChange={setLoteValor}>
+                    <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent className="bg-white z-50">
+                      <SelectItem value="Equipamento">Equipamento</SelectItem>
+                      <SelectItem value="Peça">Peça</SelectItem>
+                      <SelectItem value="Suprimento">Suprimento</SelectItem>
+                      <SelectItem value="Insumo Gráfico">Insumo (Gráfica)</SelectItem>
+                      <SelectItem value="Uso e Consumo">Materiais de Uso e Consumo</SelectItem>
+                      <SelectItem value="Serviço">Serviço</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {loteCampo === "condicao" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Selecione a nova Condição para todos:</label>
+                  <Select value={loteValor} onValueChange={setLoteValor}>
+                    <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione (ou deixe em branco para limpar)..." /></SelectTrigger>
+                    <SelectContent className="bg-white z-50">
+                      <SelectItem value="Original Novo">Original Novo</SelectItem>
+                      <SelectItem value="Original Recondicionado">Original Recondicionado</SelectItem>
+                      <SelectItem value="Compatível Novo">Compatível Novo</SelectItem>
+                      <SelectItem value="Compatível Recondicionado">Compatível Recondicionado</SelectItem>
+                      <SelectItem value="Nova">Nova (Peça)</SelectItem>
+                      <SelectItem value="Recondicionada">Recondicionada (Peça)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-6 border-t">
+                <Button variant="outline" onClick={() => setModo("lista")}>Cancelar</Button>
+                <Button onClick={aplicarEdicaoLote} className="bg-blue-600 hover:bg-blue-700 text-white">Aplicar Alteração em Massa</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* lista */}
         {modo === "lista" && (
