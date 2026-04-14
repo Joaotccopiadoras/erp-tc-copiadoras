@@ -353,7 +353,7 @@ export default function Logistica() {
                           <label className="text-sm font-medium text-emerald-700">Condição do Suprimento</label>
                           <Select value={condicao} onValueChange={setCondicao}>
                             <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-white z-50">
                               <SelectItem value="Original Novo">Original Novo</SelectItem>
                               <SelectItem value="Original Recondicionado">Original Recondicionado</SelectItem>
                               <SelectItem value="Compatível Novo">Compatível Novo</SelectItem>
