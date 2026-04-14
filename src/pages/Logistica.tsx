@@ -246,7 +246,7 @@ export default function Logistica() {
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
                 <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white z-50">
                   <SelectItem value="todas">Todas</SelectItem>
                   <SelectItem value="Equipamento">Equipamentos</SelectItem>
                   <SelectItem value="Peça">Peças</SelectItem>
@@ -258,7 +258,7 @@ export default function Logistica() {
               </Select>
               <Select value={filtroFabricante} onValueChange={setFiltroFabricante}>
                 <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Fabricante" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white z-50">
                   <SelectItem value="todos">Todos os Fabricantes</SelectItem>
                   {fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}
                 </SelectContent>
@@ -328,7 +328,7 @@ export default function Logistica() {
                         <label className="text-sm font-medium">Categoria <span className="text-red-500">*</span></label>
                         <Select value={categoria} onValueChange={(val) => { setCategoria(val); setCondicao(""); }}>
                           <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white z-50">
                             <SelectItem value="Equipamento">Equipamento</SelectItem>
                             <SelectItem value="Peça">Peça</SelectItem>
                             <SelectItem value="Suprimento">Suprimento</SelectItem>
@@ -362,7 +362,7 @@ export default function Logistica() {
                           <label className="text-sm font-medium text-orange-700">Condição da Peça</label>
                           <Select value={condicao} onValueChange={setCondicao}>
                             <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-white z-50">
                               <SelectItem value="Nova">Nova</SelectItem>
                               <SelectItem value="Recondicionada">Recondicionada</SelectItem>
                             </SelectContent>
