@@ -7,7 +7,8 @@ import {
   Calendar, 
   LayoutDashboard,
   Boxes,
-  CalendarClock
+  CalendarClock,
+  Workflow
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -23,10 +24,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       ]
     },
     {
+      titulo: "Administrativo",
+      menus: [
+        { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
+        { nome: "Agendas", url: "/agenda", icone: Calendar },
+      ]
+    },
+    {
       titulo: "Financeiro",
       menus: [
         { nome: "Dashboard Financeiro", url: "/financeiro", icone: Receipt },
-        { nome: "Upload CSV", url: "/upload-csv", icone: UploadCloud },
+        // { nome: "Upload CSV", url: "/upload-csv", icone: UploadCloud },
       ]
     },
     {
