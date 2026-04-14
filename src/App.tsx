@@ -10,6 +10,7 @@ import Agenda from "./pages/Agenda"
 import Tecnica from "./pages/Tecnica"
 import Processos from "./pages/Processos"
 import Logistica from "./pages/Logistica"
+import EntradasProdutos from "./pages/EntradasProdutos"
 
 const queryClient = new QueryClient();
 export default function App() {
@@ -73,6 +74,8 @@ export default function App() {
           <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
           <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
+
+          <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route
