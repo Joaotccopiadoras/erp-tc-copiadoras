@@ -26,8 +26,8 @@ export default function Logistica() {
   const [sku, setSku] = useState("");
   const [nome, setNome] = useState("");
   const [fabricante, setFabricante] = useState("");
-  const [familia, setFamilia] = useState(""); // NOVO
-  const [perfil, setPerfil] = useState(""); // NOVO
+  const [familia, setFamilia] = useState("");
+  const [perfil, setPerfil] = useState("");
   const [modelo, setModelo] = useState("");
   const [categoria, setCategoria] = useState("Peça");
   const [condicao, setCondicao] = useState("");
@@ -182,12 +182,19 @@ export default function Logistica() {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAFiscal(true);
     try {
+      /* CÓDIGO REAL DO N8N:
+         No seu prompt do n8n, certifique-se de pedir:
+         "Retorne o formato: {'ncm': 'CODIGO - DESCRIÇÃO', 'cest': 'CODIGO - DESCRIÇÃO'}"
+      */
       const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ produto: nome, categoria: categoria })
       });
       const dadosIA = await resposta.json();
       setNcm(dadosIA.ncm || "");
+      
+      // Simulador (Apague ou comente a linha abaixo quando for usar a URL real acima)
+      // setTimeout(() => { setNcm("8443.99.33 - Partes e acessórios de impressoras"); setCest("21.050.00 - Produtos e equipamentos de TI"); setCarregandoIAFiscal(false); }, 2000);
     } catch (error) {
       console.error("Erro na IA:", error);
       alert("Houve um erro ao consultar a IA. Verifique sua conexão ou o n8n.");
@@ -282,7 +289,7 @@ export default function Logistica() {
       const linha = [
         p.sku || "", `"${p.nome || ""}"`, p.categoria || "", p.condicao || "", p.familia || "", p.perfil || "", p.fabricante || "",
         Number(p.custo_base || 0).toFixed(2).replace('.', ','), Number(p.preco_venda || 0).toFixed(2).replace('.', ','),
-        p.estoque_minimo || "0", p.ncm || "", p.cest || ""
+        p.estoque_minimo || "0", `"${p.ncm || ""}"`, `"${p.cest || ""}"`
       ].join(";");
       csvContent += linha + "\n";
     });
@@ -334,7 +341,7 @@ export default function Logistica() {
     for (let i = 0; i < maxLinhas; i++) {
       const linha = [
         categoriasUnicas[i] || "", familiasUnicas[i] || "", perfisUnicos[i] || "", condicoesUnicas[i] || "",
-        fabricantesUnicos[i] || "", ncmUnicos[i] || "", cestUnicos[i] || ""
+        fabricantesUnicos[i] || "", `"${ncmUnicos[i] || ""}"`, `"${cestUnicos[i] || ""}"`
       ].join(";");
       csvContent += linha + "\n";
     }
@@ -349,7 +356,7 @@ export default function Logistica() {
     <AppLayout>
       <div className="space-y-6 max-w-6xl mx-auto">
         
-        {/* renderiz datalists */}
+        {/* renderiz datalist */}
         <datalist id="lista-fabricantes">{fabricantesUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
         <datalist id="lista-familias">{familiasUnicas.map((f, i) => <option key={i} value={f as string} />)}</datalist>
         <datalist id="lista-perfis">{perfisUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
@@ -365,6 +372,8 @@ export default function Logistica() {
           </div>
           {modo === "lista" ? (
             <div className="flex gap-2 flex-wrap justify-end">
+              <Button onClick={exportarExcelProdutos} variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"><TableIcon className="w-4 h-4"/> Excel</Button>
+              <Button onClick={exportarPDFProdutos} variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"><FileDown className="w-4 h-4"/> PDF</Button>
               <Button onClick={novoProduto} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
             </div>
           ) : (
@@ -372,7 +381,7 @@ export default function Logistica() {
           )}
         </div>
 
-        {/* acoes em lote */}
+        {/* lote */}
         {modo === "lote" && (
           <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto mt-8">
             <div className="flex items-center gap-4 mb-6 border-b pb-4">
@@ -436,7 +445,7 @@ export default function Logistica() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Nova Condição:</label>
                   <Select value={loteValor} onValueChange={setLoteValor}>
-                    <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione (ou deixe em branco para limpar)..." /></SelectTrigger>
                     <SelectContent className="bg-white z-50">
                       <SelectItem value="Original Novo">Original Novo</SelectItem>
                       <SelectItem value="Original Recondicionado">Original Recondicionado</SelectItem>
@@ -465,14 +474,11 @@ export default function Logistica() {
             <div className="bg-stone-50 border-b p-3 px-4 flex justify-between items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-stone-500" />
-                <span className="text-sm font-semibold text-stone-700">Exportar Relatórios:</span>
+                <span className="text-sm font-semibold text-stone-700">Relatórios Auxiliares:</span>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <Button onClick={exportarPDFProdutos} variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"><FileDown className="w-4 h-4"/> Produtos (PDF)</Button>
-                <Button onClick={exportarExcelProdutos} variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"><TableIcon className="w-4 h-4"/> Produtos (Excel)</Button>
-                <div className="border-l border-stone-300 mx-1"></div>
-                <Button onClick={exportarAuxiliaresPDF} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><FileDown className="w-4 h-4"/> Cadastros Base (PDF)</Button>
-                <Button onClick={exportarAuxiliaresExcel} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><TableIcon className="w-4 h-4"/> Cadastros Base (Excel)</Button>
+                <Button onClick={exportarAuxiliaresPDF} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><FileDown className="w-4 h-4"/> PDF</Button>
+                <Button onClick={exportarAuxiliaresExcel} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><TableIcon className="w-4 h-4"/> Excel</Button>
               </div>
             </div>
 
@@ -491,7 +497,7 @@ export default function Logistica() {
             <div className="p-4 border-b flex flex-wrap gap-4 bg-white items-center">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Buscar Nome, Partnumber, Família ou Perfil..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Buscar Nome, PartNumber, Família ou Perfil..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
                 <SelectTrigger className="w-[180px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -620,7 +626,7 @@ export default function Logistica() {
                         </Select>
                       </div>
 
-                      {/* datalist autosugest */}
+                      {/* autosugest datalist */}
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Família de Produto</label>
                         <Input list="lista-familias" value={familia} onChange={e => setFamilia(e.target.value)} placeholder="Ex: Impressão" />
@@ -662,7 +668,7 @@ export default function Logistica() {
                         </div>
                       )}
 
-                      <div className="space-y-2">
+                      <div className="space-y-2 col-span-2">
                         <label className="text-sm font-medium">Modelos Compatíveis</label>
                         <Input value={modelo} onChange={e => setModelo(e.target.value)} placeholder="Ex: DCP-L5652" />
                       </div>
@@ -704,11 +710,14 @@ export default function Logistica() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">NCM</label>
-                        <div className="relative"><FileDigit className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input list="lista-ncm" value={ncm} onChange={e => setNcm(e.target.value)} className="pl-9 bg-white" placeholder="Ex: 8443.99.33" /></div>
+                        <div className="relative">
+                          <FileDigit className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                          <Input list="lista-ncm" value={ncm} onChange={e => setNcm(e.target.value)} className="pl-9 bg-white" placeholder="Ex: 8443.99.33 - Partes e acessórios..." />
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">CEST</label>
-                        <Input list="lista-cest" value={cest} onChange={e => setCest(e.target.value)} placeholder="Ex: 21.050.00" className="bg-white" />
+                        <Input list="lista-cest" value={cest} onChange={e => setCest(e.target.value)} placeholder="Ex: 21.050.00 - Produtos de TI..." className="bg-white" />
                       </div>
                     </div>
 
