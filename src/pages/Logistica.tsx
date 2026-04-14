@@ -251,23 +251,19 @@ export default function Logistica() {
       const doc = new jsPDF("l", "mm", "a4");
 
       const adicionarCabecalhoRodape = (data: any) => {
-        // Faixa superior preta
         doc.setFillColor(41, 37, 36); 
         doc.rect(14, 10, 269, 14, 'F');
         
-        // Título dentro da faixa
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
         doc.setTextColor(255, 255, 255);
         doc.text("TC COPIADORAS - Catálogo de Produtos", 18, 19);
         
-        // Informações de filtro abaixo da faixa
         doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(100, 100, 100);
         doc.text(`Filtros: Categoria: ${filtroCategoria} | Fabricante: ${filtroFabricante} | Total de Itens: ${produtosFiltrados.length}`, 14, 30);
 
-        // Rodapé Numerado
         const numPagina = data.pageNumber;
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
@@ -288,7 +284,7 @@ export default function Logistica() {
               const ctx = canvas.getContext("2d");
               if (ctx) {
                 ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL("image/jpeg", 0.5)); // Converte para JPEG leve
+                resolve(canvas.toDataURL("image/jpeg", 0.5)); 
               } else {
                 resolve(null);
               }
@@ -296,18 +292,23 @@ export default function Logistica() {
               resolve(null);
             }
           };
-          img.onerror = () => resolve(null); // Se o site bloquear, cai aqui
+          img.onerror = () => resolve(null); 
         });
       };
 
-      const bodyData = [];
+      // Matriz que vai guardar todas as fotos já baixadas em ordem
+      const listaDeImagens: (string | null)[] = [];
+      const bodyDataParaTabela = [];
+
       for (const p of produtosFiltrados) {
         let imgData = null;
         if (p.imagem_url) {
           imgData = await carregarImagem(p.imagem_url);
         }
-        bodyData.push([
-          { content: "", styles: { minCellHeight: 16 } }, // Espaço pra foto
+        listaDeImagens.push(imgData); // Guardamos a foto na mesma posição da linha
+
+        bodyDataParaTabela.push([
+          { content: "", styles: { minCellHeight: 16 } }, // Espaço vazio para desenhar a foto por cima depois
           p.sku || "S/N", 
           p.nome, 
           p.categoria, 
@@ -315,23 +316,25 @@ export default function Logistica() {
           p.perfil || "-", 
           p.fabricante || "-", 
           `R$ ${Number(p.custo_base).toFixed(2)}`, 
-          `R$ ${Number(p.preco_venda).toFixed(2)}`,
-          imgData // Coluna oculta 9 com a imagem
+          `R$ ${Number(p.preco_venda).toFixed(2)}`
         ]);
       }
 
       autoTable(doc, {
         startY: 34,
         head: [['FOTO', 'SKU', 'NOME', 'CATEGORIA', 'FAMÍLIA', 'PERFIL', 'FABRICANTE', 'CUSTO BASE', 'PREÇO VENDA']],
-        body: bodyData.map(row => row.slice(0, 9)), 
+        body: bodyDataParaTabela, // Tabela pura com 9 colunas certinhas
         theme: 'grid',
         headStyles: { fillColor: [41, 37, 36], textColor: [255,255,255], valign: 'middle', halign: 'center' },
         styles: { fontSize: 7, cellPadding: 2, valign: 'middle' },
         columnStyles: { 0: { cellWidth: 20, halign: 'center' } },
         didDrawPage: adicionarCabecalhoRodape,
         didDrawCell: (data) => {
+          // Quando estiver desenhando a coluna "FOTO" (índice 0)
           if (data.section === 'body' && data.column.index === 0) {
-            const imgData = bodyData[data.row.index][9];
+            // Puxa a foto correspondente àquela linha exata
+            const imgData = listaDeImagens[data.row.index];
+            
             if (imgData) {
               try {
                 const tamanho = 12; 
@@ -339,7 +342,6 @@ export default function Logistica() {
                 const y = data.cell.y + (data.cell.height - tamanho) / 2;
                 doc.addImage(imgData as string, 'JPEG', x, y, tamanho, tamanho);
               } catch(e) {
-                // Previne qualquer travamento de PDF
                 doc.setFontSize(6); doc.setTextColor(200, 0, 0);
                 doc.text("Erro", data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center' });
               }
@@ -356,7 +358,7 @@ export default function Logistica() {
       console.error("Erro fatal ao gerar PDF:", error);
       alert("Houve um problema ao processar o PDF. Verifique o console.");
     } finally {
-      setCarregandoPDF(false); // Destrava o botão SEMPRE
+      setCarregandoPDF(false); 
     }
   };
 
