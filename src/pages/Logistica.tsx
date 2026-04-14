@@ -227,7 +227,11 @@ export default function Logistica() {
     const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
     const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
     const termoBusca = busca.toLowerCase();
-    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca) || (prod.familia?.toLowerCase() || "").includes(termoBusca) || (prod.perfil?.toLowerCase() || "").includes(termoBusca);
+    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || 
+                      (prod.sku?.toLowerCase() || "").includes(termoBusca) || 
+                      (prod.familia?.toLowerCase() || "").includes(termoBusca) || 
+                      (prod.perfil?.toLowerCase() || "").includes(termoBusca) ||
+                      (prod.modelo?.toLowerCase() || "").includes(termoBusca);
     return bateCategoria && bateFabricante && bateBusca;
   });
 
