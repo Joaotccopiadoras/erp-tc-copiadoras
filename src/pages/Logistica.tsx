@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, Table as TableIcon } from "lucide-react";
+import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, Table as TableIcon, Database } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -16,7 +16,7 @@ export default function Logistica() {
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
-  const [ordenacao, setOrdenacao] = useState("nome_asc"); // 
+  const [ordenacao, setOrdenacao] = useState("nome_asc");
 
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [loteCampo, setLoteCampo] = useState("");
@@ -26,6 +26,8 @@ export default function Logistica() {
   const [sku, setSku] = useState("");
   const [nome, setNome] = useState("");
   const [fabricante, setFabricante] = useState("");
+  const [familia, setFamilia] = useState(""); // NOVO
+  const [perfil, setPerfil] = useState(""); // NOVO
   const [modelo, setModelo] = useState("");
   const [categoria, setCategoria] = useState("Peça");
   const [condicao, setCondicao] = useState("");
@@ -48,7 +50,6 @@ export default function Logistica() {
   const [carregandoIAMercado, setCarregandoIAMercado] = useState(false);
   const [cotacoesMercado, setCotacoesMercado] = useState<any[]>([]);
 
-  // autosav rasc
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("logistica_rascunho");
     if (rascunhoSalvo) {
@@ -56,7 +57,8 @@ export default function Logistica() {
         const draft = JSON.parse(rascunhoSalvo);
         if (draft.modo === "editar") {
           setProdutoId(draft.produtoId); setSku(draft.sku); setNome(draft.nome);
-          setFabricante(draft.fabricante); setModelo(draft.modelo); setCategoria(draft.categoria);
+          setFabricante(draft.fabricante); setFamilia(draft.familia || ""); setPerfil(draft.perfil || "");
+          setModelo(draft.modelo); setCategoria(draft.categoria);
           setCondicao(draft.condicao || ""); setRastreiaSerie(draft.rastreiaSerie); setImagemUrl(draft.imagemUrl);
           setCicloRecomendado(draft.cicloRecomendado); setCicloMaximo(draft.cicloMaximo);
           setRendimentoVolume(draft.rendimentoVolume); setVidaUtilEstimada(draft.vidaUtilEstimada);
@@ -75,7 +77,7 @@ export default function Logistica() {
   useEffect(() => {
     if (modo === "editar") {
       const draft = {
-        modo, produtoId, sku, nome, fabricante, modelo, categoria, condicao, rastreiaSerie, imagemUrl,
+        modo, produtoId, sku, nome, fabricante, familia, perfil, modelo, categoria, condicao, rastreiaSerie, imagemUrl,
         cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada,
         custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado
       };
@@ -83,7 +85,7 @@ export default function Logistica() {
     } else {
       sessionStorage.removeItem("logistica_rascunho");
     }
-  }, [modo, produtoId, sku, nome, fabricante, modelo, categoria, condicao, rastreiaSerie, imagemUrl, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada, custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado]);
+  }, [modo, produtoId, sku, nome, fabricante, familia, perfil, modelo, categoria, condicao, rastreiaSerie, imagemUrl, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada, custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado]);
 
   useEffect(() => { if (modo === "lista") fetchProdutos(); }, [modo]);
 
@@ -94,7 +96,7 @@ export default function Logistica() {
   };
 
   const novoProduto = () => {
-    setProdutoId(null); setSku(""); setNome(""); setFabricante(""); setModelo("");
+    setProdutoId(null); setSku(""); setNome(""); setFabricante(""); setFamilia(""); setPerfil(""); setModelo("");
     setCategoria("Peça"); setCondicao(""); setRastreiaSerie(false); setImagemUrl("");
     setCicloRecomendado(""); setCicloMaximo(""); setRendimentoVolume(""); setVidaUtilEstimada("");
     setCustoBase(""); setPrecoVenda(""); setEstoqueMinimo(""); setPontoPedido("");
@@ -104,7 +106,7 @@ export default function Logistica() {
 
   const editarProduto = (prod: any) => {
     setProdutoId(prod.id); setSku(prod.sku || ""); setNome(prod.nome || "");
-    setFabricante(prod.fabricante || ""); setModelo(prod.modelo || "");
+    setFabricante(prod.fabricante || ""); setFamilia(prod.familia || ""); setPerfil(prod.perfil || ""); setModelo(prod.modelo || "");
     setCategoria(prod.categoria || "Peça"); setCondicao(prod.condicao || "");
     setRastreiaSerie(prod.rastreia_serie || false); setImagemUrl(prod.imagem_url || "");
     setCicloRecomendado(prod.ciclo_mensal_recomendado?.toString() || "");
@@ -119,7 +121,7 @@ export default function Logistica() {
 
   const salvarProduto = async () => {
     const payload = {
-      sku, nome, fabricante, modelo, categoria, condicao, rastreia_serie: rastreiaSerie, imagem_url: imagemUrl,
+      sku, nome, fabricante, familia, perfil, modelo, categoria, condicao, rastreia_serie: rastreiaSerie, imagem_url: imagemUrl,
       ciclo_mensal_recomendado: parseInt(cicloRecomendado) || 0,
       ciclo_mensal_maximo: parseInt(cicloMaximo) || 0,
       rendimento_volume: parseInt(rendimentoVolume) || 0,
@@ -155,7 +157,7 @@ export default function Logistica() {
 
   const aplicarEdicaoLote = async () => {
     if (!loteCampo) return alert("Selecione qual campo deseja alterar!");
-    if (!loteValor && loteCampo !== 'condicao') return alert("Informe o novo valor!");
+    if (!loteValor && !['condicao', 'familia', 'perfil'].includes(loteCampo)) return alert("Informe o novo valor!");
     
     const payload = { [loteCampo]: loteValor };
     
@@ -179,12 +181,10 @@ export default function Logistica() {
   const sugerirFiscalComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAFiscal(true);
-    
     try {
       const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produto: nome, categoria })
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto: nome, categoria: categoria })
       });
       const dadosIA = await resposta.json();
       setNcm(dadosIA.ncm || "");
@@ -211,28 +211,36 @@ export default function Logistica() {
       setTimeout(() => {
         setCotacoesMercado([
           { loja: "Mercado Livre", preco: "R$ 145,90", link: "https://mercadolivre.com.br" },
-          { loja: "Shopee", preco: "R$ 129,00", link: "https://shopee.com.br" }
+          { loja: "Shopee", preco: "R$ 129,00", link: "https://shopee.com.br" },
+          { loja: "AliExpress", preco: "R$ 89,50", link: "https://aliexpress.com" }
         ]);
-        setCarregandoIAMercado(false);
       }, 3000);
     } catch (error) {
       console.error("Erro na cotação:", error);
       alert("Erro ao buscar cotações.");
+    } finally {
       setCarregandoIAMercado(false);
     }
   };
 
-  const fabricantesUnicos = Array.from(new Set(produtos.map(p => p.fabricante).filter(f => f && f.trim() !== ""))).sort();
+  const extrairUnicos = (campo: string) => Array.from(new Set(produtos.map(p => p[campo]).filter(f => f && f.trim() !== ""))).sort();
+  
+  const fabricantesUnicos = extrairUnicos("fabricante");
+  const familiasUnicas = extrairUnicos("familia");
+  const perfisUnicos = extrairUnicos("perfil");
+  const ncmUnicos = extrairUnicos("ncm");
+  const cestUnicos = extrairUnicos("cest");
+  const condicoesUnicas = extrairUnicos("condicao");
+  const categoriasUnicas = extrairUnicos("categoria");
   
   let produtosFiltrados = produtos.filter(prod => {
     const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
     const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
     const termoBusca = busca.toLowerCase();
-    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca);
+    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca) || (prod.familia?.toLowerCase() || "").includes(termoBusca) || (prod.perfil?.toLowerCase() || "").includes(termoBusca);
     return bateCategoria && bateFabricante && bateBusca;
   });
 
-  // ordenacao
   produtosFiltrados = produtosFiltrados.sort((a, b) => {
     if (ordenacao === "nome_asc") return (a.nome || "").localeCompare(b.nome || "");
     if (ordenacao === "categoria_asc") return (a.categoria || "").localeCompare(b.categoria || "");
@@ -240,9 +248,9 @@ export default function Logistica() {
     return 0;
   });
 
-  const exportarPDF = () => {
+  const exportarPDFProdutos = () => {
     if (produtosFiltrados.length === 0) return alert("Não há produtos para exportar!");
-    const doc = new jsPDF("l", "mm", "a4"); // format paisag
+    const doc = new jsPDF("l", "mm", "a4");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
     doc.text("Relatório de Produtos - Catálogo ERP", 14, 20);
@@ -253,64 +261,101 @@ export default function Logistica() {
     doc.text(`Total de Itens: ${produtosFiltrados.length}`, 14, 34);
 
     const bodyData = produtosFiltrados.map(p => [
-      p.sku || "S/N",
-      p.nome,
-      p.categoria,
-      p.fabricante || "-",
-      `R$ ${Number(p.custo_base).toFixed(2)}`,
-      `R$ ${Number(p.preco_venda).toFixed(2)}`
+      p.sku || "S/N", p.nome, p.categoria, p.familia || "-", p.perfil || "-", p.fabricante || "-", `R$ ${Number(p.custo_base).toFixed(2)}`, `R$ ${Number(p.preco_venda).toFixed(2)}`
     ]);
 
     autoTable(doc, {
       startY: 40,
-      head: [['SKU', 'NOME DO PRODUTO', 'CATEGORIA', 'FABRICANTE', 'CUSTO BASE', 'PREÇO VENDA']],
+      head: [['SKU', 'NOME', 'CATEGORIA', 'FAMÍLIA', 'PERFIL', 'FABRICANTE', 'CUSTO BASE', 'PREÇO VENDA']],
       body: bodyData,
       theme: 'grid',
       headStyles: { fillColor: [41, 37, 36], textColor: [255,255,255] },
       styles: { fontSize: 8, cellPadding: 3 }
     });
-
-    doc.save("Relatorio_Produtos_TC_Copiadoras.pdf");
+    doc.save("Produtos_TC_Copiadoras.pdf");
   };
 
-  const exportarExcel = () => {
+  const exportarExcelProdutos = () => {
     if (produtosFiltrados.length === 0) return alert("Não há produtos para exportar!");
-    
-    // cabec CSV
-    let csvContent = "SKU;NOME;CATEGORIA;CONDIÇÃO;FABRICANTE;CUSTO_BASE;PRECO_VENDA;ESTOQUE_MINIMO;NCM;CEST\n";
-    
+    let csvContent = "SKU;NOME;CATEGORIA;CONDIÇÃO;FAMÍLIA;PERFIL;FABRICANTE;CUSTO_BASE;PRECO_VENDA;ESTOQUE_MINIMO;NCM;CEST\n";
     produtosFiltrados.forEach(p => {
       const linha = [
-        p.sku || "",
-        `"${p.nome || ""}"`,
-        p.categoria || "",
-        p.condicao || "",
-        p.fabricante || "",
-        Number(p.custo_base || 0).toFixed(2).replace('.', ','), // Formato BR para Excel
-        Number(p.preco_venda || 0).toFixed(2).replace('.', ','),
-        p.estoque_minimo || "0",
-        p.ncm || "",
-        p.cest || ""
+        p.sku || "", `"${p.nome || ""}"`, p.categoria || "", p.condicao || "", p.familia || "", p.perfil || "", p.fabricante || "",
+        Number(p.custo_base || 0).toFixed(2).replace('.', ','), Number(p.preco_venda || 0).toFixed(2).replace('.', ','),
+        p.estoque_minimo || "0", p.ncm || "", p.cest || ""
       ].join(";");
       csvContent += linha + "\n";
     });
-
-    // criac arq
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = "Relatorio_Produtos_TC_Copiadoras.csv";
-    document.body.appendChild(a);
+    a.href = URL.createObjectURL(blob);
+    a.download = "Produtos_TC_Copiadoras.csv";
     a.click();
-    document.body.removeChild(a);
   };
 
+  const exportarAuxiliaresPDF = () => {
+    const doc = new jsPDF("p", "mm", "a4");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Relatório de Cadastros Auxiliares", 14, 20);
+    
+    let yPos = 30;
+    const adicionarTabela = (titulo: string, itens: string[]) => {
+      if (itens.length === 0) return;
+      doc.setFontSize(12);
+      doc.text(titulo, 14, yPos);
+      autoTable(doc, {
+        startY: yPos + 4,
+        head: [[titulo.toUpperCase()]],
+        body: itens.map(i => [i]),
+        theme: 'grid',
+        headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0] },
+        styles: { fontSize: 9, cellPadding: 2 }
+      });
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+      if (yPos > 270) { doc.addPage(); yPos = 20; }
+    };
+
+    adicionarTabela("Categorias Ativas", categoriasUnicas as string[]);
+    adicionarTabela("Famílias de Produtos", familiasUnicas as string[]);
+    adicionarTabela("Perfis de Produtos", perfisUnicos as string[]);
+    adicionarTabela("Condições", condicoesUnicas as string[]);
+    adicionarTabela("Fabricantes / Marcas", fabricantesUnicos as string[]);
+    adicionarTabela("NCMs Registrados", ncmUnicos as string[]);
+    adicionarTabela("CESTs Registrados", cestUnicos as string[]);
+
+    doc.save("Cadastros_Auxiliares.pdf");
+  };
+
+  const exportarAuxiliaresExcel = () => {
+    const maxLinhas = Math.max(categoriasUnicas.length, familiasUnicas.length, perfisUnicos.length, condicoesUnicas.length, fabricantesUnicos.length, ncmUnicos.length, cestUnicos.length);
+    let csvContent = "CATEGORIAS;FAMILIAS;PERFIS;CONDICOES;FABRICANTES;NCM;CEST\n";
+    
+    for (let i = 0; i < maxLinhas; i++) {
+      const linha = [
+        categoriasUnicas[i] || "", familiasUnicas[i] || "", perfisUnicos[i] || "", condicoesUnicas[i] || "",
+        fabricantesUnicos[i] || "", ncmUnicos[i] || "", cestUnicos[i] || ""
+      ].join(";");
+      csvContent += linha + "\n";
+    }
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "Cadastros_Auxiliares.csv";
+    a.click();
+  };
 
   return (
     <AppLayout>
       <div className="space-y-6 max-w-6xl mx-auto">
         
+        {/* renderiz datalists */}
+        <datalist id="lista-fabricantes">{fabricantesUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
+        <datalist id="lista-familias">{familiasUnicas.map((f, i) => <option key={i} value={f as string} />)}</datalist>
+        <datalist id="lista-perfis">{perfisUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
+        <datalist id="lista-ncm">{ncmUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
+        <datalist id="lista-cest">{cestUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
+
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
@@ -319,9 +364,7 @@ export default function Logistica() {
             <p className="text-slate-500">Gestão unificada de equipamentos, peças e insumos.</p>
           </div>
           {modo === "lista" ? (
-            <div className="flex gap-2">
-              <Button onClick={exportarExcel} variant="outline" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"><TableIcon className="w-4 h-4"/> Excel</Button>
-              <Button onClick={exportarPDF} variant="outline" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"><FileDown className="w-4 h-4"/> PDF</Button>
+            <div className="flex gap-2 flex-wrap justify-end">
               <Button onClick={novoProduto} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
             </div>
           ) : (
@@ -329,6 +372,7 @@ export default function Logistica() {
           )}
         </div>
 
+        {/* acoes em lote */}
         {modo === "lote" && (
           <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto mt-8">
             <div className="flex items-center gap-4 mb-6 border-b pb-4">
@@ -348,6 +392,8 @@ export default function Logistica() {
                   <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione o campo..." /></SelectTrigger>
                   <SelectContent className="bg-white z-50">
                     <SelectItem value="fabricante">Fabricante (Marca)</SelectItem>
+                    <SelectItem value="familia">Família de Produto</SelectItem>
+                    <SelectItem value="perfil">Perfil de Produto</SelectItem>
                     <SelectItem value="categoria">Categoria do Produto</SelectItem>
                     <SelectItem value="condicao">Condição (Novo/Recondicionado)</SelectItem>
                   </SelectContent>
@@ -355,15 +401,18 @@ export default function Logistica() {
               </div>
 
               {loteCampo === "fabricante" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Digite o novo Fabricante para todos:</label>
-                  <Input value={loteValor} onChange={e => setLoteValor(e.target.value)} placeholder="Ex: BROTHER" />
-                </div>
+                <div className="space-y-2"><label className="text-sm font-medium">Novo Fabricante:</label><Input list="lista-fabricantes" value={loteValor} onChange={e => setLoteValor(e.target.value)} placeholder="Ex: BROTHER" /></div>
+              )}
+              {loteCampo === "familia" && (
+                <div className="space-y-2"><label className="text-sm font-medium">Nova Família:</label><Input list="lista-familias" value={loteValor} onChange={e => setLoteValor(e.target.value)} placeholder="Ex: Impressão" /></div>
+              )}
+              {loteCampo === "perfil" && (
+                <div className="space-y-2"><label className="text-sm font-medium">Novo Perfil:</label><Input list="lista-perfis" value={loteValor} onChange={e => setLoteValor(e.target.value)} placeholder="Ex: Laser Monocromática" /></div>
               )}
 
               {loteCampo === "categoria" && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Selecione a nova Categoria para todos:</label>
+                  <label className="text-sm font-medium">Nova Categoria:</label>
                   <Select value={loteValor} onValueChange={setLoteValor}>
                     <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent className="bg-white z-50">
@@ -385,9 +434,9 @@ export default function Logistica() {
 
               {loteCampo === "condicao" && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Selecione a nova Condição para todos:</label>
+                  <label className="text-sm font-medium">Nova Condição:</label>
                   <Select value={loteValor} onValueChange={setLoteValor}>
-                    <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione (ou deixe em branco para limpar)..." /></SelectTrigger>
+                    <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent className="bg-white z-50">
                       <SelectItem value="Original Novo">Original Novo</SelectItem>
                       <SelectItem value="Original Recondicionado">Original Recondicionado</SelectItem>
@@ -408,9 +457,25 @@ export default function Logistica() {
           </div>
         )}
 
+        {/* lista */}
         {modo === "lista" && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
             
+            {/* acoes rapidas e export */}
+            <div className="bg-stone-50 border-b p-3 px-4 flex justify-between items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-stone-500" />
+                <span className="text-sm font-semibold text-stone-700">Exportar Relatórios:</span>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={exportarPDFProdutos} variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"><FileDown className="w-4 h-4"/> Produtos (PDF)</Button>
+                <Button onClick={exportarExcelProdutos} variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"><TableIcon className="w-4 h-4"/> Produtos (Excel)</Button>
+                <div className="border-l border-stone-300 mx-1"></div>
+                <Button onClick={exportarAuxiliaresPDF} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><FileDown className="w-4 h-4"/> Cadastros Base (PDF)</Button>
+                <Button onClick={exportarAuxiliaresExcel} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><TableIcon className="w-4 h-4"/> Cadastros Base (Excel)</Button>
+              </div>
+            </div>
+
             {selecionados.length > 0 && (
               <div className="bg-blue-50 border-b border-blue-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2">
                 <span className="text-blue-800 font-semibold">{selecionados.length} produto(s) selecionado(s)</span>
@@ -423,10 +488,10 @@ export default function Logistica() {
               </div>
             )}
 
-            <div className="p-4 border-b flex flex-wrap gap-4 bg-slate-50 items-center">
+            <div className="p-4 border-b flex flex-wrap gap-4 bg-white items-center">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Buscar por Nome ou SKU..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Buscar Nome, Partnumber, Família ou Perfil..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
                 <SelectTrigger className="w-[180px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -435,7 +500,7 @@ export default function Logistica() {
                   <SelectItem value="Equipamento">Equipamentos</SelectItem>
                   <SelectItem value="Peça">Peças</SelectItem>
                   <SelectItem value="Suprimento">Suprimentos</SelectItem>
-                  <SelectItem value="Produto Final Gráfico">Produtos Finais Gráficos</SelectItem>
+                  <SelectItem value="Produto Final Gráfico">Produtos Finais</SelectItem>
                   <SelectItem value="Insumo Gráfico">Insumos Gráficos</SelectItem>
                   <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
                   <SelectItem value="Ferramenta">Ferramentas</SelectItem>
@@ -452,8 +517,6 @@ export default function Logistica() {
                   {fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}
                 </SelectContent>
               </Select>
-
-              {/* botao ordenacao */}
               <div className="border-l border-slate-200 h-8 mx-1"></div>
               <Select value={ordenacao} onValueChange={setOrdenacao}>
                 <SelectTrigger className="w-[160px] bg-white z-50"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
@@ -490,7 +553,12 @@ export default function Logistica() {
                           {prod.rastreia_serie && <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center gap-1"><Barcode className="w-3 h-3"/> Seriado</span>}
                         </div>
                         <h3 className="font-semibold text-slate-800">{prod.nome}</h3>
-                        <p className="text-sm text-slate-500">{prod.categoria} • {prod.fabricante || "Fabricante não informado"}</p>
+                        <p className="text-sm text-slate-500">
+                          {prod.categoria} 
+                          {prod.familia && ` • ${prod.familia}`}
+                          {prod.perfil && ` • ${prod.perfil}`}
+                          {prod.fabricante && ` • ${prod.fabricante}`}
+                        </p>
                       </div>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => editarProduto(prod)} className="text-slate-400 hover:text-stone-700"><Edit className="w-4 h-4" /></Button>
@@ -501,6 +569,7 @@ export default function Logistica() {
           </div>
         )}
 
+        {/* edicao */}
         {modo === "editar" && (
           <div className="bg-white rounded-xl border shadow-sm">
             <Tabs defaultValue="geral" className="w-full">
@@ -551,6 +620,20 @@ export default function Logistica() {
                         </Select>
                       </div>
 
+                      {/* datalist autosugest */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Família de Produto</label>
+                        <Input list="lista-familias" value={familia} onChange={e => setFamilia(e.target.value)} placeholder="Ex: Impressão" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Perfil de Produto</label>
+                        <Input list="lista-perfis" value={perfil} onChange={e => setPerfil(e.target.value)} placeholder="Ex: Laser Monocromática" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Fabricante / Marca</label>
+                        <Input list="lista-fabricantes" value={fabricante} onChange={e => setFabricante(e.target.value)} placeholder="Ex: Brother" />
+                      </div>
+
                       {categoria === "Suprimento" && (
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-emerald-700">Condição do Suprimento</label>
@@ -579,10 +662,6 @@ export default function Logistica() {
                         </div>
                       )}
 
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Fabricante</label>
-                        <Input value={fabricante} onChange={e => setFabricante(e.target.value)} placeholder="Ex: Brother" />
-                      </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Modelos Compatíveis</label>
                         <Input value={modelo} onChange={e => setModelo(e.target.value)} placeholder="Ex: DCP-L5652" />
@@ -625,11 +704,11 @@ export default function Logistica() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">NCM</label>
-                        <div className="relative"><FileDigit className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={ncm} onChange={e => setNcm(e.target.value)} className="pl-9 bg-white" placeholder="Ex: 8443.99.33" /></div>
+                        <div className="relative"><FileDigit className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input list="lista-ncm" value={ncm} onChange={e => setNcm(e.target.value)} className="pl-9 bg-white" placeholder="Ex: 8443.99.33" /></div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">CEST</label>
-                        <Input value={cest} onChange={e => setCest(e.target.value)} placeholder="Ex: 21.050.00" className="bg-white" />
+                        <Input list="lista-cest" value={cest} onChange={e => setCest(e.target.value)} placeholder="Ex: 21.050.00" className="bg-white" />
                       </div>
                     </div>
 
