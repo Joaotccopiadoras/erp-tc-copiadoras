@@ -177,16 +177,22 @@ export default function Logistica() {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAFiscal(true);
     
-    const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produto: nome, categoria })
+    try {
+        const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ produto: nome, categoria })
     });
-
 
     const dadosIA = await resposta.json();
     setNcm(dadosIA.ncm);
-}
+    } catch (error) {
+      console.error("Erro na IA:", error);
+      alert("Houve um erro ao consultar a IA. Verifique sua conexão ou o n8n.");
+    } finally {
+        setCarregandoIAFiscal(false);
+    }
+};
 
   const cotarNoMercadoComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
