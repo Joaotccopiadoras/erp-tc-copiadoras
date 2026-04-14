@@ -342,7 +342,7 @@ export default function Logistica() {
             <div className="p-4 border-b flex flex-wrap gap-4 bg-slate-50">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Buscar por Nome ou SKU..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Buscar por Nome ou PartNumber..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
                 <SelectTrigger className="w-[200px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
