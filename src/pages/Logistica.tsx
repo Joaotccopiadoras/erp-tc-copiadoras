@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks } from "lucide-react";
+import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, Table as TableIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function Logistica() {
   const [modo, setModo] = useState<"lista" | "editar" | "lote">("lista");
@@ -14,6 +16,7 @@ export default function Logistica() {
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
+  const [ordenacao, setOrdenacao] = useState("nome_asc"); // 
 
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [loteCampo, setLoteCampo] = useState("");
@@ -45,6 +48,7 @@ export default function Logistica() {
   const [carregandoIAMercado, setCarregandoIAMercado] = useState(false);
   const [cotacoesMercado, setCotacoesMercado] = useState<any[]>([]);
 
+  // autosav rasc
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("logistica_rascunho");
     if (rascunhoSalvo) {
@@ -195,9 +199,8 @@ export default function Logistica() {
   const cotarNoMercadoComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAMercado(true);
-
     try {
-      /*
+      /* Descomente quando o n8n estiver pronto
       const resposta = await fetch("SUA_URL_DO_WEBHOOK_MERCADO_AQUI", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ produto: nome })
@@ -205,30 +208,104 @@ export default function Logistica() {
       const dados = await resposta.json();
       setCotacoesMercado(dados.cotacoes || []);
       */
-      
       setTimeout(() => {
         setCotacoesMercado([
           { loja: "Mercado Livre", preco: "R$ 145,90", link: "https://mercadolivre.com.br" },
-          { loja: "Shopee", preco: "R$ 129,00", link: "https://shopee.com.br" },
-          { loja: "AliExpress", preco: "R$ 89,50", link: "https://aliexpress.com" }
+          { loja: "Shopee", preco: "R$ 129,00", link: "https://shopee.com.br" }
         ]);
+        setCarregandoIAMercado(false);
       }, 3000);
     } catch (error) {
       console.error("Erro na cotação:", error);
       alert("Erro ao buscar cotações.");
-    } finally {
       setCarregandoIAMercado(false);
     }
   };
 
   const fabricantesUnicos = Array.from(new Set(produtos.map(p => p.fabricante).filter(f => f && f.trim() !== ""))).sort();
-  const produtosFiltrados = produtos.filter(prod => {
+  
+  let produtosFiltrados = produtos.filter(prod => {
     const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
     const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
     const termoBusca = busca.toLowerCase();
     const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca);
     return bateCategoria && bateFabricante && bateBusca;
   });
+
+  // ordenacao
+  produtosFiltrados = produtosFiltrados.sort((a, b) => {
+    if (ordenacao === "nome_asc") return (a.nome || "").localeCompare(b.nome || "");
+    if (ordenacao === "categoria_asc") return (a.categoria || "").localeCompare(b.categoria || "");
+    if (ordenacao === "fabricante_asc") return (a.fabricante || "").localeCompare(b.fabricante || "");
+    return 0;
+  });
+
+  const exportarPDF = () => {
+    if (produtosFiltrados.length === 0) return alert("Não há produtos para exportar!");
+    const doc = new jsPDF("l", "mm", "a4"); // format paisag
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Relatório de Produtos - Catálogo ERP", 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Filtros: Categoria: ${filtroCategoria} | Fabricante: ${filtroFabricante}`, 14, 28);
+    doc.text(`Total de Itens: ${produtosFiltrados.length}`, 14, 34);
+
+    const bodyData = produtosFiltrados.map(p => [
+      p.sku || "S/N",
+      p.nome,
+      p.categoria,
+      p.fabricante || "-",
+      `R$ ${Number(p.custo_base).toFixed(2)}`,
+      `R$ ${Number(p.preco_venda).toFixed(2)}`
+    ]);
+
+    autoTable(doc, {
+      startY: 40,
+      head: [['SKU', 'NOME DO PRODUTO', 'CATEGORIA', 'FABRICANTE', 'CUSTO BASE', 'PREÇO VENDA']],
+      body: bodyData,
+      theme: 'grid',
+      headStyles: { fillColor: [41, 37, 36], textColor: [255,255,255] },
+      styles: { fontSize: 8, cellPadding: 3 }
+    });
+
+    doc.save("Relatorio_Produtos_TC_Copiadoras.pdf");
+  };
+
+  const exportarExcel = () => {
+    if (produtosFiltrados.length === 0) return alert("Não há produtos para exportar!");
+    
+    // cabec CSV
+    let csvContent = "SKU;NOME;CATEGORIA;CONDIÇÃO;FABRICANTE;CUSTO_BASE;PRECO_VENDA;ESTOQUE_MINIMO;NCM;CEST\n";
+    
+    produtosFiltrados.forEach(p => {
+      const linha = [
+        p.sku || "",
+        `"${p.nome || ""}"`,
+        p.categoria || "",
+        p.condicao || "",
+        p.fabricante || "",
+        Number(p.custo_base || 0).toFixed(2).replace('.', ','), // Formato BR para Excel
+        Number(p.preco_venda || 0).toFixed(2).replace('.', ','),
+        p.estoque_minimo || "0",
+        p.ncm || "",
+        p.cest || ""
+      ].join(";");
+      csvContent += linha + "\n";
+    });
+
+    // criac arq
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "Relatorio_Produtos_TC_Copiadoras.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
 
   return (
     <AppLayout>
@@ -242,7 +319,11 @@ export default function Logistica() {
             <p className="text-slate-500">Gestão unificada de equipamentos, peças e insumos.</p>
           </div>
           {modo === "lista" ? (
-            <Button onClick={novoProduto} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
+            <div className="flex gap-2">
+              <Button onClick={exportarExcel} variant="outline" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"><TableIcon className="w-4 h-4"/> Excel</Button>
+              <Button onClick={exportarPDF} variant="outline" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"><FileDown className="w-4 h-4"/> PDF</Button>
+              <Button onClick={novoProduto} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
+            </div>
           ) : (
             <Button variant="outline" onClick={() => { setModo("lista"); setSelecionados([]); }}>Voltar ao Catálogo</Button>
           )}
@@ -289,9 +370,12 @@ export default function Logistica() {
                       <SelectItem value="Equipamento">Equipamento</SelectItem>
                       <SelectItem value="Peça">Peça</SelectItem>
                       <SelectItem value="Suprimento">Suprimento</SelectItem>
-                      <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
+                      <SelectItem value="Produto Final Gráfico">Produto Final Gráfico</SelectItem>
                       <SelectItem value="Insumo Gráfico">Insumo (Gráfica)</SelectItem>
+                      <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
                       <SelectItem value="Ferramenta">Ferramenta</SelectItem>
+                      <SelectItem value="EPI">EPI</SelectItem>
+                      <SelectItem value="Acessório">Acessório</SelectItem>
                       <SelectItem value="Uso e Consumo">Materiais de Uso e Consumo</SelectItem>
                       <SelectItem value="Serviço">Serviço</SelectItem>
                     </SelectContent>
@@ -339,28 +423,44 @@ export default function Logistica() {
               </div>
             )}
 
-            <div className="p-4 border-b flex flex-wrap gap-4 bg-slate-50">
+            <div className="p-4 border-b flex flex-wrap gap-4 bg-slate-50 items-center">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Buscar por Nome ou PartNumber..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Buscar por Nome ou SKU..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-                <SelectTrigger className="w-[200px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectTrigger className="w-[180px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
                   <SelectItem value="todas">Todas as Categorias</SelectItem>
                   <SelectItem value="Equipamento">Equipamentos</SelectItem>
                   <SelectItem value="Peça">Peças</SelectItem>
                   <SelectItem value="Suprimento">Suprimentos</SelectItem>
-                  <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
+                  <SelectItem value="Produto Final Gráfico">Produtos Finais Gráficos</SelectItem>
                   <SelectItem value="Insumo Gráfico">Insumos Gráficos</SelectItem>
+                  <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
+                  <SelectItem value="Ferramenta">Ferramentas</SelectItem>
+                  <SelectItem value="EPI">EPIs</SelectItem>
+                  <SelectItem value="Acessório">Acessórios</SelectItem>
                   <SelectItem value="Uso e Consumo">Uso e Consumo</SelectItem>
+                  <SelectItem value="Serviço">Serviços</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filtroFabricante} onValueChange={setFiltroFabricante}>
-                <SelectTrigger className="w-[200px] bg-white z-50"><SelectValue placeholder="Fabricante" /></SelectTrigger>
+                <SelectTrigger className="w-[180px] bg-white z-50"><SelectValue placeholder="Fabricante" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
                   <SelectItem value="todos">Todos os Fabricantes</SelectItem>
                   {fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}
+                </SelectContent>
+              </Select>
+
+              {/* botao ordenacao */}
+              <div className="border-l border-slate-200 h-8 mx-1"></div>
+              <Select value={ordenacao} onValueChange={setOrdenacao}>
+                <SelectTrigger className="w-[160px] bg-white z-50"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  <SelectItem value="nome_asc">A-Z (Nome)</SelectItem>
+                  <SelectItem value="categoria_asc">Por Categoria</SelectItem>
+                  <SelectItem value="fabricante_asc">Por Fabricante</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -439,9 +539,12 @@ export default function Logistica() {
                             <SelectItem value="Equipamento">Equipamento</SelectItem>
                             <SelectItem value="Peça">Peça</SelectItem>
                             <SelectItem value="Suprimento">Suprimento</SelectItem>
-                            <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
+                            <SelectItem value="Produto Final Gráfico">Produto Final Gráfico</SelectItem>
                             <SelectItem value="Insumo Gráfico">Insumo (Gráfica)</SelectItem>
+                            <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
                             <SelectItem value="Ferramenta">Ferramenta</SelectItem>
+                            <SelectItem value="EPI">EPI</SelectItem>
+                            <SelectItem value="Acessório">Acessório</SelectItem>
                             <SelectItem value="Uso e Consumo">Materiais de Uso e Consumo</SelectItem>
                             <SelectItem value="Serviço">Serviço</SelectItem>
                           </SelectContent>
