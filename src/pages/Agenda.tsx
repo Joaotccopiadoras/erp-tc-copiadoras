@@ -8,6 +8,7 @@ import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import AppLayout from "@/components/AppLayout";
 import { X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -369,164 +370,166 @@ const formatarData = (dataStr: string) => {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-8">
-      
-     {/* CABEÇALHO */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Gestão de Projetos e Processos</h1>
-            <p className="text-muted-foreground text-sm mt-1">Acompanhamento e rastreabilidade de atividades</p>
-          </div>
-        </div>
+    <AppLayout>
+      <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-8">
         
-        <div className="flex items-center gap-4">
-          {usuarioAtual && (
-            <div className="text-sm text-gray-500 hidden sm:block text-right">
-              Logado como:<br/>
-              <strong className="text-gray-800">{usuarioAtual.email}</strong>
+      {/* CABEÇALHO */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-4">
+            <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Gestão de Projetos e Processos</h1>
+              <p className="text-muted-foreground text-sm mt-1">Acompanhamento e rastreabilidade de atividades</p>
             </div>
-          )}
+          </div>
           
-          {/* BOTÃO DE SAIR */}
-          <Button
-            onClick={handleVoltar}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 hover:text-destructive transition-all font-medium mt-1"
-        >
-          Voltar ao Início
-          </Button>
-        </div>
-      </div>
-
-      {/* ÁREA DE FILTROS */}
-      <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-foreground">Filtros Avançados</span>
-          {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-              <X className="h-4 w-4 mr-1" /> Limpar Tudo
-            </Button>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MultiSelectDropdown title="Líder" options={uniqueLideres} selected={filterLideres} onChange={setFilterLideres} />
-          <MultiSelectDropdown title="Departamento" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
-          <MultiSelectDropdown title="Solicitante" options={uniqueSolicitantes} selected={filterSolicitantes} onChange={setFilterSolicitantes} />
-          <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4">
-          <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-            <span className="text-xs font-semibold text-gray-700 uppercase">Período de Entrada</span>
-            <div className="flex gap-2 items-center">
-              <Input type="date" className="text-xs h-8" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
-              <span className="text-xs text-gray-400">até</span>
-              <Input type="date" className="text-xs h-8" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
-            </div>
-          </div>
-          <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-            <span className="text-xs font-semibold text-gray-700 uppercase">Período de Previsão</span>
-            <div className="flex gap-2 items-center">
-              <Input type="date" className="text-xs h-8" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
-              <span className="text-xs text-gray-400">até</span>
-              <Input type="date" className="text-xs h-8" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
-            </div>
-          </div>
-          <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-            <span className="text-xs font-semibold text-gray-700 uppercase">Período de Conclusão</span>
-            <div className="flex gap-2 items-center">
-              <Input type="date" className="text-xs h-8" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
-              <span className="text-xs text-gray-400">até</span>
-              <Input type="date" className="text-xs h-8" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-        <span className="text-muted-foreground">
-          <strong className="text-foreground text-lg">{filtered.length}</strong> projetos listados
-        </span>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-green-600 text-green-600 hover:bg-green-50">
-            <TableIcon className="h-4 w-4 mr-2" /> Exportar Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-red-600 text-red-600 hover:bg-red-50">
-            <FileText className="h-4 w-4 mr-2" /> Exportar PDF
-          </Button>
-        </div>
-      </div>
-
-      {/* TABELA PRINCIPAL */}
-      <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-gray-50">
-              <TableRow>
-                <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Entrada {renderSortIcon('data_entrada')}</TableHead>
-                <TableHead onClick={() => handleSort('previsao_prazo')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Previsão {renderSortIcon('previsao_prazo')}</TableHead>
-                <TableHead onClick={() => handleSort('solicitante')} className="cursor-pointer hover:bg-gray-100">Solicitante {renderSortIcon('solicitante')}</TableHead>
-                <TableHead onClick={() => handleSort('processo_projeto')} className="cursor-pointer hover:bg-gray-100">Projeto {renderSortIcon('processo_projeto')}</TableHead>
-                <TableHead onClick={() => handleSort('departamento')} className="cursor-pointer hover:bg-gray-100">Depto {renderSortIcon('departamento')}</TableHead>
-                <TableHead onClick={() => handleSort('lider_card')} className="cursor-pointer hover:bg-gray-100">Líder {renderSortIcon('lider_card')}</TableHead>
-                <TableHead onClick={() => handleSort('tarefa_atual')} className="cursor-pointer hover:bg-gray-100">Tarefa Atual {renderSortIcon('tarefa_atual')}</TableHead>
-                <TableHead onClick={() => handleSort('status')} className="cursor-pointer hover:bg-gray-100">Status {renderSortIcon('status')}</TableHead>
-                <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
-                <TableHead>Resumo</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="flex items-center gap-4">
+            {usuarioAtual && (
+              <div className="text-sm text-gray-500 hidden sm:block text-right">
+                Logado como:<br/>
+                <strong className="text-gray-800">{usuarioAtual.email}</strong>
+              </div>
+            )}
             
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Analisando banco de dados...</TableCell></TableRow>
-              ) : paginated.length === 0 ? (
-                <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow>
-              ) : (
-                paginated.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="whitespace-nowrap">{formatarData(a.data_entrada)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatarData(a.previsao_prazo)}</TableCell>
-                    <TableCell className="text-xs">{a.solicitante || "—"}</TableCell>
-                    <TableCell className="font-medium text-xs">{a.processo_projeto || "—"}</TableCell>
-                    <TableCell className="text-xs">{a.departamento || "—"}</TableCell>
-                    <TableCell className="text-xs font-semibold">{a.lider_card || "—"}</TableCell>
-                    <TableCell className="text-xs text-blue-600 font-medium">{a.tarefa_atual || "—"}</TableCell>
-                    <TableCell>
-                      <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
-                        a.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        a.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-blue-100 text-blue-700'
-                      }`}>
-                        {formatarStatus(a.status)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{formatarData(a.data_conclusao)}</TableCell>
-                    <TableCell className="max-w-[150px] truncate text-xs text-gray-500" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => excluirRegistro(a.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border shadow-sm">
-          <span className="text-muted-foreground font-medium pl-2">Página {page + 1} de {totalPages}</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Anterior</Button>
-            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Próxima</Button>
+            {/* BOTÃO DE SAIR */}
+            <Button
+              onClick={handleVoltar}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 hover:text-destructive transition-all font-medium mt-1"
+          >
+            Voltar ao Início
+            </Button>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* ÁREA DE FILTROS */}
+        <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-foreground">Filtros Avançados</span>
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                <X className="h-4 w-4 mr-1" /> Limpar Tudo
+              </Button>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <MultiSelectDropdown title="Líder" options={uniqueLideres} selected={filterLideres} onChange={setFilterLideres} />
+            <MultiSelectDropdown title="Departamento" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
+            <MultiSelectDropdown title="Solicitante" options={uniqueSolicitantes} selected={filterSolicitantes} onChange={setFilterSolicitantes} />
+            <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4">
+            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
+              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Entrada</span>
+              <div className="flex gap-2 items-center">
+                <Input type="date" className="text-xs h-8" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-gray-400">até</span>
+                <Input type="date" className="text-xs h-8" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
+              </div>
+            </div>
+            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
+              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Previsão</span>
+              <div className="flex gap-2 items-center">
+                <Input type="date" className="text-xs h-8" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-gray-400">até</span>
+                <Input type="date" className="text-xs h-8" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
+              </div>
+            </div>
+            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
+              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Conclusão</span>
+              <div className="flex gap-2 items-center">
+                <Input type="date" className="text-xs h-8" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-gray-400">até</span>
+                <Input type="date" className="text-xs h-8" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
+          <span className="text-muted-foreground">
+            <strong className="text-foreground text-lg">{filtered.length}</strong> projetos listados
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-green-600 text-green-600 hover:bg-green-50">
+              <TableIcon className="h-4 w-4 mr-2" /> Exportar Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-red-600 text-red-600 hover:bg-red-50">
+              <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+            </Button>
+          </div>
+        </div>
+
+        {/* TABELA PRINCIPAL */}
+        <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-gray-50">
+                <TableRow>
+                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Entrada {renderSortIcon('data_entrada')}</TableHead>
+                  <TableHead onClick={() => handleSort('previsao_prazo')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Previsão {renderSortIcon('previsao_prazo')}</TableHead>
+                  <TableHead onClick={() => handleSort('solicitante')} className="cursor-pointer hover:bg-gray-100">Solicitante {renderSortIcon('solicitante')}</TableHead>
+                  <TableHead onClick={() => handleSort('processo_projeto')} className="cursor-pointer hover:bg-gray-100">Projeto {renderSortIcon('processo_projeto')}</TableHead>
+                  <TableHead onClick={() => handleSort('departamento')} className="cursor-pointer hover:bg-gray-100">Depto {renderSortIcon('departamento')}</TableHead>
+                  <TableHead onClick={() => handleSort('lider_card')} className="cursor-pointer hover:bg-gray-100">Líder {renderSortIcon('lider_card')}</TableHead>
+                  <TableHead onClick={() => handleSort('tarefa_atual')} className="cursor-pointer hover:bg-gray-100">Tarefa Atual {renderSortIcon('tarefa_atual')}</TableHead>
+                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer hover:bg-gray-100">Status {renderSortIcon('status')}</TableHead>
+                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
+                  <TableHead>Resumo</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Analisando banco de dados...</TableCell></TableRow>
+                ) : paginated.length === 0 ? (
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow>
+                ) : (
+                  paginated.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell className="whitespace-nowrap">{formatarData(a.data_entrada)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatarData(a.previsao_prazo)}</TableCell>
+                      <TableCell className="text-xs">{a.solicitante || "—"}</TableCell>
+                      <TableCell className="font-medium text-xs">{a.processo_projeto || "—"}</TableCell>
+                      <TableCell className="text-xs">{a.departamento || "—"}</TableCell>
+                      <TableCell className="text-xs font-semibold">{a.lider_card || "—"}</TableCell>
+                      <TableCell className="text-xs text-blue-600 font-medium">{a.tarefa_atual || "—"}</TableCell>
+                      <TableCell>
+                        <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
+                          a.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          a.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {formatarStatus(a.status)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{formatarData(a.data_conclusao)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-xs text-gray-500" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => excluirRegistro(a.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border shadow-sm">
+            <span className="text-muted-foreground font-medium pl-2">Página {page + 1} de {totalPages}</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Próxima</Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
   );
 }
