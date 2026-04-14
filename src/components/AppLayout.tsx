@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       titulo: "Logística e Estoque",
       menus: [
         { nome: "Catálogo", url: "/logistica", icone: Package },
-        { nome: "Recebimento (NF-e)", url: "/entradas", icone: PackageOpen },
+        { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
         // { nome: "Saídas / OS", url: "/saidas", icone: Boxes },
       ]
     },
