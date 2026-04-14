@@ -10,18 +10,15 @@ import { supabase } from "@/integrations/supabase/client";
 export default function Logistica() {
   const [modo, setModo] = useState<"lista" | "editar" | "lote">("lista");
 
-  // --- estados de lista e filtros ---
   const [produtos, setProdutos] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
 
-  // --- estados edicao lote ---
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [loteCampo, setLoteCampo] = useState("");
   const [loteValor, setLoteValor] = useState("");
 
-  // --- estados de formularios ---
   const [produtoId, setProdutoId] = useState<string | null>(null);
   const [sku, setSku] = useState("");
   const [nome, setNome] = useState("");
@@ -31,10 +28,12 @@ export default function Logistica() {
   const [condicao, setCondicao] = useState("");
   const [rastreiaSerie, setRastreiaSerie] = useState(false);
   const [imagemUrl, setImagemUrl] = useState("");
+  
   const [cicloRecomendado, setCicloRecomendado] = useState("");
   const [cicloMaximo, setCicloMaximo] = useState("");
   const [rendimentoVolume, setRendimentoVolume] = useState("");
   const [vidaUtilEstimada, setVidaUtilEstimada] = useState("");
+
   const [custoBase, setCustoBase] = useState("");
   const [precoVenda, setPrecoVenda] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState("");
@@ -42,7 +41,6 @@ export default function Logistica() {
   const [ncm, setNcm] = useState("");
   const [cest, setCest] = useState("");
 
-  // -estados ia ---
   const [carregandoIAFiscal, setCarregandoIAFiscal] = useState(false);
   const [carregandoIAMercado, setCarregandoIAMercado] = useState(false);
   const [cotacoesMercado, setCotacoesMercado] = useState<any[]>([]);
@@ -55,13 +53,14 @@ export default function Logistica() {
         if (draft.modo === "editar") {
           setProdutoId(draft.produtoId); setSku(draft.sku); setNome(draft.nome);
           setFabricante(draft.fabricante); setModelo(draft.modelo); setCategoria(draft.categoria);
-          setRastreiaSerie(draft.rastreiaSerie); setImagemUrl(draft.imagemUrl);
+          setCondicao(draft.condicao || ""); setRastreiaSerie(draft.rastreiaSerie); setImagemUrl(draft.imagemUrl);
           setCicloRecomendado(draft.cicloRecomendado); setCicloMaximo(draft.cicloMaximo);
           setRendimentoVolume(draft.rendimentoVolume); setVidaUtilEstimada(draft.vidaUtilEstimada);
           setCustoBase(draft.custoBase); setPrecoVenda(draft.precoVenda);
           setEstoqueMinimo(draft.estoqueMinimo); setPontoPedido(draft.pontoPedido);
           setNcm(draft.ncm); setCest(draft.cest);
-          setModo("editar"); // Força a tela a ficar no modo edição!
+          setCotacoesMercado(draft.cotacoesMercado || []);
+          setModo("editar"); 
         }
       } catch (e) {
         console.error("Erro ao recuperar rascunho", e);
@@ -72,80 +71,51 @@ export default function Logistica() {
   useEffect(() => {
     if (modo === "editar") {
       const draft = {
-        modo, produtoId, sku, nome, fabricante, modelo, categoria, rastreiaSerie, imagemUrl,
+        modo, produtoId, sku, nome, fabricante, modelo, categoria, condicao, rastreiaSerie, imagemUrl,
         cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada,
-        custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest
+        custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado
       };
       sessionStorage.setItem("logistica_rascunho", JSON.stringify(draft));
     } else {
-        sessionStorage.removeItem("logistica_rascunho");
+      sessionStorage.removeItem("logistica_rascunho");
     }
-  }, [modo, produtoId, sku, nome, fabricante, modelo, categoria, rastreiaSerie, imagemUrl, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada, custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest]);
+  }, [modo, produtoId, sku, nome, fabricante, modelo, categoria, condicao, rastreiaSerie, imagemUrl, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada, custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado]);
 
-  // busca produtos
-  useEffect(() => {
-    if (modo === "lista") {
-      fetchProdutos();
-    }
-  }, [modo]);
+  useEffect(() => { if (modo === "lista") fetchProdutos(); }, [modo]);
 
   const fetchProdutos = async () => {
-    const { data, error } = await supabase
-      .from('log_produtos')
-      .select('*')
-      .order('nome', { ascending: true });
-
+    const { data, error } = await supabase.from('log_produtos').select('*').order('nome', { ascending: true });
     if (data) setProdutos(data);
-    if (error) console.error("Erro ao buscar produtos:", error);
+    if (error) console.error(error);
   };
 
-  // formulario novo cadastro
   const novoProduto = () => {
-    setProdutoId(null);
-    setSku(""); setNome(""); setFabricante(""); setModelo("");
-    setCategoria("Peça"); setCondicao(""); setRastreiaSerie(false);
+    setProdutoId(null); setSku(""); setNome(""); setFabricante(""); setModelo("");
+    setCategoria("Peça"); setCondicao(""); setRastreiaSerie(false); setImagemUrl("");
     setCicloRecomendado(""); setCicloMaximo(""); setRendimentoVolume(""); setVidaUtilEstimada("");
-    setCustoBase(""); setPrecoVenda("");
-    setEstoqueMinimo(""); setPontoPedido("");
-    setNcm(""); setCest("");
+    setCustoBase(""); setPrecoVenda(""); setEstoqueMinimo(""); setPontoPedido("");
+    setNcm(""); setCest(""); setCotacoesMercado([]);
     setModo("editar");
   };
 
-  // carrega dados produto a ser editado
   const editarProduto = (prod: any) => {
-    setProdutoId(prod.id);
-    setSku(prod.sku || "");
-    setNome(prod.nome || "");
-    setFabricante(prod.fabricante || "");
-    setModelo(prod.modelo || "");
-    setCategoria(prod.categoria || "Peça");
-    setCondicao(prod.condicao || "");
-    setRastreiaSerie(prod.rastreia_serie || false);
-    setImagemUrl(prod.imagem_url || "");
+    setProdutoId(prod.id); setSku(prod.sku || ""); setNome(prod.nome || "");
+    setFabricante(prod.fabricante || ""); setModelo(prod.modelo || "");
+    setCategoria(prod.categoria || "Peça"); setCondicao(prod.condicao || "");
+    setRastreiaSerie(prod.rastreia_serie || false); setImagemUrl(prod.imagem_url || "");
     setCicloRecomendado(prod.ciclo_mensal_recomendado?.toString() || "");
     setCicloMaximo(prod.ciclo_mensal_maximo?.toString() || "");
     setRendimentoVolume(prod.rendimento_volume?.toString() || "");
     setVidaUtilEstimada(prod.vida_util_estimada?.toString() || "");
-    setCustoBase(prod.custo_base?.toString() || "");
-    setPrecoVenda(prod.preco_venda?.toString() || "");
-    setEstoqueMinimo(prod.estoque_minimo?.toString() || "");
-    setPontoPedido(prod.ponto_pedido?.toString() || "");
-    setNcm(prod.ncm || "");
-    setCest(prod.cest || "");
+    setCustoBase(prod.custo_base?.toString() || ""); setPrecoVenda(prod.preco_venda?.toString() || "");
+    setEstoqueMinimo(prod.estoque_minimo?.toString() || ""); setPontoPedido(prod.ponto_pedido?.toString() || "");
+    setNcm(prod.ncm || ""); setCest(prod.cest || ""); setCotacoesMercado([]);
     setModo("editar");
   };
 
-  // salvamento insert ou updt
   const salvarProduto = async () => {
     const payload = {
-      sku,
-      nome,
-      fabricante,
-      modelo,
-      categoria,
-      condicao,
-      rastreia_serie: rastreiaSerie,
-      imagem_url: imagemUrl,
+      sku, nome, fabricante, modelo, categoria, condicao, rastreia_serie: rastreiaSerie, imagem_url: imagemUrl,
       ciclo_mensal_recomendado: parseInt(cicloRecomendado) || 0,
       ciclo_mensal_maximo: parseInt(cicloMaximo) || 0,
       rendimento_volume: parseInt(rendimentoVolume) || 0,
@@ -154,18 +124,14 @@ export default function Logistica() {
       preco_venda: parseFloat(precoVenda.replace(',', '.')) || 0,
       estoque_minimo: parseInt(estoqueMinimo) || 0,
       ponto_pedido: parseInt(pontoPedido) || 0,
-      ncm,
-      cest
+      ncm, cest
     };
 
     let erroBanco;
-
     if (produtoId) {
-      // Atualizar existente
       const { error } = await supabase.from('log_produtos').update(payload).eq('id', produtoId);
       erroBanco = error;
     } else {
-      // Criar novo
       const { error } = await supabase.from('log_produtos').insert([payload]);
       erroBanco = error;
     }
@@ -174,6 +140,7 @@ export default function Logistica() {
       alert("Erro ao salvar produto: " + erroBanco.message);
     } else {
       alert("Produto salvo com sucesso!");
+      sessionStorage.removeItem("logistica_rascunho");
       setModo("lista");
     }
   };
@@ -185,15 +152,19 @@ export default function Logistica() {
   const aplicarEdicaoLote = async () => {
     if (!loteCampo) return alert("Selecione qual campo deseja alterar!");
     if (!loteValor && loteCampo !== 'condicao') return alert("Informe o novo valor!");
+    
     const payload = { [loteCampo]: loteValor };
+    
     const { error } = await supabase
       .from('log_produtos')
       .update(payload)
       .in('id', selecionados);
-      if (error) {
+      
+    if (error) {
       alert("Erro ao atualizar produtos: " + error.message);
     } else {
       alert(`${selecionados.length} produtos atualizados com sucesso!`);
+      fetchProdutos();
       setModo("lista");
       setSelecionados([]);
       setLoteCampo("");
@@ -206,49 +177,56 @@ export default function Logistica() {
     setCarregandoIAFiscal(true);
     
     try {
-        const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ produto: nome, categoria })
-    });
-
-    const dadosIA = await resposta.json();
-    setNcm(dadosIA.ncm);
+      const resposta = await fetch("https://n8n.srv1338428.hstgr.cloud/webhook/fiscal-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto: nome, categoria })
+      });
+      const dadosIA = await resposta.json();
+      setNcm(dadosIA.ncm || "");
     } catch (error) {
       console.error("Erro na IA:", error);
       alert("Houve um erro ao consultar a IA. Verifique sua conexão ou o n8n.");
     } finally {
-        setCarregandoIAFiscal(false);
+      setCarregandoIAFiscal(false);
     }
-};
+  };
 
   const cotarNoMercadoComIA = async () => {
     if (!nome) return alert("Digite o nome do produto primeiro!");
     setCarregandoIAMercado(true);
 
-    // n8n rasp
-    setTimeout(() => {
-      setCotacoesMercado([
-        { loja: "Mercado Livre", preco: "R$ 145,90", link: "#" },
-        { loja: "Shopee", preco: "R$ 129,00", link: "#" },
-        { loja: "AliExpress", preco: "R$ 89,50", link: "#" }
-      ]);
+    try {
+      /*
+      const resposta = await fetch("SUA_URL_DO_WEBHOOK_MERCADO_AQUI", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto: nome })
+      });
+      const dados = await resposta.json();
+      setCotacoesMercado(dados.cotacoes || []);
+      */
+      
+      setTimeout(() => {
+        setCotacoesMercado([
+          { loja: "Mercado Livre", preco: "R$ 145,90", link: "https://mercadolivre.com.br" },
+          { loja: "Shopee", preco: "R$ 129,00", link: "https://shopee.com.br" },
+          { loja: "AliExpress", preco: "R$ 89,50", link: "https://aliexpress.com" }
+        ]);
+      }, 3000);
+    } catch (error) {
+      console.error("Erro na cotação:", error);
+      alert("Erro ao buscar cotações.");
+    } finally {
       setCarregandoIAMercado(false);
-    }, 3000);
+    }
   };
 
-
-  // filtro na tela
-  const fabricantesUnicos = Array.from(
-    new Set(produtos.map(p => p.fabricante).filter(f => f && f.trim() !== ""))
-  ).sort();
-  
+  const fabricantesUnicos = Array.from(new Set(produtos.map(p => p.fabricante).filter(f => f && f.trim() !== ""))).sort();
   const produtosFiltrados = produtos.filter(prod => {
     const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
     const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
     const termoBusca = busca.toLowerCase();
-    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || 
-                      (prod.sku?.toLowerCase() || "").includes(termoBusca);
+    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca);
     return bateCategoria && bateFabricante && bateBusca;
   });
 
@@ -266,11 +244,10 @@ export default function Logistica() {
           {modo === "lista" ? (
             <Button onClick={novoProduto} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
           ) : (
-            <Button variant="outline" onClick={() => setModo("lista")}>Voltar ao Catálogo</Button>
+            <Button variant="outline" onClick={() => { setModo("lista"); setSelecionados([]); }}>Voltar ao Catálogo</Button>
           )}
         </div>
 
-        {/* modo lote */}
         {modo === "lote" && (
           <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto mt-8">
             <div className="flex items-center gap-4 mb-6 border-b pb-4">
@@ -296,7 +273,6 @@ export default function Logistica() {
                 </Select>
               </div>
 
-              {/* input dinamico */}
               {loteCampo === "fabricante" && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Digite o novo Fabricante para todos:</label>
@@ -313,7 +289,9 @@ export default function Logistica() {
                       <SelectItem value="Equipamento">Equipamento</SelectItem>
                       <SelectItem value="Peça">Peça</SelectItem>
                       <SelectItem value="Suprimento">Suprimento</SelectItem>
+                      <SelectItem value="Insumo para Recondicionamento">Insumo Recondic.</SelectItem>
                       <SelectItem value="Insumo Gráfico">Insumo (Gráfica)</SelectItem>
+                      <SelectItem value="Ferramenta">Ferramenta</SelectItem>
                       <SelectItem value="Uso e Consumo">Materiais de Uso e Consumo</SelectItem>
                       <SelectItem value="Serviço">Serviço</SelectItem>
                     </SelectContent>
@@ -346,18 +324,30 @@ export default function Logistica() {
           </div>
         )}
 
-        {/* lista */}
         {modo === "lista" && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            
+            {selecionados.length > 0 && (
+              <div className="bg-blue-50 border-b border-blue-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2">
+                <span className="text-blue-800 font-semibold">{selecionados.length} produto(s) selecionado(s)</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSelecionados([])} className="text-blue-700 hover:bg-blue-100">Desmarcar Todos</Button>
+                  <Button size="sm" onClick={() => setModo("lote")} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                    <ListChecks className="w-4 h-4" /> Editar Selecionados
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="p-4 border-b flex flex-wrap gap-4 bg-slate-50">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input placeholder="Buscar por Nome ou SKU..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-                <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectTrigger className="w-[200px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
-                  <SelectItem value="todas">Todas</SelectItem>
+                  <SelectItem value="todas">Todas as Categorias</SelectItem>
                   <SelectItem value="Equipamento">Equipamentos</SelectItem>
                   <SelectItem value="Peça">Peças</SelectItem>
                   <SelectItem value="Suprimento">Suprimentos</SelectItem>
@@ -367,7 +357,7 @@ export default function Logistica() {
                 </SelectContent>
               </Select>
               <Select value={filtroFabricante} onValueChange={setFiltroFabricante}>
-                <SelectTrigger className="w-[200px] bg-white"><SelectValue placeholder="Fabricante" /></SelectTrigger>
+                <SelectTrigger className="w-[200px] bg-white z-50"><SelectValue placeholder="Fabricante" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
                   <SelectItem value="todos">Todos os Fabricantes</SelectItem>
                   {fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}
@@ -380,8 +370,16 @@ export default function Logistica() {
                 <div className="p-8 text-center text-slate-500">Nenhum produto encontrado.</div>
               ) : (
                 produtosFiltrados.map(prod => (
-                  <div key={prod.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                  <div key={prod.id} className={`p-4 flex items-center justify-between transition-colors ${selecionados.includes(prod.id) ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}>
                     <div className="flex items-center gap-4">
+                      
+                      <input 
+                        type="checkbox" 
+                        checked={selecionados.includes(prod.id)}
+                        onChange={() => toggleSelecao(prod.id)}
+                        className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-600 cursor-pointer ml-2"
+                      />
+
                       <div className="h-14 w-14 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
                         {prod.imagem_url ? <img src={prod.imagem_url} alt={prod.nome} className="h-full w-full object-cover" /> : <Package className="w-6 h-6 text-stone-400" />}
                       </div>
@@ -403,7 +401,6 @@ export default function Logistica() {
           </div>
         )}
 
-        {/* edicao */}
         {modo === "editar" && (
           <div className="bg-white rounded-xl border shadow-sm">
             <Tabs defaultValue="geral" className="w-full">
@@ -437,7 +434,7 @@ export default function Logistica() {
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Categoria <span className="text-red-500">*</span></label>
                         <Select value={categoria} onValueChange={(val) => { setCategoria(val); setCondicao(""); }}>
-                          <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                           <SelectContent className="bg-white z-50">
                             <SelectItem value="Equipamento">Equipamento</SelectItem>
                             <SelectItem value="Peça">Peça</SelectItem>
@@ -451,12 +448,11 @@ export default function Logistica() {
                         </Select>
                       </div>
 
-                      {/* condicao de supr e pecas */}
                       {categoria === "Suprimento" && (
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-emerald-700">Condição do Suprimento</label>
-                          <Select value={condicao} onValueChange={setCondicao}>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <Select value={condicao || undefined} onValueChange={setCondicao}>
+                            <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                             <SelectContent className="bg-white z-50">
                               <SelectItem value="Original Novo">Original Novo</SelectItem>
                               <SelectItem value="Original Recondicionado">Original Recondicionado</SelectItem>
@@ -470,8 +466,8 @@ export default function Logistica() {
                       {categoria === "Peça" && (
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-orange-700">Condição da Peça</label>
-                          <Select value={condicao} onValueChange={setCondicao}>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <Select value={condicao || undefined} onValueChange={setCondicao}>
+                            <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                             <SelectContent className="bg-white z-50">
                               <SelectItem value="Nova">Nova</SelectItem>
                               <SelectItem value="Recondicionada">Recondicionada</SelectItem>
@@ -505,10 +501,10 @@ export default function Logistica() {
                         <div className="space-y-2"><label className="text-sm font-medium text-red-700">Ciclo Máximo</label><Input type="number" value={cicloMaximo} onChange={e => setCicloMaximo(e.target.value)} placeholder="Ex: 20000" /></div></>
                       )}
                       {categoria === "Suprimento" && (
-                        <div className="space-y-2"><label className="text-sm font-medium text-emerald-700">Rendimento de Volume (Páginas)</label><Input type="number" value={rendimentoVolume} onChange={e => setRendimentoVolume(e.target.value)} placeholder="Ex: 25000" /></div>
+                        <div className="space-y-2"><label className="text-sm font-medium text-emerald-700">Rend. de Volume (Pág)</label><Input type="number" value={rendimentoVolume} onChange={e => setRendimentoVolume(e.target.value)} placeholder="Ex: 25000" /></div>
                       )}
                       {categoria === "Peça" && (
-                        <div className="space-y-2"><label className="text-sm font-medium text-orange-700">Vida Útil Estimada (Páginas)</label><Input type="number" value={vidaUtilEstimada} onChange={e => setVidaUtilEstimada(e.target.value)} placeholder="Ex: 200000" /></div>
+                        <div className="space-y-2"><label className="text-sm font-medium text-orange-700">Vida Útil Estimada (Pág)</label><Input type="number" value={vidaUtilEstimada} onChange={e => setVidaUtilEstimada(e.target.value)} placeholder="Ex: 200000" /></div>
                       )}
                     </div>
                   </div>
@@ -517,13 +513,11 @@ export default function Logistica() {
                 <TabsContent value="financeiro" className="space-y-6 mt-0">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     
-                    {/* fiscal com ia */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
                       <div className="flex justify-between items-center border-b pb-2">
                         <h3 className="text-sm font-bold text-slate-800">Dados Fiscais</h3>
                         <Button size="sm" variant="outline" className="gap-2 text-violet-600 border-violet-200 hover:bg-violet-50" onClick={sugerirFiscalComIA} disabled={carregandoIAFiscal}>
-                          {carregandoIAFiscal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                          Sugerir com IA
+                          {carregandoIAFiscal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Sugerir com IA
                         </Button>
                       </div>
                       <div className="space-y-2">
@@ -536,13 +530,11 @@ export default function Logistica() {
                       </div>
                     </div>
 
-                    {/* precificacao e cotacao com ia */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
                       <div className="flex justify-between items-center border-b pb-2">
                         <h3 className="text-sm font-bold text-slate-800">Precificação</h3>
                         <Button size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={cotarNoMercadoComIA} disabled={carregandoIAMercado}>
-                          {carregandoIAMercado ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
-                          Cotar no Mercado
+                          {carregandoIAMercado ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} Cotar no Mercado
                         </Button>
                       </div>
                       <div className="flex gap-4">
@@ -556,7 +548,6 @@ export default function Logistica() {
                         </div>
                       </div>
 
-                      {/* radar de cotacao */}
                       {cotacoesMercado.length > 0 && (
                         <div className="mt-4 pt-4 border-t border-slate-200">
                           <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Radar de Preços Web</p>
