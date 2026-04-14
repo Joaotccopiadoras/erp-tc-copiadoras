@@ -27,7 +27,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       titulo: "Administrativo",
       menus: [
         { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
-        { nome: "Agendas", url: "/agenda", icone: Calendar },
       ]
     },
     {
