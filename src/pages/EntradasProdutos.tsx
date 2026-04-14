@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, AlertCircle } from "lucide-react";
+import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ItemEntrada = {
@@ -18,18 +18,14 @@ type ItemEntrada = {
 export default function Entradas() {
   const [modo, setModo] = useState<"formulario" | "bipagem">("formulario");
   
-  // cab entrada
   const [fornecedor, setFornecedor] = useState("");
   const [documento, setDocumento] = useState("");
   
-  // autocomplete
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [buscaProduto, setBuscaProduto] = useState("");
 
-  // carrin entrada
   const [itens, setItens] = useState<ItemEntrada[]>([]);
   
-  // tela de bip
   const [indexBipagem, setIndexBipagem] = useState<number | null>(null);
   const [serialInput, setSerialInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +74,7 @@ export default function Entradas() {
         series: []
       }]);
     }
-    setBuscaProduto("");
+    setBuscaProduto(""); 
   };
 
   const removerItem = (index: number) => {
@@ -112,8 +108,7 @@ export default function Entradas() {
       const novosItens = [...itens];
       const itemAtual = novosItens[indexBipagem!];
 
-      // validacoes
-      if (itemAtual.series.includes(serialInput.trim())) {
+      if (itemAtual.series.includes(serialInput.trim().toUpperCase())) {
         alert("Este número de série já foi bipado nesta entrada!");
         setSerialInput("");
         return;
@@ -126,7 +121,7 @@ export default function Entradas() {
 
       itemAtual.series.push(serialInput.trim().toUpperCase());
       setItens(novosItens);
-      setSerialInput("");
+      setSerialInput(""); 
     }
   };
 
@@ -140,7 +135,6 @@ export default function Entradas() {
     if (!fornecedor || !documento) return alert("Preencha o Fornecedor e o Número do Documento/NF.");
     if (itens.length === 0) return alert("Adicione pelo menos um produto na entrada.");
 
-    // valid series
     for (let i = 0; i < itens.length; i++) {
       if (itens[i].rastreiaSerie && itens[i].series.length !== itens[i].quantidade) {
         return alert(`Erro: O produto "${itens[i].nome}" exige ${itens[i].quantidade} números de série, mas apenas ${itens[i].series.length} foram bipados.`);
@@ -162,6 +156,7 @@ export default function Entradas() {
           documento: documento,
           fornecedor_cliente: fornecedor
         });
+
         if (item.rastreiaSerie && item.series.length > 0) {
           const payloadSeries = item.series.map(s => ({
             produto_id: item.produtoId,
@@ -172,22 +167,30 @@ export default function Entradas() {
           await supabase.from('log_numeros_serie').insert(payloadSeries);
         }
 
-        // atual estoque fis
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', item.produtoId).single();
         const novoEstoque = (prodData?.estoque_atual || 0) + item.quantidade;
         
         await supabase.from('log_produtos').update({ 
             estoque_atual: novoEstoque,
-            custo_base: item.custo // Atualiza o custo base com o valor da última entrada
+            custo_base: item.custo 
         }).eq('id', item.produtoId);
       }
 
       alert("Entrada registrada com sucesso! Estoque atualizado.");
-      // Limpa a tela para a próxima NF
-      setFornecedor(""); setDocumento(""); setItens([]);
+      
+      setItens([]);
+      setFornecedor(""); 
+      setDocumento(""); 
+      setIndexBipagem(null);
+      setModo("formulario");
+      setBuscaProduto("");
+      setSerialInput("");
+      
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (error) {
-      console.error(error);
-      alert("Houve um erro de conexão ao salvar a entrada.");
+      console.error("Erro ao salvar entrada:", error);
+      alert("Houve um erro ao salvar a entrada. Verifique o console (F12).");
     } finally {
       setSalvando(false);
     }
@@ -197,7 +200,6 @@ export default function Entradas() {
     <AppLayout>
       <div className="space-y-6 max-w-5xl mx-auto">
         
-        {/* Render datalist */}
         <datalist id="lista-produtos-bd">
           {produtosBD.map((p) => (
             <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />
@@ -221,11 +223,8 @@ export default function Entradas() {
           )}
         </div>
 
-        {/* TELA 1: FORMULÁRIO DA NOTA */}
         {modo === "formulario" && (
           <div className="space-y-6">
-            
-            {/* Cabeçalho da NF */}
             <div className="bg-white p-6 rounded-xl border shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">Fornecedor / Origem</label>
@@ -237,7 +236,6 @@ export default function Entradas() {
               </div>
             </div>
 
-            {/* Inserção de Itens */}
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
               <div className="bg-slate-50 p-4 border-b flex items-center gap-3">
                 <div className="flex-1">
@@ -318,7 +316,6 @@ export default function Entradas() {
               </div>
             </div>
 
-            {/* Rodapé de Fechamento */}
             {itens.length > 0 && (
               <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg">
                 <div>
@@ -336,8 +333,7 @@ export default function Entradas() {
           </div>
         )}
 
-        {/* TELA 2: MODO BIPAGEM DE SÉRIES (TELA CHEIA/FOCO) */}
-        {modo === "bipagem" && indexBipagem !== null && (
+        {modo === "bipagem" && indexBipagem !== null && itens[indexBipagem] && (
           <div className="bg-white rounded-xl border shadow-sm p-8 text-center animate-in fade-in zoom-in-95 duration-200">
             
             <div className="max-w-md mx-auto space-y-6">
@@ -373,7 +369,6 @@ export default function Entradas() {
                 </div>
               )}
 
-              {/* Lista das séries já bipadas deste item */}
               {itens[indexBipagem].series.length > 0 && (
                 <div className="mt-8 text-left">
                   <p className="text-sm font-bold text-slate-400 mb-3 border-b pb-2">SÉRIES REGISTRADAS NESTE LOTE:</p>
