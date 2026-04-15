@@ -135,9 +135,6 @@ export default function Fornecedores() {
     }
   };
 
-  // ==========================================
-  // CNPJa API (INSCRIÇÃO ESTADUAL E EMAIL)
-  // ==========================================
   const buscarIEeEmail = async () => {
     const cnpjLimpo = cnpjCpf.replace(/\D/g, ''); 
     
@@ -151,32 +148,40 @@ export default function Fornecedores() {
       const dados = await resposta.json();
       let encontrouAlgo = false;
 
-      // 1. Extraindo a Inscrição Estadual com lógica mais "abrangente"
-      if (dados.registrations && dados.registrations.length > 0) {
-        // Tenta achar qualquer indício de IE, ou pega o primeiro registro que tiver um número
-        const ieObj = dados.registrations.find((r: any) => 
-          (r.jurisdiction && r.jurisdiction.includes('states')) ||
-          (r.type && r.type.toUpperCase().includes('ESTADUAL')) ||
-          (r.type && r.type.toUpperCase().includes('SINTEGRA')) ||
-          (r.type && r.type === 'STATE')
-        ) || dados.registrations[0]; 
+      // 1. LÓGICA DE EXTRAÇÃO DA INSCRIÇÃO ESTADUAL BASEADA NO PAYLOAD DO CNPJA
+      if (dados.registrations && Array.isArray(dados.registrations) && dados.registrations.length > 0) {
+        
+        // A empresa tem várias IEs? Vamos tentar pegar a "Normal" (Geralmente a principal)
+        let iePrincipal = dados.registrations.find((r: any) => r.type?.text?.includes("Normal"));
 
-        if (ieObj && ieObj.number) {
-          setInscricaoEstadual(ieObj.number);
+        // Se não achou "Normal", vamos tentar pegar a IE que seja do mesmo Estado (UF) do endereço da matriz/filial
+        if (!iePrincipal && dados.address && dados.address.state) {
+             iePrincipal = dados.registrations.find((r: any) => r.state === dados.address.state);
+        }
+
+        // Se ainda assim não achou (ou o estado for diferente), pega a primeira da lista que não seja nula.
+        if (!iePrincipal) {
+            iePrincipal = dados.registrations[0];
+        }
+
+        if (iePrincipal && iePrincipal.number) {
+          // Removemos caracteres especiais pra salvar limpo no banco
+          const numeroIELimpo = iePrincipal.number.replace(/[^\w\s]/gi, '');
+          setInscricaoEstadual(numeroIELimpo);
           encontrouAlgo = true;
         }
       }
 
       // 2. Extraindo o Email Comercial
-      if (dados.emails && dados.emails.length > 0) {
+      if (dados.emails && Array.isArray(dados.emails) && dados.emails.length > 0) {
         setEmail(dados.emails[0].address);
         encontrouAlgo = true;
       }
 
       if (encontrouAlgo) {
-        // Silencioso ou com alerta discreto para não poluir
+         // Silencioso ou com alerta discreto para não poluir
       } else {
-        alert("A API não retornou Inscrição Estadual para este CNPJ.");
+        alert("A API não retornou Inscrição Estadual ou E-mail para este CNPJ.");
       }
 
     } catch (error) {
