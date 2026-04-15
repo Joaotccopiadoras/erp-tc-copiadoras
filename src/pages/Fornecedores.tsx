@@ -34,6 +34,7 @@ export default function Fornecedores() {
   // Controles de UI
   const [salvando, setSalvando] = useState(false);
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const [buscandoIe, setBuscandoIe] = useState(false); // NOVO: Controle de loading para o CNPJa
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
   // ==========================================
@@ -71,7 +72,6 @@ export default function Fornecedores() {
     }
   }, [modo, id, razaoSocial, nomeFantasia, cnpjCpf, inscricaoEstadual, tipo, segmento, email, telefone, contatoNome, endereco, portalLink, portalLogin, portalSenha, prazoMedio]);
 
-  // ==========================================
 
   useEffect(() => {
     if (modo === "lista") fetchFornecedores();
@@ -104,17 +104,17 @@ export default function Fornecedores() {
     setModo("formulario");
   };
 
+  // ==========================================
+  // BRASIL API (DADOS GERAIS)
+  // ==========================================
   const buscarDadosCNPJ = async () => {
     const cnpjLimpo = cnpjCpf.replace(/\D/g, ''); 
     
-    if (cnpjLimpo.length !== 14) {
-      return alert("Por favor, digite um CNPJ válido com 14 dígitos.");
-    }
+    if (cnpjLimpo.length !== 14) return alert("Por favor, digite um CNPJ válido com 14 dígitos.");
 
     setBuscandoCnpj(true);
     try {
       const resposta = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
-      
       if (!resposta.ok) throw new Error("CNPJ não encontrado na Receita Federal");
       
       const dados = await resposta.json();
@@ -122,17 +122,64 @@ export default function Fornecedores() {
       setRazaoSocial(dados.razao_social || "");
       setNomeFantasia(dados.nome_fantasia || dados.razao_social || ""); 
       setTelefone(dados.ddd_telefone_1 || "");
-      setEmail(dados.email || "");
+      // Removido o preenchimento de email daqui para priorizar o do CNPJa, mas mantido como fallback se estiver vazio
+      if (!email && dados.email) setEmail(dados.email);
       
       const enderecoCompleto = `${dados.logradouro}, ${dados.numero}${dados.complemento ? ' - ' + dados.complemento : ''}, ${dados.bairro}, ${dados.municipio} - ${dados.uf}, CEP: ${dados.cep}`;
       setEndereco(enderecoCompleto);
 
-      alert("Dados importados da Receita Federal com sucesso!");
+      alert("Dados gerais importados da Receita Federal com sucesso!");
     } catch (error) {
       console.error(error);
-      alert("Erro ao buscar CNPJ. Verifique se o número está correto ou preencha os dados manualmente.");
+      alert("Erro ao buscar CNPJ. Verifique se o número está correto.");
     } finally {
       setBuscandoCnpj(false);
+    }
+  };
+
+  // ==========================================
+  // CNPJa API (INSCRIÇÃO ESTADUAL E EMAIL)
+  // ==========================================
+  const buscarIEeEmail = async () => {
+    const cnpjLimpo = cnpjCpf.replace(/\D/g, ''); 
+    
+    if (cnpjLimpo.length !== 14) return alert("Por favor, informe o CNPJ antes de buscar a Inscrição Estadual.");
+
+    setBuscandoIe(true);
+    try {
+      // Endpoint público do CNPJa
+      const resposta = await fetch(`https://open.cnpja.com/office/${cnpjLimpo}`);
+      if (!resposta.ok) throw new Error("Falha ao comunicar com a API do CNPJa");
+      
+      const dados = await resposta.json();
+      let encontrouAlgo = false;
+
+      // 1. Extraindo a Inscrição Estadual (Sintegra/Sefaz)
+      if (dados.registrations && dados.registrations.length > 0) {
+        const ieObj = dados.registrations.find((r: any) => r.type === 'STATE'); // Procura a inscrição do tipo ESTADUAL
+        if (ieObj && ieObj.number) {
+          setInscricaoEstadual(ieObj.number);
+          encontrouAlgo = true;
+        }
+      }
+
+      // 2. Extraindo o Email Comercial
+      if (dados.emails && dados.emails.length > 0) {
+        setEmail(dados.emails[0].address);
+        encontrouAlgo = true;
+      }
+
+      if (encontrouAlgo) {
+        alert("Inscrição Estadual e E-mail atualizados via CNPJa!");
+      } else {
+        alert("A API não retornou Inscrição Estadual ou E-mail para este CNPJ.");
+      }
+
+    } catch (error) {
+      console.error("Erro na API CNPJa:", error);
+      alert("Não foi possível buscar a Inscrição Estadual no momento. Tente novamente mais tarde.");
+    } finally {
+      setBuscandoIe(false);
     }
   };
 
@@ -174,7 +221,7 @@ export default function Fornecedores() {
     }
 
     alert("Fornecedor salvo com sucesso!");
-    sessionStorage.removeItem("fornecedores_rascunho"); // Limpa o rascunho
+    sessionStorage.removeItem("fornecedores_rascunho");
     setModo("lista");
   };
 
@@ -277,14 +324,16 @@ export default function Fornecedores() {
         {modo === "formulario" && (
           <div className="bg-white rounded-xl border shadow-sm p-6 space-y-8 animate-in fade-in zoom-in-95 duration-200">
             
+            {/* Bloco 1: Dados Cadastrais */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b pb-2 mb-4">
                 <Building className="w-5 h-5 text-indigo-600" />
                 <h2 className="text-lg font-bold text-slate-800">Dados da Empresa</h2>
               </div>
               
+              {/* O INPUT MÁGICO DO CNPJ (BRASIL API) */}
               <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 mb-6">
-                <label className="text-sm font-bold text-indigo-900 block mb-2">Busca Automática por CNPJ</label>
+                <label className="text-sm font-bold text-indigo-900 block mb-2">Busca Automática por CNPJ (Dados Gerais)</label>
                 <div className="flex gap-3">
                   <Input 
                     value={cnpjCpf} 
@@ -299,7 +348,7 @@ export default function Fornecedores() {
                   </Button>
                 </div>
                 <p className="text-xs text-indigo-600/70 mt-2 flex items-center gap-1">
-                  Puxa Razão Social, Nome Fantasia, Endereço e Contato automaticamente.
+                  Puxa Razão Social, Nome Fantasia e Endereço automaticamente.
                 </p>
               </div>
 
@@ -312,10 +361,27 @@ export default function Fornecedores() {
                   <label className="text-sm font-medium">Nome Fantasia</label>
                   <Input value={nomeFantasia} onChange={e => setNomeFantasia(e.target.value)} placeholder="Ex: Brother Brasil" />
                 </div>
+                
+                {/* O NOVO CAMPO DA INSCRIÇÃO ESTADUAL COM BOTÃO (CNPJa) */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Inscrição Estadual (IE)</label>
-                  <Input value={inscricaoEstadual} onChange={e => setInscricaoEstadual(e.target.value)} placeholder="Ex: 123.456.789.000" />
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    Inscrição Estadual (IE)
+                  </label>
+                  <div className="flex gap-2">
+                    <Input value={inscricaoEstadual} onChange={e => setInscricaoEstadual(e.target.value)} placeholder="Ex: 123.456.789.000" className="flex-1" />
+                    <Button 
+                      variant="outline" 
+                      onClick={buscarIEeEmail} 
+                      disabled={buscandoIe} 
+                      className="shrink-0 gap-2 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                      title="Buscar IE e E-mail no CNPJa"
+                    >
+                      {buscandoIe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      Buscar API CNPJa
+                    </Button>
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Tipo de Parceiro</label>
@@ -337,6 +403,7 @@ export default function Fornecedores() {
               </div>
             </div>
 
+            {/* Bloco 2: Contato e Localização */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b pb-2 mb-4 mt-6">
                 <MapPin className="w-5 h-5 text-indigo-600" />
@@ -362,6 +429,7 @@ export default function Fornecedores() {
               </div>
             </div>
 
+            {/* Bloco 3: Portal B2B e Logística */}
             <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
               <div className="flex items-center gap-2 border-b pb-2 mb-4">
                 <Globe className="w-5 h-5 text-indigo-600" />
