@@ -34,7 +34,7 @@ export default function Fornecedores() {
   // Controles de UI
   const [salvando, setSalvando] = useState(false);
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
-  const [buscandoIe, setBuscandoIe] = useState(false); // NOVO: Controle de loading para o CNPJa
+  const [buscandoIe, setBuscandoIe] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
   // ==========================================
@@ -71,7 +71,6 @@ export default function Fornecedores() {
       sessionStorage.removeItem("fornecedores_rascunho");
     }
   }, [modo, id, razaoSocial, nomeFantasia, cnpjCpf, inscricaoEstadual, tipo, segmento, email, telefone, contatoNome, endereco, portalLink, portalLogin, portalSenha, prazoMedio]);
-
 
   useEffect(() => {
     if (modo === "lista") fetchFornecedores();
@@ -122,7 +121,6 @@ export default function Fornecedores() {
       setRazaoSocial(dados.razao_social || "");
       setNomeFantasia(dados.nome_fantasia || dados.razao_social || ""); 
       setTelefone(dados.ddd_telefone_1 || "");
-      // Removido o preenchimento de email daqui para priorizar o do CNPJa, mas mantido como fallback se estiver vazio
       if (!email && dados.email) setEmail(dados.email);
       
       const enderecoCompleto = `${dados.logradouro}, ${dados.numero}${dados.complemento ? ' - ' + dados.complemento : ''}, ${dados.bairro}, ${dados.municipio} - ${dados.uf}, CEP: ${dados.cep}`;
@@ -147,16 +145,22 @@ export default function Fornecedores() {
 
     setBuscandoIe(true);
     try {
-      // Endpoint público do CNPJa
       const resposta = await fetch(`https://open.cnpja.com/office/${cnpjLimpo}`);
       if (!resposta.ok) throw new Error("Falha ao comunicar com a API do CNPJa");
       
       const dados = await resposta.json();
       let encontrouAlgo = false;
 
-      // 1. Extraindo a Inscrição Estadual (Sintegra/Sefaz)
+      // 1. Extraindo a Inscrição Estadual com lógica mais "abrangente"
       if (dados.registrations && dados.registrations.length > 0) {
-        const ieObj = dados.registrations.find((r: any) => r.type === 'STATE'); // Procura a inscrição do tipo ESTADUAL
+        // Tenta achar qualquer indício de IE, ou pega o primeiro registro que tiver um número
+        const ieObj = dados.registrations.find((r: any) => 
+          (r.jurisdiction && r.jurisdiction.includes('states')) ||
+          (r.type && r.type.toUpperCase().includes('ESTADUAL')) ||
+          (r.type && r.type.toUpperCase().includes('SINTEGRA')) ||
+          (r.type && r.type === 'STATE')
+        ) || dados.registrations[0]; 
+
         if (ieObj && ieObj.number) {
           setInscricaoEstadual(ieObj.number);
           encontrouAlgo = true;
@@ -170,14 +174,14 @@ export default function Fornecedores() {
       }
 
       if (encontrouAlgo) {
-        alert("Inscrição Estadual e E-mail atualizados via CNPJa!");
+        // Silencioso ou com alerta discreto para não poluir
       } else {
-        alert("A API não retornou Inscrição Estadual ou E-mail para este CNPJ.");
+        alert("A API não retornou Inscrição Estadual para este CNPJ.");
       }
 
     } catch (error) {
       console.error("Erro na API CNPJa:", error);
-      alert("Não foi possível buscar a Inscrição Estadual no momento. Tente novamente mais tarde.");
+      alert("Não foi possível buscar a Inscrição Estadual no momento. Tente novamente.");
     } finally {
       setBuscandoIe(false);
     }
@@ -324,14 +328,12 @@ export default function Fornecedores() {
         {modo === "formulario" && (
           <div className="bg-white rounded-xl border shadow-sm p-6 space-y-8 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* Bloco 1: Dados Cadastrais */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b pb-2 mb-4">
                 <Building className="w-5 h-5 text-indigo-600" />
                 <h2 className="text-lg font-bold text-slate-800">Dados da Empresa</h2>
               </div>
               
-              {/* O INPUT MÁGICO DO CNPJ (BRASIL API) */}
               <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 mb-6">
                 <label className="text-sm font-bold text-indigo-900 block mb-2">Busca Automática por CNPJ (Dados Gerais)</label>
                 <div className="flex gap-3">
@@ -362,7 +364,6 @@ export default function Fornecedores() {
                   <Input value={nomeFantasia} onChange={e => setNomeFantasia(e.target.value)} placeholder="Ex: Brother Brasil" />
                 </div>
                 
-                {/* O NOVO CAMPO DA INSCRIÇÃO ESTADUAL COM BOTÃO (CNPJa) */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
                     Inscrição Estadual (IE)
@@ -374,10 +375,10 @@ export default function Fornecedores() {
                       onClick={buscarIEeEmail} 
                       disabled={buscandoIe} 
                       className="shrink-0 gap-2 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
-                      title="Buscar IE e E-mail no CNPJa"
+                      title="Preencher IE e E-mail"
                     >
                       {buscandoIe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                      Buscar API CNPJa
+                      Preencher
                     </Button>
                   </div>
                 </div>
@@ -403,7 +404,6 @@ export default function Fornecedores() {
               </div>
             </div>
 
-            {/* Bloco 2: Contato e Localização */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b pb-2 mb-4 mt-6">
                 <MapPin className="w-5 h-5 text-indigo-600" />
@@ -429,7 +429,6 @@ export default function Fornecedores() {
               </div>
             </div>
 
-            {/* Bloco 3: Portal B2B e Logística */}
             <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
               <div className="flex items-center gap-2 border-b pb-2 mb-4">
                 <Globe className="w-5 h-5 text-indigo-600" />
