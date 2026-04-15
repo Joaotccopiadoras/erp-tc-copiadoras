@@ -16,6 +16,9 @@ export default function Logistica() {
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
+  const [filtroCondicao, setFiltroCondicao] = useState("todas");
+  const [filtroFamilia, setFiltroFamilia] = useState("todas");
+  const [filtroPerfil, setFiltroPerfil] = useState("todos");
   const [ordenacao, setOrdenacao] = useState("nome_asc");
 
   const [selecionados, setSelecionados] = useState<string[]>([]);
@@ -226,13 +229,16 @@ export default function Logistica() {
   let produtosFiltrados = produtos.filter(prod => {
     const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
     const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
+    const bateCondicao = filtroCondicao === "todas" || prod.condicao === filtroCondicao;
+    const bateFamilia = filtroFamilia === "todas" || prod.familia === filtroFamilia;
+    const batePerfil = filtroPerfil === "todos" || prod.perfil === filtroPerfil;
     const termoBusca = busca.toLowerCase();
     const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || 
                       (prod.sku?.toLowerCase() || "").includes(termoBusca) || 
                       (prod.familia?.toLowerCase() || "").includes(termoBusca) || 
                       (prod.perfil?.toLowerCase() || "").includes(termoBusca) ||
                       (prod.modelo?.toLowerCase() || "").includes(termoBusca);
-    return bateCategoria && bateFabricante && bateBusca;
+    return bateCategoria && bateFabricante && bateCondicao && bateFamilia && batePerfil && bateBusca;
   });
 
   produtosFiltrados = produtosFiltrados.sort((a, b) => {
@@ -580,13 +586,14 @@ export default function Logistica() {
               </div>
             )}
 
-            <div className="p-4 border-b flex flex-wrap gap-4 bg-white items-center">
+            <div className="p-4 border-b flex flex-wrap gap-3 bg-white items-center">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Buscar Nome, PartNumber, Família ou Perfil..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Buscar Nome, SKU, Compatibilidade..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
+              
               <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
-                <SelectTrigger className="w-[180px] bg-white z-50"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectTrigger className="w-[160px] bg-white z-50 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
                   <SelectItem value="todas">Todas as Categorias</SelectItem>
                   <SelectItem value="Equipamento">Equipamentos</SelectItem>
@@ -602,16 +609,43 @@ export default function Logistica() {
                   <SelectItem value="Serviço">Serviços</SelectItem>
                 </SelectContent>
               </Select>
+
               <Select value={filtroFabricante} onValueChange={setFiltroFabricante}>
-                <SelectTrigger className="w-[180px] bg-white z-50"><SelectValue placeholder="Fabricante" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Fabricante" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
-                  <SelectItem value="todos">Todos os Fabricantes</SelectItem>
+                  <SelectItem value="todos">Fabricantes (Todos)</SelectItem>
                   {fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}
                 </SelectContent>
               </Select>
-              <div className="border-l border-slate-200 h-8 mx-1"></div>
+
+              <Select value={filtroCondicao} onValueChange={setFiltroCondicao}>
+                <SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Condição" /></SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  <SelectItem value="todas">Condição (Todas)</SelectItem>
+                  {condicoesUnicas.map((cond, idx) => (<SelectItem key={idx} value={cond as string}>{cond as string}</SelectItem>))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filtroFamilia} onValueChange={setFiltroFamilia}>
+                <SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Família" /></SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  <SelectItem value="todas">Família (Todas)</SelectItem>
+                  {familiasUnicas.map((fam, idx) => (<SelectItem key={idx} value={fam as string}>{fam as string}</SelectItem>))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filtroPerfil} onValueChange={setFiltroPerfil}>
+                <SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Perfil" /></SelectTrigger>
+                <SelectContent className="bg-white z-50">
+                  <SelectItem value="todos">Perfil (Todos)</SelectItem>
+                  {perfisUnicos.map((perf, idx) => (<SelectItem key={idx} value={perf as string}>{perf as string}</SelectItem>))}
+                </SelectContent>
+              </Select>
+
+              <div className="border-l border-slate-200 h-6 mx-1 hidden xl:block"></div>
+              
               <Select value={ordenacao} onValueChange={setOrdenacao}>
-                <SelectTrigger className="w-[160px] bg-white z-50"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                <SelectTrigger className="w-[140px] bg-white z-50 text-xs"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
                 <SelectContent className="bg-white z-50">
                   <SelectItem value="nome_asc">A-Z (Nome)</SelectItem>
                   <SelectItem value="categoria_asc">Por Categoria</SelectItem>
