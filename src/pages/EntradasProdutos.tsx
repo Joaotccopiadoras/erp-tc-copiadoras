@@ -158,8 +158,13 @@ export default function Entradas() {
 
   // --- FUNÇÕES DE HISTÓRICO ---
   const fetchHistorico = async () => {
-    const { data, error } = await supabase.from('log_documentos_entrada').select(`*, log_fornecedores(nome_fantasia, razao_social)`).order('sequencial', { ascending: false });
+    const { data, error } = await supabase
+      .from('log_documentos_entrada')
+      .select(`*, log_fornecedores!fornecedor_id(nome_fantasia, razao_social)`)
+      .order('sequencial', { ascending: false });
+    
     if (data) setHistoricoDocs(data);
+    if (error) console.error("Erro ao buscar histórico:", error);
   };
 
   const abrirDetalhesDocumento = async (doc: any) => {
