@@ -25,7 +25,7 @@ export default function Entradas() {
   // ==========================================
   // ESTADOS: NOVO RECEBIMENTO
   // ==========================================
-  const [fornecedorBusca, setFornecedorBusca] = useState(""); // Substituiu o fornecedorTexto
+  const [fornecedorBusca, setFornecedorBusca] = useState(""); 
   const [fornecedorId, setFornecedorId] = useState<string | null>(null);
   const [mostrarDropdownFornecedor, setMostrarDropdownFornecedor] = useState(false);
   
@@ -65,6 +65,58 @@ export default function Entradas() {
   const [itensDocSelecionado, setItensDocSelecionado] = useState<any[]>([]);
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
 
+  // ==========================================
+  // AUTO-SAVE (RASCUNHO BLINDADO)
+  // ==========================================
+  useEffect(() => {
+    const rascunhoSalvo = sessionStorage.getItem("entradas_rascunho");
+    if (rascunhoSalvo) {
+      try {
+        const draft = JSON.parse(rascunhoSalvo);
+        if (draft) {
+          setFornecedorBusca(draft.fornecedorBusca || "");
+          setFornecedorId(draft.fornecedorId || null);
+          setDocumento(draft.documento || "");
+          setCfop(draft.cfop || "");
+          setChaveAcesso(draft.chaveAcesso || "");
+          setDataEmissao(draft.dataEmissao || "");
+          setTransportadora(draft.transportadora || "");
+          setValorFrete(draft.valorFrete || 0);
+          setLocalDestino(draft.localDestino || "");
+          setValorIcms(draft.valorIcms || 0);
+          setValorIcmsSt(draft.valorIcmsSt || 0);
+          setValorIpi(draft.valorIpi || 0);
+          setValorPis(draft.valorPis || 0);
+          setValorCofins(draft.valorCofins || 0);
+          setValorOutros(draft.valorOutros || 0);
+          setItens(draft.itens || []);
+          if (draft.modo) setModo(draft.modo);
+          if (draft.indexBipagem !== undefined) setIndexBipagem(draft.indexBipagem);
+        }
+      } catch (e) {
+        console.error("Erro ao recuperar rascunho", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Só salva o rascunho se estivermos na aba de receber
+    if (abaAtiva === "receber" && modo !== "detalhe_historico") {
+      const draft = {
+        fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso,
+        dataEmissao, transportadora, valorFrete, localDestino,
+        valorIcms, valorIcmsSt, valorIpi, valorPis, valorCofins, valorOutros,
+        itens, modo, indexBipagem
+      };
+      sessionStorage.setItem("entradas_rascunho", JSON.stringify(draft));
+    }
+  }, [
+    fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, transportadora, 
+    valorFrete, localDestino, valorIcms, valorIcmsSt, valorIpi, valorPis, valorCofins, valorOutros, 
+    itens, modo, indexBipagem, abaAtiva
+  ]);
+
+
   useEffect(() => {
     fetchDadosBase();
   }, []);
@@ -74,7 +126,6 @@ export default function Entradas() {
       fetchHistorico();
       setModo("formulario"); 
     } else {
-      // Recarrega os fornecedores caso o usuário tenha cadastrado um novo na outra aba e voltado
       fetchDadosBase();
     }
   }, [abaAtiva]);
@@ -86,15 +137,16 @@ export default function Entradas() {
   const fetchDadosBase = async () => {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base').order('nome'),
-      supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial'), // Puxando o sequencial
-      supabase.from('log_locais').select('id, nome').order('nome')
+      supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial'), 
+      supabase.from('log_locais').select('id, nome, tipo').order('nome')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (fornRes.data) setFornecedoresBD(fornRes.data);
     if (locRes.data) {
         setLocaisBD(locRes.data);
-        if(locRes.data.length > 0 && !localDestino) setLocalDestino(locRes.data[0].id); 
+        // Só seta o destino inicial se o usuário não tiver puxado do rascunho
+        setLocalDestino(prev => prev ? prev : (locRes.data[0]?.id || ""));
     }
   };
 
@@ -191,7 +243,7 @@ export default function Entradas() {
           setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`);
       } else {
           setFornecedorId(null);
-          setFornecedorBusca(emitente); // Deixa o nome limpo para o usuário ver
+          setFornecedorBusca(emitente); 
       }
 
       const detNodes = xmlDoc.querySelectorAll("det");
@@ -320,6 +372,8 @@ export default function Entradas() {
       }
 
       alert("Entrada registrada com sucesso!");
+      sessionStorage.removeItem("entradas_rascunho"); // APAGA O RASCUNHO APÓS SALVAR COM SUCESSO!
+      
       setItens([]); setFornecedorBusca(""); setFornecedorId(null); setDocumento(""); setCfop("");
       setChaveAcesso(""); setDataEmissao(""); setTransportadora(""); setValorFrete(0); 
       setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
@@ -401,7 +455,7 @@ export default function Entradas() {
                             value={fornecedorBusca} 
                             onChange={e => {
                                 setFornecedorBusca(e.target.value);
-                                setFornecedorId(null); // Se o cara digitar por cima, perde o vínculo até ele selecionar na lista
+                                setFornecedorId(null); 
                                 setMostrarDropdownFornecedor(true);
                             }}
                             onFocus={() => setMostrarDropdownFornecedor(true)}
@@ -513,15 +567,13 @@ export default function Entradas() {
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
-                    <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10">
-                      <SelectValue placeholder="Selecione o Almoxarifado..." />
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">
-                      {locaisBD.map(loc => (
-                        <SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10"><SelectValue placeholder="Selecione o Almoxarifado..." /></SelectTrigger>
+                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">
+                          {locaisBD.map(loc => (
+                            <SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
