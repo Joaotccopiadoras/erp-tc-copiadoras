@@ -277,7 +277,7 @@ export default function Entradas() {
         <div className="flex justify-between items-center border-b pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><PackageOpen className="w-6 h-6 text-emerald-600" /> Recebimento de Mercadorias</h1>
-            <p className="text-slate-500">Importe XML ou lance manualmente para alimentar o Almoxarifado.</p>
+            <p className="text-slate-500">Importe XML ou lance manualmente para alimentar o Estoque.</p>
           </div>
           {modo === "formulario" ? (
             <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm">
@@ -340,7 +340,7 @@ export default function Entradas() {
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                   <Select value={localDestino} onValueChange={setLocalDestino}>
-                    <SelectTrigger className="w-[250px] bg-white border-indigo-200"><SelectValue placeholder="Selecione o Almoxarifado..." /></SelectTrigger>
+                    <SelectTrigger className="w-[250px] bg-white border-indigo-200"><SelectValue placeholder="Selecione o Local de Estoque de Destino..." /></SelectTrigger>
                     <SelectContent>
                       {locaisBD.map(loc => (
                         <SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>
