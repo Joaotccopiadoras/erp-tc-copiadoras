@@ -11,6 +11,7 @@ import Tecnica from "./pages/Tecnica"
 import Processos from "./pages/Processos"
 import Logistica from "./pages/Logistica"
 import EntradasProdutos from "./pages/EntradasProdutos"
+import Fornecedores from "./pages/Fornecedores";
 
 const queryClient = new QueryClient();
 export default function App() {
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
 
           <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
+          <Route path="/fornecedores" element={<RotaProtegida><Fornecedores /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route

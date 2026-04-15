@@ -8,7 +8,8 @@ import {
   LayoutDashboard,
   Boxes,
   CalendarClock,
-  Workflow
+  Workflow,
+  Factory
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       menus: [
         { nome: "Catálogo", url: "/logistica", icone: Package },
         { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
+        { nome: "Fornecedores", url: "/fornecedores", icone: Factory },
         // { nome: "Saídas / OS", url: "/saidas", icone: Boxes },
       ]
     },
