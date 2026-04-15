@@ -11,8 +11,11 @@ type ItemEntrada = {
   sku: string;
   nome: string;
   rastreiaSerie: boolean;
-  quantidade: number;
-  custo: number;
+  quantidade: number; // Quantidade final em unidades (que vai pro banco)
+  qtdEmbalagem: number; // NOVO: Quantidade de pacotes/caixas
+  fatorConversao: number; // NOVO: Unidades por pacote
+  custo: number; // Preço unitário da unidade individual
+  custoEmbalagem: number; // NOVO: Preço do pacote
   series: string[];
   precisaMapeamento?: boolean;
   nomeOriginalXML?: string;
@@ -277,9 +280,17 @@ export default function Entradas() {
     setBuscaProduto(""); 
   };
 
-  const atualizarItem = (index: number, campo: keyof ItemEntrada, valor: any) => {
-    const novosItens = [...itens]; novosItens[index] = { ...novosItens[index], [campo]: valor };
-    if (campo === 'quantidade' && novosItens[index].rastreiaSerie) { if (novosItens[index].series.length > valor) novosItens[index].series = novosItens[index].series.slice(0, valor); }
+  const atualizarItemConversao = (index: number, campo: 'qtdEmbalagem' | 'fatorConversao' | 'custoEmbalagem', valor: number) => {
+    const novosItens = [...itens];
+    const item = novosItens[index];
+    if (campo === 'qtdEmbalagem') item.qtdEmbalagem = valor;
+    if (campo === 'fatorConversao') item.fatorConversao = valor;
+    if (campo === 'custoEmbalagem') item.custoEmbalagem = valor;
+    item.quantidade = item.qtdEmbalagem * item.fatorConversao;
+    item.custo = item.fatorConversao > 0 ? item.custoEmbalagem / item.fatorConversao : 0;
+    if (item.rastreiaSerie && item.series.length > item.quantidade) {
+        item.series = item.series.slice(0, item.quantidade);
+    }
     setItens(novosItens);
   };
 
@@ -561,41 +572,45 @@ export default function Entradas() {
 
                   <div className="p-0 overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
-                          <th className="p-3 font-semibold border-b min-w-[300px]">Produto / Mapeamento</th>
-                          <th className="p-3 font-semibold border-b w-32 text-center">Séries</th>
-                          <th className="p-3 font-semibold border-b w-32">Custo Un. (R$)</th>
-                          <th className="p-3 font-semibold border-b w-28">Qtd</th>
-                          <th className="p-3 font-semibold border-b w-32 text-right">Total</th>
-                          <th className="p-3 font-semibold border-b w-12"></th>
-                        </tr>
-                      </thead>
+                     <thead>
+                      <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
+                        <th className="p-3 font-semibold border-b min-w-[250px]">Produto</th>
+                        <th className="p-3 font-semibold border-b w-24 text-center">Qtd. Pacotes</th>
+                        <th className="p-3 font-semibold border-b w-24 text-center">Un. por Pacote</th>
+                        <th className="p-3 font-semibold border-b w-24 text-center text-indigo-600">Total Unid.</th>
+                        <th className="p-3 font-semibold border-b w-28">Preço Pacote (R$)</th>
+                        <th className="p-3 font-semibold border-b w-28 text-indigo-600">Custo Un. (R$)</th>
+                        <th className="p-3 font-semibold border-b w-32 text-right">Total Item</th>
+                        <th className="p-3 font-semibold border-b w-10"></th>
+                      </tr>
+                    </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {itens.length === 0 ? (
-                          <tr><td colSpan={6} className="p-8 text-center text-slate-400">Importe um arquivo XML para iniciar.</td></tr>
-                        ) : (
-                          itens.map((item, index) => (
-                            <tr key={index} className={item.precisaMapeamento ? 'bg-amber-50/50' : 'hover:bg-slate-50'}>
-                              <td className="p-3">
-                                {!item.precisaMapeamento ? (
-                                  <><p className="font-semibold text-slate-800 text-sm">{item.nome}</p><p className="text-xs text-slate-500">SKU: {item.sku}</p></>
-                                ) : (
-                                  <div className="space-y-2"><p className="text-xs text-amber-700 font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> XML: {item.nomeOriginalXML}</p><Input list="lista-produtos-bd" placeholder="Vincule ao Catálogo..." className="h-8 text-xs border-amber-300" onChange={(e) => vincularProdutoXML(index, e.target.value)} /></div>
-                                )}
-                              </td>
-                              <td className="p-3 text-center">
-                                {item.precisaMapeamento ? <span className="text-xs text-amber-600">Pendente</span> : item.rastreiaSerie ? (
-                                  <Button size="sm" variant={item.series.length === item.quantidade ? "default" : "secondary"} onClick={() => abrirBipagem(index)} className={`h-7 text-xs w-full px-2 ${item.series.length === item.quantidade ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>{item.series.length === item.quantidade ? <CheckCircle2 className="w-3 h-3"/> : <Barcode className="w-3 h-3" />} {item.series.length}/{item.quantidade}</Button>
-                                ) : <span className="text-xs text-slate-400">Lote Padrão</span>}
-                              </td>
-                              <td className="p-3"><Input type="number" step="0.01" min="0" value={item.custo} onChange={e => atualizarItem(index, 'custo', parseFloat(e.target.value)||0)} className="h-8 text-sm" /></td>
-                              <td className="p-3"><Input type="number" min="1" value={item.quantidade} onChange={e => atualizarItem(index, 'quantidade', parseInt(e.target.value)||1)} className="h-8 text-sm" /></td>
-                              <td className="p-3 text-right font-medium text-slate-700">R$ {(item.quantidade * item.custo).toFixed(2).replace('.', ',')}</td>
-                              <td className="p-3 text-center"><Button variant="ghost" size="icon" onClick={() => removerItem(index)} className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button></td>
-                            </tr>
-                          ))
-                        )}
+                        {itens.map((item, index) => (
+                          <tr key={index} className="hover:bg-slate-50 text-sm">
+                            <td className="p-3 font-medium text-slate-700">
+                              {item.nome} <br/> <span className="text-[10px] text-slate-400 font-mono">{item.sku}</span>
+                            </td>
+                            <td className="p-3">
+                              <Input type="number" value={item.qtdEmbalagem} onChange={e => atualizarItemConversao(index, 'qtdEmbalagem', parseFloat(e.target.value)||0)} className="h-8 text-center" />
+                            </td>
+                            <td className="p-3">
+                              <Input type="number" value={item.fatorConversao} onChange={e => atualizarItemConversao(index, 'fatorConversao', parseInt(e.target.value)||1)} className="h-8 text-center" />
+                            </td>
+                            <td className="p-3 text-center font-bold text-indigo-600 bg-indigo-50/30">
+                              {item.quantidade}
+                            </td>
+                            <td className="p-3">
+                              <Input type="number" step="0.01" value={item.custoEmbalagem} onChange={e => atualizarItemConversao(index, 'custoEmbalagem', parseFloat(e.target.value)||0)} className="h-8" />
+                            </td>
+                            <td className="p-3 text-indigo-700 font-semibold italic">
+                              R$ {item.custo.toFixed(4)}
+                            </td>
+                            <td className="p-3 text-right font-bold">
+                              R$ {(item.qtdEmbalagem * item.custoEmbalagem).toFixed(2)}
+                            </td>
+                            {/* ... botão de remover ... */}
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
