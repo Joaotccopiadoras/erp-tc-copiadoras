@@ -87,7 +87,7 @@ export default function Entradas() {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial'), // Puxando o sequencial
-      supabase.from('log_locais').select('id, nome, tipo').order('nome')
+      supabase.from('log_locais').select('id, nome').order('nome')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
@@ -513,13 +513,15 @@ export default function Entradas() {
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
-                        <SelectTrigger className="w-[250px] bg-white border-indigo-200"><SelectValue placeholder="Selecione o Almoxarifado..." /></SelectTrigger>
-                        <SelectContent>
-                          {locaisBD.map(loc => (
-                            <SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10">
+                      <SelectValue placeholder="Selecione o Almoxarifado..." />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">
+                      {locaisBD.map(loc => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                     </div>
 
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
