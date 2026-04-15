@@ -14,7 +14,7 @@ export default function Fornecedores() {
   const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
 
-  // estados de formul
+  // Estados do Formulário
   const [id, setId] = useState<string | null>(null);
   const [razaoSocial, setRazaoSocial] = useState("");
   const [nomeFantasia, setNomeFantasia] = useState("");
@@ -31,10 +31,47 @@ export default function Fornecedores() {
   const [portalSenha, setPortalSenha] = useState("");
   const [prazoMedio, setPrazoMedio] = useState("");
 
-  // controles de ui
+  // Controles de UI
   const [salvando, setSalvando] = useState(false);
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
+
+  // ==========================================
+  // AUTO-SAVE (RASCUNHO BLINDADO)
+  // ==========================================
+  useEffect(() => {
+    const rascunhoSalvo = sessionStorage.getItem("fornecedores_rascunho");
+    if (rascunhoSalvo) {
+      try {
+        const draft = JSON.parse(rascunhoSalvo);
+        if (draft.modo === "formulario") {
+          setId(draft.id || null); setRazaoSocial(draft.razaoSocial || ""); setNomeFantasia(draft.nomeFantasia || "");
+          setCnpjCpf(draft.cnpjCpf || ""); setInscricaoEstadual(draft.inscricaoEstadual || "");
+          setTipo(draft.tipo || ""); setSegmento(draft.segmento || ""); setEmail(draft.email || "");
+          setTelefone(draft.telefone || ""); setContatoNome(draft.contatoNome || ""); setEndereco(draft.endereco || "");
+          setPortalLink(draft.portalLink || ""); setPortalLogin(draft.portalLogin || ""); 
+          setPortalSenha(draft.portalSenha || ""); setPrazoMedio(draft.prazoMedio || "");
+          setModo("formulario");
+        }
+      } catch (e) {
+        console.error("Erro ao recuperar rascunho", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (modo === "formulario") {
+      const draft = {
+        modo, id, razaoSocial, nomeFantasia, cnpjCpf, inscricaoEstadual, tipo, segmento,
+        email, telefone, contatoNome, endereco, portalLink, portalLogin, portalSenha, prazoMedio
+      };
+      sessionStorage.setItem("fornecedores_rascunho", JSON.stringify(draft));
+    } else {
+      sessionStorage.removeItem("fornecedores_rascunho");
+    }
+  }, [modo, id, razaoSocial, nomeFantasia, cnpjCpf, inscricaoEstadual, tipo, segmento, email, telefone, contatoNome, endereco, portalLink, portalLogin, portalSenha, prazoMedio]);
+
+  // ==========================================
 
   useEffect(() => {
     if (modo === "lista") fetchFornecedores();
@@ -67,9 +104,8 @@ export default function Fornecedores() {
     setModo("formulario");
   };
 
-  // integracao com BrasilAApi
   const buscarDadosCNPJ = async () => {
-    const cnpjLimpo = cnpjCpf.replace(/\D/g, ''); // Remove pontos e traços
+    const cnpjLimpo = cnpjCpf.replace(/\D/g, ''); 
     
     if (cnpjLimpo.length !== 14) {
       return alert("Por favor, digite um CNPJ válido com 14 dígitos.");
@@ -84,7 +120,7 @@ export default function Fornecedores() {
       const dados = await resposta.json();
       
       setRazaoSocial(dados.razao_social || "");
-      setNomeFantasia(dados.nome_fantasia || dados.razao_social || ""); // Fallback se não tiver nome fantasia
+      setNomeFantasia(dados.nome_fantasia || dados.razao_social || ""); 
       setTelefone(dados.ddd_telefone_1 || "");
       setEmail(dados.email || "");
       
@@ -138,6 +174,7 @@ export default function Fornecedores() {
     }
 
     alert("Fornecedor salvo com sucesso!");
+    sessionStorage.removeItem("fornecedores_rascunho"); // Limpa o rascunho
     setModo("lista");
   };
 
@@ -215,7 +252,6 @@ export default function Fornecedores() {
                     </div>
                     
                     <div className="flex items-center gap-6">
-                      {/* Indicador de Performance */}
                       <div className="text-right hidden md:block">
                         <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-0.5 flex items-center justify-end gap-1"><Clock className="w-3 h-3"/> Prazo Médio</p>
                         {forn.prazo_medio_entrega_dias ? (
@@ -241,14 +277,12 @@ export default function Fornecedores() {
         {modo === "formulario" && (
           <div className="bg-white rounded-xl border shadow-sm p-6 space-y-8 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* dados Cadastrais e automação */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b pb-2 mb-4">
                 <Building className="w-5 h-5 text-indigo-600" />
                 <h2 className="text-lg font-bold text-slate-800">Dados da Empresa</h2>
               </div>
               
-              {/* input cnpj */}
               <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 mb-6">
                 <label className="text-sm font-bold text-indigo-900 block mb-2">Busca Automática por CNPJ</label>
                 <div className="flex gap-3">
@@ -303,7 +337,6 @@ export default function Fornecedores() {
               </div>
             </div>
 
-            {/* Contato e Localização */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b pb-2 mb-4 mt-6">
                 <MapPin className="w-5 h-5 text-indigo-600" />
@@ -329,7 +362,6 @@ export default function Fornecedores() {
               </div>
             </div>
 
-            {/* Portal B2B e Logística */}
             <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
               <div className="flex items-center gap-2 border-b pb-2 mb-4">
                 <Globe className="w-5 h-5 text-indigo-600" />
