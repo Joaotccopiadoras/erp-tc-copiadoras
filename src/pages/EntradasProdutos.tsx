@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Loader2,  } from "lucide-react";
+import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ItemEntrada = {
@@ -21,7 +21,7 @@ type ItemEntrada = {
 export default function Entradas() {
   const [modo, setModo] = useState<"formulario" | "bipagem">("formulario");
   
-  // Dados do Cabeçalho Robusto da NF-e
+  // Cabeçalho Robusto da NF-e
   const [fornecedorTexto, setFornecedorTexto] = useState("");
   const [fornecedorId, setFornecedorId] = useState<string | null>(null);
   const [documento, setDocumento] = useState("");
@@ -29,10 +29,16 @@ export default function Entradas() {
   const [dataEmissao, setDataEmissao] = useState("");
   const [transportadora, setTransportadora] = useState("");
   const [valorFrete, setValorFrete] = useState(0);
-  const [valorImpostos, setValorImpostos] = useState(0);
   const [localDestino, setLocalDestino] = useState("");
   
-  // Listas Auxiliares
+  // IMPOSTOS DETALHADOS
+  const [valorIcms, setValorIcms] = useState(0);
+  const [valorIcmsSt, setValorIcmsSt] = useState(0);
+  const [valorIpi, setValorIpi] = useState(0);
+  const [valorPis, setValorPis] = useState(0);
+  const [valorCofins, setValorCofins] = useState(0);
+  const [valorOutros, setValorOutros] = useState(0); // Impostos Aprox (vTotTrib)
+  
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [fornecedoresBD, setFornecedoresBD] = useState<any[]>([]);
   const [locaisBD, setLocaisBD] = useState<any[]>([]);
@@ -66,7 +72,7 @@ export default function Entradas() {
     if (fornRes.data) setFornecedoresBD(fornRes.data);
     if (locRes.data) {
         setLocaisBD(locRes.data);
-        if(locRes.data.length > 0) setLocalDestino(locRes.data[0].id); // Seleciona o primeiro por padrão
+        if(locRes.data.length > 0) setLocalDestino(locRes.data[0].id); 
     }
   };
 
@@ -82,34 +88,42 @@ export default function Entradas() {
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(text, "text/xml");
 
-      // 1. Extração do Cabeçalho (Inteligência do XML)
+      // 1. Extração do Cabeçalho
       const emitente = xmlDoc.querySelector("emit xNome")?.textContent || "";
       const cnpjEmitente = xmlDoc.querySelector("emit CNPJ")?.textContent || "";
       const nNf = xmlDoc.querySelector("ide nNF")?.textContent || "";
       const chAcesso = xmlDoc.querySelector("protNFe chNFe")?.textContent || xmlDoc.querySelector("infNFe")?.getAttribute("Id")?.replace("NFe", "") || "";
-      const dhEmi = xmlDoc.querySelector("ide dhEmi")?.textContent?.split("T")[0] || ""; // Pega só a data AAAA-MM-DD
-      
-      const vFrete = parseFloat(xmlDoc.querySelector("total ICMSTot vFrete")?.textContent || "0");
-      const vTotTrib = parseFloat(xmlDoc.querySelector("total ICMSTot vTotTrib")?.textContent || "0"); // Aproximado
+      const dhEmi = xmlDoc.querySelector("ide dhEmi")?.textContent?.split("T")[0] || "";
       const transNome = xmlDoc.querySelector("transporta xNome")?.textContent || "Retirada/Próprio";
+      const vFrete = parseFloat(xmlDoc.querySelector("total ICMSTot vFrete")?.textContent || "0");
+      
+      // EXTRAÇÃO DETALHADA DOS IMPOSTOS (Lendo a tag ICMSTot do XML)
+      const vICMS = parseFloat(xmlDoc.querySelector("total ICMSTot vICMS")?.textContent || "0");
+      const vST = parseFloat(xmlDoc.querySelector("total ICMSTot vST")?.textContent || "0");
+      const vIPI = parseFloat(xmlDoc.querySelector("total ICMSTot vIPI")?.textContent || "0");
+      const vPIS = parseFloat(xmlDoc.querySelector("total ICMSTot vPIS")?.textContent || "0");
+      const vCOFINS = parseFloat(xmlDoc.querySelector("total ICMSTot vCOFINS")?.textContent || "0");
+      const vTotTrib = parseFloat(xmlDoc.querySelector("total ICMSTot vTotTrib")?.textContent || "0"); // Valor Aproximado de Tributos (Lei da Transparência)
 
-      // Preenche os campos visuais
       setDocumento(nNf);
       setFornecedorTexto(emitente);
       setChaveAcesso(chAcesso);
       setDataEmissao(dhEmi);
-      setValorFrete(vFrete);
-      setValorImpostos(vTotTrib);
       setTransportadora(transNome);
+      setValorFrete(vFrete);
+      
+      // Seta os impostos na tela
+      setValorIcms(vICMS);
+      setValorIcmsSt(vST);
+      setValorIpi(vIPI);
+      setValorPis(vPIS);
+      setValorCofins(vCOFINS);
+      setValorOutros(vTotTrib);
 
-      // Tenta achar o Fornecedor no Banco pelo CNPJ
+      // Vínculo Automático do Fornecedor
       const cnpjFormatado = cnpjEmitente.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
       const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === cnpjEmitente);
-      if (fornMatch) {
-          setFornecedorId(fornMatch.id);
-      } else {
-          setFornecedorId(null);
-      }
+      setFornecedorId(fornMatch ? fornMatch.id : null);
 
       // 2. Extração dos Itens
       const detNodes = xmlDoc.querySelectorAll("det");
@@ -179,6 +193,7 @@ export default function Entradas() {
   };
 
   const abrirBipagem = (index: number) => { setIndexBipagem(index); setModo("bipagem"); };
+  const removerItem = (index: number) => { const n = [...itens]; n.splice(index, 1); setItens(n); };
 
   const biparSerie = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -196,6 +211,12 @@ export default function Entradas() {
     }
   };
 
+  const removerSerie = (indexSerie: number) => {
+    const novosItens = [...itens];
+    novosItens[indexBipagem!].series.splice(indexSerie, 1);
+    setItens(novosItens);
+  };
+
   const salvarEntrada = async () => {
     if (!fornecedorTexto || !documento) return alert("Fornecedor e Número da NF são obrigatórios.");
     if (!localDestino) return alert("Selecione o Local de Destino (Armazém) para a mercadoria.");
@@ -209,32 +230,37 @@ export default function Entradas() {
 
     setSalvando(true);
     const valorTotalProdutos = itens.reduce((acc, item) => acc + (item.quantidade * item.custo), 0);
+    // Somatório total da nota = Produtos + Frete + IPI + ICMS ST (ICMS normal, PIS e COFINS já estão embutidos no valor dos produtos)
+    const valorTotalNota = valorTotalProdutos + valorFrete + valorIpi + valorIcmsSt;
 
     try {
-      // 1. Grava o Cabeçalho da Nota
       const cabecalho = {
         tipo_documento: 'NF-e',
         chave_acesso: chaveAcesso || null,
-        documento: documento, // Reutilizando a coluna documento que já existe ou usando chave. Adaptaremos para a tabela nova.
+        documento: documento, 
         data_emissao: dataEmissao || null,
         fornecedor_id: fornecedorId,
         fornecedor_texto: fornecedorTexto,
         transportadora: transportadora,
         valor_frete: valorFrete,
-        valor_impostos: valorImpostos,
-        valor_total: valorTotalProdutos + valorFrete
+        valor_icms: valorIcms,
+        valor_icms_st: valorIcmsSt,
+        valor_ipi: valorIpi,
+        valor_pis: valorPis,
+        valor_cofins: valorCofins,
+        valor_impostos: valorOutros, // Tributos Totais Aprox.
+        valor_total: valorTotalNota
       };
 
       const { data: docData, error: docError } = await supabase.from('log_documentos_entrada').insert([cabecalho]).select('id').single();
       if (docError) throw docError;
       const docId = docData.id;
 
-      // 2. Grava Movimentações, Séries e Atualiza Saldo Global
       for (const item of itens) {
         await supabase.from('log_movimentacoes').insert({
           produto_id: item.produtoId, tipo: 'Entrada', quantidade: item.quantidade,
           custo_unitario: item.custo, documento_id: docId, local_id: localDestino,
-          documento: documento, fornecedor_cliente: fornecedorTexto // retro-compatibilidade
+          documento: documento, fornecedor_cliente: fornecedorTexto 
         });
 
         if (item.rastreiaSerie && item.series.length > 0) {
@@ -252,9 +278,9 @@ export default function Entradas() {
 
       alert("Entrada de mercadoria registrada com sucesso!");
       
-      // Reset Total
       setItens([]); setFornecedorTexto(""); setFornecedorId(null); setDocumento(""); 
-      setChaveAcesso(""); setDataEmissao(""); setTransportadora(""); setValorFrete(0); setValorImpostos(0);
+      setChaveAcesso(""); setDataEmissao(""); setTransportadora(""); setValorFrete(0); 
+      setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
       setIndexBipagem(null); setModo("formulario"); setBuscaProduto(""); setSerialInput("");
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -277,7 +303,7 @@ export default function Entradas() {
         <div className="flex justify-between items-center border-b pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><PackageOpen className="w-6 h-6 text-emerald-600" /> Recebimento de Mercadorias</h1>
-            <p className="text-slate-500">Importe XML ou lance manualmente para alimentar o Estoque.</p>
+            <p className="text-slate-500">Importe XML ou lance manualmente para alimentar o Almoxarifado.</p>
           </div>
           {modo === "formulario" ? (
             <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm">
@@ -301,34 +327,61 @@ export default function Entradas() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-semibold text-slate-700">Fornecedor / Emitente</label>
-                  <Input value={fornecedorTexto} onChange={e => setFornecedorTexto(e.target.value)} placeholder="Nome do Fornecedor..." className={fornecedorId ? "bg-emerald-50 border-emerald-200" : "bg-white"} />
+                  <Input value={fornecedorTexto} onChange={e => setFornecedorTexto(e.target.value)} placeholder="Nome do Fornecedor..." className={fornecedorId ? "bg-emerald-50 border-emerald-200 font-medium" : "bg-white"} />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Nº da NF / Documento</label>
+                  <label className="text-sm font-semibold text-slate-700">Nº da NF / Doc</label>
                   <Input value={documento} onChange={e => setDocumento(e.target.value)} placeholder="Ex: 123456" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Data de Emissão</label>
+                  <label className="text-sm font-semibold text-slate-700">Data Emissão</label>
                   <Input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} />
                 </div>
                 <div className="space-y-2 md:col-span-4">
                   <label className="text-sm font-semibold text-slate-700">Chave de Acesso (NF-e)</label>
-                  <Input value={chaveAcesso} onChange={e => setChaveAcesso(e.target.value)} placeholder="44 dígitos..." className="font-mono text-xs" />
+                  <Input value={chaveAcesso} onChange={e => setChaveAcesso(e.target.value)} placeholder="44 dígitos..." className="font-mono text-xs text-slate-600" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-1 text-slate-600"><Truck className="w-4 h-4"/> Transportadora</label>
-                  <Input value={transportadora} onChange={e => setTransportadora(e.target.value)} placeholder="Nome da Transportadora" />
+              {/* BLOCO DE FRETE E IMPOSTOS DISCRIMINADOS */}
+              <div className="pt-4 mt-2 border-t border-slate-100">
+                <h4 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-2"><Calculator className="w-4 h-4"/> Frete e Impostos Discriminados</h4>
+                <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">Valor Frete</label>
+                    <Input type="number" step="0.01" value={valorFrete} onChange={e => setValorFrete(parseFloat(e.target.value)||0)} className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">Valor ICMS</label>
+                    <Input type="number" step="0.01" value={valorIcms} onChange={e => setValorIcms(parseFloat(e.target.value)||0)} className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">ICMS ST</label>
+                    <Input type="number" step="0.01" value={valorIcmsSt} onChange={e => setValorIcmsSt(parseFloat(e.target.value)||0)} className="h-8 text-sm bg-amber-50" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">Valor IPI</label>
+                    <Input type="number" step="0.01" value={valorIpi} onChange={e => setValorIpi(parseFloat(e.target.value)||0)} className="h-8 text-sm bg-amber-50" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">Valor PIS</label>
+                    <Input type="number" step="0.01" value={valorPis} onChange={e => setValorPis(parseFloat(e.target.value)||0)} className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">COFINS</label>
+                    <Input type="number" step="0.01" value={valorCofins} onChange={e => setValorCofins(parseFloat(e.target.value)||0)} className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500 truncate" title="Valor Aproximado Tributos">Trib. Aprox.</label>
+                    <Input type="number" step="0.01" value={valorOutros} onChange={e => setValorOutros(parseFloat(e.target.value)||0)} className="h-8 text-sm bg-slate-100 text-slate-500" />
+                  </div>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 pt-4 border-t border-slate-100">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Valor do Frete (R$)</label>
-                  <Input type="number" value={valorFrete} onChange={e => setValorFrete(parseFloat(e.target.value)||0)} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Impostos Nfe (R$)</label>
-                  <Input type="number" value={valorImpostos} onChange={e => setValorImpostos(parseFloat(e.target.value)||0)} />
+                  <label className="text-sm font-medium flex items-center gap-1 text-slate-600"><Truck className="w-4 h-4"/> Transportadora / Volume</label>
+                  <Input value={transportadora} onChange={e => setTransportadora(e.target.value)} placeholder="Nome da Transportadora ou Retirada Própria" />
                 </div>
               </div>
             </div>
@@ -340,7 +393,7 @@ export default function Entradas() {
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                   <Select value={localDestino} onValueChange={setLocalDestino}>
-                    <SelectTrigger className="w-[250px] bg-white border-indigo-200"><SelectValue placeholder="Selecione o Local de Estoque de Destino..." /></SelectTrigger>
+                    <SelectTrigger className="w-[250px] bg-white border-indigo-200"><SelectValue placeholder="Selecione o Almoxarifado..." /></SelectTrigger>
                     <SelectContent>
                       {locaisBD.map(loc => (
                         <SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>
@@ -359,7 +412,7 @@ export default function Entradas() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
-                      <th className="p-3 font-semibold border-b min-w-[300px]">Produto</th>
+                      <th className="p-3 font-semibold border-b min-w-[300px]">Produto / Mapeamento</th>
                       <th className="p-3 font-semibold border-b w-32 text-center">Séries</th>
                       <th className="p-3 font-semibold border-b w-32">Custo Un. (R$)</th>
                       <th className="p-3 font-semibold border-b w-28">Qtd</th>
@@ -388,7 +441,7 @@ export default function Entradas() {
                               <Button size="sm" variant={item.series.length === item.quantidade ? "default" : "secondary"} onClick={() => abrirBipagem(index)} className={`h-7 text-xs w-full px-2 ${item.series.length === item.quantidade ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
                                 {item.series.length === item.quantidade ? <CheckCircle2 className="w-3 h-3"/> : <Barcode className="w-3 h-3" />} {item.series.length}/{item.quantidade}
                               </Button>
-                            ) : <span className="text-xs text-slate-400">Lote Padrão</span>}
+                            ) : <span className="text-xs text-slate-400">Lote</span>}
                           </td>
                           <td className="p-3"><Input type="number" step="0.01" min="0" value={item.custo} onChange={e => atualizarItem(index, 'custo', parseFloat(e.target.value)||0)} className="h-8 text-sm" /></td>
                           <td className="p-3"><Input type="number" min="1" value={item.quantidade} onChange={e => atualizarItem(index, 'quantidade', parseInt(e.target.value)||1)} className="h-8 text-sm" /></td>
@@ -404,13 +457,14 @@ export default function Entradas() {
 
             {/* TOTALIZADORES E SALVAR */}
             {itens.length > 0 && (
-              <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg">
-                <div className="flex gap-8">
+              <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg flex-wrap gap-4">
+                <div className="flex gap-6 md:gap-8 flex-wrap">
                   <div><p className="text-stone-400 text-xs uppercase tracking-wider">Itens</p><p className="text-lg font-semibold">R$ {itens.reduce((acc, i) => acc + (i.quantidade * i.custo), 0).toFixed(2).replace('.', ',')}</p></div>
                   <div><p className="text-stone-400 text-xs uppercase tracking-wider">Frete</p><p className="text-lg font-semibold">R$ {valorFrete.toFixed(2).replace('.', ',')}</p></div>
-                  <div className="pl-6 border-l border-stone-600"><p className="text-stone-300 text-xs uppercase tracking-wider font-bold">Total da Nota</p><p className="text-2xl font-bold text-emerald-400">R$ {(itens.reduce((acc, i) => acc + (i.quantidade * i.custo), 0) + valorFrete).toFixed(2).replace('.', ',')}</p></div>
+                  <div><p className="text-stone-400 text-xs uppercase tracking-wider">ST + IPI</p><p className="text-lg font-semibold text-amber-400">R$ {(valorIcmsSt + valorIpi).toFixed(2).replace('.', ',')}</p></div>
+                  <div className="pl-4 md:pl-6 border-l border-stone-600"><p className="text-stone-300 text-xs uppercase tracking-wider font-bold">Total da Nota</p><p className="text-2xl font-bold text-emerald-400">R$ {(itens.reduce((acc, i) => acc + (i.quantidade * i.custo), 0) + valorFrete + valorIcmsSt + valorIpi).toFixed(2).replace('.', ',')}</p></div>
                 </div>
-                <Button onClick={salvarEntrada} disabled={salvando} className="bg-emerald-500 hover:bg-emerald-600 text-white gap-2 h-12 px-6">
+                <Button onClick={salvarEntrada} disabled={salvando} className="bg-emerald-500 hover:bg-emerald-600 text-white gap-2 h-12 px-6 w-full md:w-auto">
                   {salvando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Finalizar Recebimento
                 </Button>
               </div>
