@@ -25,10 +25,12 @@ export default function Entradas() {
   // ==========================================
   // ESTADOS: NOVO RECEBIMENTO
   // ==========================================
-  const [fornecedorTexto, setFornecedorTexto] = useState("");
+  const [fornecedorBusca, setFornecedorBusca] = useState(""); // Substituiu o fornecedorTexto
   const [fornecedorId, setFornecedorId] = useState<string | null>(null);
+  const [mostrarDropdownFornecedor, setMostrarDropdownFornecedor] = useState(false);
+  
   const [documento, setDocumento] = useState("");
-  const [cfop, setCfop] = useState(""); // NOVO CAMPO: CFOP / Natureza
+  const [cfop, setCfop] = useState(""); 
   const [chaveAcesso, setChaveAcesso] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
   const [transportadora, setTransportadora] = useState("");
@@ -70,7 +72,10 @@ export default function Entradas() {
   useEffect(() => {
     if (abaAtiva === "historico") {
       fetchHistorico();
-      setModo("formulario"); // Reseta a tela ao trocar de aba
+      setModo("formulario"); 
+    } else {
+      // Recarrega os fornecedores caso o usuário tenha cadastrado um novo na outra aba e voltado
+      fetchDadosBase();
     }
   }, [abaAtiva]);
 
@@ -81,7 +86,7 @@ export default function Entradas() {
   const fetchDadosBase = async () => {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base').order('nome'),
-      supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf'),
+      supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial'), // Puxando o sequencial
       supabase.from('log_locais').select('id, nome, tipo').order('nome')
     ]);
     
@@ -89,8 +94,23 @@ export default function Entradas() {
     if (fornRes.data) setFornecedoresBD(fornRes.data);
     if (locRes.data) {
         setLocaisBD(locRes.data);
-        if(locRes.data.length > 0) setLocalDestino(locRes.data[0].id); 
+        if(locRes.data.length > 0 && !localDestino) setLocalDestino(locRes.data[0].id); 
     }
+  };
+
+  // --- LÓGICA DE AUTOCOMPLETE DO FORNECEDOR ---
+  const fornecedoresFiltrados = fornecedoresBD.filter(f => {
+    const termo = fornecedorBusca.toLowerCase();
+    return (f.razao_social?.toLowerCase() || "").includes(termo) ||
+           (f.nome_fantasia?.toLowerCase() || "").includes(termo) ||
+           (f.cnpj_cpf?.toLowerCase() || "").includes(termo) ||
+           (f.codigo_sequencial?.toString() || "").includes(termo);
+  });
+
+  const selecionarFornecedor = (f: any) => {
+    setFornecedorId(f.id);
+    setFornecedorBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`);
+    setMostrarDropdownFornecedor(false);
   };
 
   // --- FUNÇÕES DE HISTÓRICO ---
@@ -111,11 +131,7 @@ export default function Entradas() {
 
     const { data, error } = await supabase
       .from('log_movimentacoes')
-      .select(`
-        *, 
-        log_produtos(sku, nome),
-        log_locais(nome)
-      `)
+      .select(`*, log_produtos(sku, nome), log_locais(nome)`)
       .eq('documento_id', doc.id);
 
     if (data) setItensDocSelecionado(data);
@@ -145,7 +161,7 @@ export default function Entradas() {
       const emitente = xmlDoc.querySelector("emit xNome")?.textContent || "";
       const cnpjEmitente = xmlDoc.querySelector("emit CNPJ")?.textContent || "";
       const nNf = xmlDoc.querySelector("ide nNF")?.textContent || "";
-      const natOp = xmlDoc.querySelector("ide natOp")?.textContent || ""; // Natureza da Operação
+      const natOp = xmlDoc.querySelector("ide natOp")?.textContent || ""; 
       const chAcesso = xmlDoc.querySelector("protNFe chNFe")?.textContent || xmlDoc.querySelector("infNFe")?.getAttribute("Id")?.replace("NFe", "") || "";
       const dhEmi = xmlDoc.querySelector("ide dhEmi")?.textContent?.split("T")[0] || "";
       const transNome = xmlDoc.querySelector("transporta xNome")?.textContent || "Retirada/Próprio";
@@ -160,16 +176,23 @@ export default function Entradas() {
 
       setDocumento(nNf);
       setCfop(natOp);
-      setFornecedorTexto(emitente);
       setChaveAcesso(chAcesso);
       setDataEmissao(dhEmi);
       setTransportadora(transNome);
       setValorFrete(vFrete);
       setValorIcms(vICMS); setValorIcmsSt(vST); setValorIpi(vIPI); setValorPis(vPIS); setValorCofins(vCOFINS); setValorOutros(vTotTrib);
 
+      // Auto-Vínculo de Fornecedor
       const cnpjFormatado = cnpjEmitente.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
       const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === cnpjEmitente);
-      setFornecedorId(fornMatch ? fornMatch.id : null);
+      
+      if (fornMatch) {
+          setFornecedorId(fornMatch.id);
+          setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`);
+      } else {
+          setFornecedorId(null);
+          setFornecedorBusca(emitente); // Deixa o nome limpo para o usuário ver
+      }
 
       const detNodes = xmlDoc.querySelectorAll("det");
       const novosItens: ItemEntrada[] = [];
@@ -251,7 +274,7 @@ export default function Entradas() {
   };
 
   const salvarEntrada = async () => {
-    if (!fornecedorTexto || !documento) return alert("Fornecedor e Número da NF são obrigatórios.");
+    if (!fornecedorBusca || !documento) return alert("Fornecedor e Número da NF são obrigatórios.");
     if (!localDestino) return alert("Selecione o Local de Destino.");
     if (itens.length === 0) return alert("Adicione produtos na entrada.");
 
@@ -267,7 +290,7 @@ export default function Entradas() {
     try {
       const cabecalho = {
         tipo_documento: 'NF-e', cfop: cfop, chave_acesso: chaveAcesso || null, documento: documento, 
-        data_emissao: dataEmissao || null, fornecedor_id: fornecedorId, fornecedor_texto: fornecedorTexto,
+        data_emissao: dataEmissao || null, fornecedor_id: fornecedorId, fornecedor_texto: fornecedorBusca,
         transportadora: transportadora, valor_frete: valorFrete, valor_icms: valorIcms, valor_icms_st: valorIcmsSt,
         valor_ipi: valorIpi, valor_pis: valorPis, valor_cofins: valorCofins, valor_impostos: valorOutros, valor_total: valorTotalNota
       };
@@ -280,7 +303,7 @@ export default function Entradas() {
         await supabase.from('log_movimentacoes').insert({
           produto_id: item.produtoId, tipo: 'Entrada', quantidade: item.quantidade,
           custo_unitario: item.custo, documento_id: docId, local_id: localDestino,
-          documento: documento, fornecedor_cliente: fornecedorTexto 
+          documento: documento, fornecedor_cliente: fornecedorBusca 
         });
 
         if (item.rastreiaSerie && item.series.length > 0) {
@@ -297,12 +320,11 @@ export default function Entradas() {
       }
 
       alert("Entrada registrada com sucesso!");
-      setItens([]); setFornecedorTexto(""); setFornecedorId(null); setDocumento(""); setCfop("");
+      setItens([]); setFornecedorBusca(""); setFornecedorId(null); setDocumento(""); setCfop("");
       setChaveAcesso(""); setDataEmissao(""); setTransportadora(""); setValorFrete(0); 
       setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
       setIndexBipagem(null); setModo("formulario"); setBuscaProduto(""); setSerialInput("");
       
-      // Atualiza o histórico silenciosamente
       fetchHistorico();
 
     } catch (error: any) {
@@ -328,7 +350,6 @@ export default function Entradas() {
         <datalist id="lista-produtos-bd">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
         <input type="file" accept=".xml" ref={fileInputRef} style={{ display: "none" }} onChange={processarXML} />
 
-        {/* NAVEGAÇÃO DE ABAS */}
         <div className="flex border-b border-slate-200">
           <button 
             onClick={() => setAbaAtiva("receber")}
@@ -344,9 +365,7 @@ export default function Entradas() {
           </button>
         </div>
 
-        {/* ========================================================= */}
         {/* ABA 1: NOVO RECEBIMENTO */}
-        {/* ========================================================= */}
         {abaAtiva === "receber" && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center">
@@ -365,7 +384,6 @@ export default function Entradas() {
 
             {modo === "formulario" && (
               <div className="space-y-6">
-                {/* CABEÇALHO AVANÇADO DA NF-E */}
                 <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b pb-2">
                     <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600"/> Dados da Nota Fiscal</h3>
@@ -373,10 +391,60 @@ export default function Entradas() {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    
+                    {/* AUTOCOMPLETE DO FORNECEDOR */}
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-sm font-semibold text-slate-700">Fornecedor / Emitente</label>
-                      <Input value={fornecedorTexto} onChange={e => setFornecedorTexto(e.target.value)} placeholder="Nome do Fornecedor..." className={fornecedorId ? "bg-emerald-50 border-emerald-200 font-medium" : "bg-white"} />
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input 
+                            value={fornecedorBusca} 
+                            onChange={e => {
+                                setFornecedorBusca(e.target.value);
+                                setFornecedorId(null); // Se o cara digitar por cima, perde o vínculo até ele selecionar na lista
+                                setMostrarDropdownFornecedor(true);
+                            }}
+                            onFocus={() => setMostrarDropdownFornecedor(true)}
+                            onBlur={() => setTimeout(() => setMostrarDropdownFornecedor(false), 200)}
+                            placeholder="Buscar Razão, Fantasia, CNPJ ou Cód..." 
+                            className={fornecedorId ? "bg-emerald-50 border-emerald-200 font-medium" : "bg-white"} 
+                          />
+                          
+                          {/* LISTA SUSPENSA DE RESULTADOS */}
+                          {mostrarDropdownFornecedor && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl max-h-60 overflow-y-auto">
+                              {fornecedoresFiltrados.length > 0 ? (
+                                fornecedoresFiltrados.map(f => (
+                                  <div key={f.id} className="p-3 hover:bg-slate-50 cursor-pointer border-b last:border-0" onClick={() => selecionarFornecedor(f)}>
+                                    <p className="text-sm font-bold text-slate-800">
+                                      <span className="text-indigo-600 bg-indigo-50 px-1 rounded mr-1">#{f.codigo_sequencial}</span> 
+                                      {f.nome_fantasia || f.razao_social}
+                                    </p>
+                                    <p className="text-xs text-slate-500 font-mono mt-0.5">{f.cnpj_cpf || "Sem CNPJ"}</p>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="p-3 text-sm text-slate-500 text-center">Nenhum fornecedor encontrado.</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => window.open('/fornecedores', '_blank')} 
+                          className="shrink-0 gap-1 text-indigo-700 border-indigo-200 hover:bg-indigo-50" 
+                          title="Cadastrar Novo Fornecedor em Nova Guia"
+                        >
+                          <Plus className="w-4 h-4" /> Novo
+                        </Button>
+                      </div>
+                      {!fornecedorId && fornecedorBusca && (
+                         <p className="text-xs text-amber-600 font-medium flex items-center gap-1 mt-1">
+                             <AlertTriangle className="w-3 h-3"/> Cadastro ficará avulso (Não vinculado ao CRM).
+                         </p>
+                      )}
                     </div>
+
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700">Nº da NF / Doc</label>
                       <Input value={documento} onChange={e => setDocumento(e.target.value)} placeholder="Ex: 123456" />
@@ -395,7 +463,7 @@ export default function Entradas() {
                     </div>
                   </div>
 
-                  {/* BLOCO DE FRETE E IMPOSTOS DISCRIMINADOS */}
+                  {/* BLOCO DE FRETE E IMPOSTOS */}
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <h4 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-2"><Calculator className="w-4 h-4"/> Frete e Impostos Discriminados</h4>
                     <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
@@ -565,13 +633,10 @@ export default function Entradas() {
           </div>
         )}
 
-        {/* ========================================================= */}
         {/* ABA 2: HISTÓRICO DE LANÇAMENTOS */}
-        {/* ========================================================= */}
         {abaAtiva === "historico" && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* TELA DE LISTA DO HISTÓRICO */}
             {modo !== "detalhe_historico" && (
               <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                 <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
@@ -623,11 +688,8 @@ export default function Entradas() {
               </div>
             )}
 
-            {/* TELA DE DETALHE EXPANDIDO DO DOCUMENTO */}
             {modo === "detalhe_historico" && docSelecionado && (
               <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6 animate-in slide-in-from-right-4 duration-200">
-                
-                {/* Cabeçalho do Detalhe */}
                 <div className="flex justify-between items-start border-b pb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
@@ -640,7 +702,6 @@ export default function Entradas() {
                   <Button variant="ghost" onClick={() => setModo("formulario")} className="text-slate-400 hover:text-slate-800 hover:bg-slate-100"><X className="w-5 h-5"/></Button>
                 </div>
 
-                {/* Bloco de Impostos do Documento */}
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 text-center">
                   <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-slate-400 font-bold uppercase">CFOP / Operação</p><p className="text-sm font-semibold text-slate-700">{docSelecionado.cfop || "-"}</p></div>
                   <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-slate-400 font-bold uppercase">ICMS</p><p className="text-sm font-semibold text-slate-700">R$ {Number(docSelecionado.valor_icms).toFixed(2)}</p></div>
@@ -652,9 +713,8 @@ export default function Entradas() {
                   <div><p className="text-[10px] text-emerald-600 font-bold uppercase">TOTAL NOTA</p><p className="text-base font-bold text-emerald-600">R$ {Number(docSelecionado.valor_total).toFixed(2)}</p></div>
                 </div>
 
-                {/* Tabela de Produtos do Documento */}
                 <div>
-                  <h3 className="text-sm font-bold text-slate-700 mb-3 border-b pb-2">Mercadorias Recebidas neste Documento</h3>
+                  <h3 className="text-sm font-bold text-slate-700 mb-3 border-b pb-2">Mercadorias Recebidas</h3>
                   {carregandoDetalhes ? (
                     <div className="p-8 text-center text-slate-400 flex justify-center"><Loader2 className="w-6 h-6 animate-spin"/></div>
                   ) : (
@@ -672,17 +732,13 @@ export default function Entradas() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {itensDocSelecionado.map(item => {
-                            // CÁLCULO DINÂMICO DO PREÇO AGREGADO
                             const qtdTotalNota = itensDocSelecionado.reduce((acc, i) => acc + i.quantidade, 0);
                             const taxaUnitario = qtdTotalNota > 0 ? (Number(docSelecionado.valor_frete) + Number(docSelecionado.valor_icms_st) + Number(docSelecionado.valor_ipi)) / qtdTotalNota : 0;
                             const precoAgregado = Number(item.custo_unitario) + taxaUnitario;
 
                             return (
                               <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="p-3">
-                                  <p className="font-semibold text-slate-800">{item.log_produtos?.nome}</p>
-                                  <p className="text-xs text-slate-500 font-mono">SKU: {item.log_produtos?.sku}</p>
-                                </td>
+                                <td className="p-3"><p className="font-semibold text-slate-800">{item.log_produtos?.nome}</p><p className="text-xs text-slate-500 font-mono">SKU: {item.log_produtos?.sku}</p></td>
                                 <td className="p-3 text-center font-medium">{item.quantidade}</td>
                                 <td className="p-3 text-right text-slate-600">R$ {Number(item.custo_unitario).toFixed(2).replace('.', ',')}</td>
                                 <td className="p-3 text-right text-amber-600">+ R$ {taxaUnitario.toFixed(2).replace('.', ',')}</td>
@@ -696,10 +752,8 @@ export default function Entradas() {
                     </div>
                   )}
                 </div>
-
               </div>
             )}
-
           </div>
         )}
 
