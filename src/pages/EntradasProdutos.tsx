@@ -138,7 +138,7 @@ export default function Entradas() {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial'), 
-      supabase.from('log_locais').select('id, nome, tipo').order('nome')
+      supabase.from('log_locais').select('id, nome').order('nome')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
