@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt } from "lucide-react";
+import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ItemEntrada = {
@@ -11,11 +11,11 @@ type ItemEntrada = {
   sku: string;
   nome: string;
   rastreiaSerie: boolean;
-  quantidade: number; // Quantidade final em unidades (que vai pro banco)
-  qtdEmbalagem: number; // NOVO: Quantidade de pacotes/caixas
-  fatorConversao: number; // NOVO: Unidades por pacote
-  custo: number; // Preço unitário da unidade individual
-  custoEmbalagem: number; // NOVO: Preço do pacote
+  quantidade: number; // Qtd Final (Unidades)
+  qtdEmbalagem: number; // Qtd de Caixas/Pacotes
+  fatorConversao: number; // Quantos vêm em cada Caixa
+  custo: number; // Preço Unitário Diluído
+  custoEmbalagem: number; // Preço Fechado da Caixa/Pacote
   series: string[];
   precisaMapeamento?: boolean;
   nomeOriginalXML?: string;
@@ -24,6 +24,7 @@ type ItemEntrada = {
 export default function Entradas() {
   const [abaAtiva, setAbaAtiva] = useState<"receber" | "historico">("receber");
   const [modo, setModo] = useState<"formulario" | "bipagem" | "detalhe_historico">("formulario");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   
   // ==========================================
   // ESTADOS: NOVO RECEBIMENTO
@@ -38,7 +39,6 @@ export default function Entradas() {
   const [dataEmissao, setDataEmissao] = useState("");
   const [localDestino, setLocalDestino] = useState("");
   
-  // --- NOVOS ESTADOS: FRETE E CT-E ---
   const [modalidadeFrete, setModalidadeFrete] = useState("0 - CIF");
   const [transportadoraBusca, setTransportadoraBusca] = useState("");
   const [transportadoraId, setTransportadoraId] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export default function Entradas() {
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
 
   // ==========================================
-  // AUTO-SAVE
+  // AUTO-SAVE RASCUNHO
   // ==========================================
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("entradas_rascunho");
@@ -84,6 +84,7 @@ export default function Entradas() {
       try {
         const draft = JSON.parse(rascunhoSalvo);
         if (draft) {
+          setEditandoId(draft.editandoId || null);
           setFornecedorBusca(draft.fornecedorBusca || ""); setFornecedorId(draft.fornecedorId || null);
           setDocumento(draft.documento || ""); setCfop(draft.cfop || ""); setChaveAcesso(draft.chaveAcesso || "");
           setDataEmissao(draft.dataEmissao || ""); setLocalDestino(draft.localDestino || "");
@@ -103,14 +104,14 @@ export default function Entradas() {
   useEffect(() => {
     if (abaAtiva === "receber" && modo !== "detalhe_historico") {
       const draft = {
-        fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, localDestino,
+        editandoId, fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, localDestino,
         modalidadeFrete, transportadoraBusca, transportadoraId, cteNumero, cteChave, valorFrete,
         valorIcms, valorIcmsSt, valorIpi, valorPis, valorCofins, valorOutros, itens, modo, indexBipagem
       };
       sessionStorage.setItem("entradas_rascunho", JSON.stringify(draft));
     }
   }, [
-    fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, localDestino,
+    editandoId, fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, localDestino,
     modalidadeFrete, transportadoraBusca, transportadoraId, cteNumero, cteChave, valorFrete,
     valorIcms, valorIcmsSt, valorIpi, valorPis, valorCofins, valorOutros, itens, modo, indexBipagem, abaAtiva
   ]);
@@ -127,9 +128,9 @@ export default function Entradas() {
 
   const fetchDadosBase = async () => {
     const [prodRes, fornRes, locRes] = await Promise.all([
-      supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base').order('nome'),
+      supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base, fator_conversao').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial, is_transportadora'), 
-      supabase.from('log_locais').select('id, nome').order('nome')
+      supabase.from('log_locais').select('id, nome, tipo').order('nome')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (fornRes.data) setFornecedoresBD(fornRes.data);
@@ -139,7 +140,6 @@ export default function Entradas() {
     }
   };
 
-  // --- LÓGICA DE AUTOCOMPLETE: FORNECEDORES E TRANSPORTADORAS ---
   const fornecedoresFiltrados = fornecedoresBD.filter(f => {
     const termo = fornecedorBusca.toLowerCase();
     return (f.razao_social?.toLowerCase() || "").includes(termo) || (f.nome_fantasia?.toLowerCase() || "").includes(termo) || (f.cnpj_cpf?.toLowerCase() || "").includes(termo) || (f.codigo_sequencial?.toString() || "").includes(termo);
@@ -147,27 +147,17 @@ export default function Entradas() {
 
   const transportadorasFiltradas = fornecedoresBD.filter(f => {
     const termo = transportadoraBusca.toLowerCase();
-    return (f.is_transportadora === true || f.is_transportadora === null) && // Aceita null para caso o BD tenha registros antigos
+    return (f.is_transportadora === true || f.is_transportadora === null) && 
            ((f.razao_social?.toLowerCase() || "").includes(termo) || (f.nome_fantasia?.toLowerCase() || "").includes(termo) || (f.cnpj_cpf?.toLowerCase() || "").includes(termo) || (f.codigo_sequencial?.toString() || "").includes(termo));
   });
 
-  const selecionarFornecedor = (f: any) => {
-    setFornecedorId(f.id); setFornecedorBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownFornecedor(false);
-  };
+  const selecionarFornecedor = (f: any) => { setFornecedorId(f.id); setFornecedorBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownFornecedor(false); };
+  const selecionarTransportadora = (f: any) => { setTransportadoraId(f.id); setTransportadoraBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownTransp(false); };
 
-  const selecionarTransportadora = (f: any) => {
-    setTransportadoraId(f.id); setTransportadoraBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownTransp(false);
-  };
-
-  // --- FUNÇÕES DE HISTÓRICO ---
+  // --- FUNÇÕES DE HISTÓRICO E GESTÃO ---
   const fetchHistorico = async () => {
-    const { data, error } = await supabase
-      .from('log_documentos_entrada')
-      .select(`*, log_fornecedores!fornecedor_id(nome_fantasia, razao_social)`)
-      .order('sequencial', { ascending: false });
-    
+    const { data, error } = await supabase.from('log_documentos_entrada').select(`*, log_fornecedores!fornecedor_id(nome_fantasia, razao_social)`).order('sequencial', { ascending: false });
     if (data) setHistoricoDocs(data);
-    if (error) console.error("Erro ao buscar histórico:", error);
   };
 
   const abrirDetalhesDocumento = async (doc: any) => {
@@ -177,8 +167,62 @@ export default function Entradas() {
     setCarregandoDetalhes(false);
   };
 
-  const formatarData = (dataIso: string) => {
-    if (!dataIso) return "-"; return new Date(dataIso).toLocaleDateString('pt-BR');
+  const excluirEntrada = async (doc: any) => {
+    if (!confirm(`Deseja realmente excluir a entrada do documento ${doc.documento}? \n\nEsta ação descontará o saldo dos produtos no estoque e não pode ser desfeita.`)) return;
+    try {
+      setCarregandoDetalhes(true);
+      // 1. Reverter Estoque
+      const { data: movs } = await supabase.from('log_movimentacoes').select('produto_id, quantidade').eq('documento_id', doc.id);
+      if (movs) {
+        for (const mov of movs) {
+          const { data: prod } = await supabase.from('log_produtos').select('estoque_atual').eq('id', mov.produto_id).single();
+          if (prod) await supabase.from('log_produtos').update({ estoque_atual: Math.max(0, prod.estoque_atual - mov.quantidade) }).eq('id', mov.produto_id);
+        }
+      }
+      // 2. Apagar dependências e documento principal
+      await supabase.from('log_ctes').delete().eq('documento_entrada_id', doc.id);
+      await supabase.from('log_numeros_serie').delete().eq('documento_entrada', doc.documento);
+      await supabase.from('log_movimentacoes').delete().eq('documento_id', doc.id);
+      await supabase.from('log_documentos_entrada').delete().eq('id', doc.id);
+
+      alert("Lançamento excluído com sucesso e estoque revertido!");
+      fetchHistorico();
+      setModo("formulario");
+    } catch (e) {
+      console.error(e); alert("Erro ao excluir.");
+    } finally { setCarregandoDetalhes(false); }
+  };
+
+  const carregarParaEdicao = async (doc: any) => {
+    if (!confirm("Ao editar, o estoque será recalculado.\nSe o documento tiver séries (equipamentos), elas serão apagadas e precisarão ser bipadas novamente.\nDeseja continuar?")) return;
+    setCarregandoDetalhes(true);
+    
+    const { data: movs } = await supabase.from('log_movimentacoes').select('*, log_produtos(sku, nome, rastreia_serie)').eq('documento_id', doc.id);
+    const itensMapeados: ItemEntrada[] = (movs || []).map(m => ({
+       produtoId: m.produto_id, sku: m.log_produtos?.sku || '', nome: m.log_produtos?.nome || '', rastreiaSerie: m.log_produtos?.rastreia_serie || false,
+       quantidade: m.quantidade, qtdEmbalagem: m.quantidade, fatorConversao: 1, custo: m.custo_unitario, custoEmbalagem: m.custo_unitario, series: []
+    }));
+
+    setEditandoId(doc.id);
+    setDocumento(doc.documento || ""); setCfop(doc.cfop || ""); setChaveAcesso(doc.chave_acesso || ""); setDataEmissao(doc.data_emissao || "");
+    setLocalDestino(movs?.[0]?.local_id || ""); setModalidadeFrete(doc.modalidade_frete || "0 - CIF"); setValorFrete(doc.valor_frete || 0);
+    setValorIcms(doc.valor_icms || 0); setValorIcmsSt(doc.valor_icms_st || 0); setValorIpi(doc.valor_ipi || 0); setValorPis(doc.valor_pis || 0);
+    setValorCofins(doc.valor_cofins || 0); setValorOutros(doc.valor_impostos || 0);
+    
+    setFornecedorId(doc.fornecedor_id); setFornecedorBusca(doc.fornecedor_texto || "");
+    setTransportadoraId(doc.transportadora_id); setTransportadoraBusca(doc.transportadora || "");
+    setItens(itensMapeados);
+    
+    setCarregandoDetalhes(false);
+    setAbaAtiva("receber");
+  };
+
+  const cancelarEdicao = () => {
+    setEditandoId(null); sessionStorage.removeItem("entradas_rascunho");
+    setItens([]); setFornecedorBusca(""); setFornecedorId(null); setDocumento(""); setCfop(""); setChaveAcesso(""); setDataEmissao("");
+    setModalidadeFrete("0 - CIF"); setTransportadoraBusca(""); setTransportadoraId(null); setCteNumero(""); setCteChave(""); setValorFrete(0); 
+    setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
+    setAbaAtiva("historico");
   };
 
   // --- XML ---
@@ -215,19 +259,16 @@ export default function Entradas() {
       setDocumento(nNf); setCfop(natOp); setChaveAcesso(chAcesso); setDataEmissao(dhEmi);
       setValorFrete(vFrete); setValorIcms(vICMS); setValorIcmsSt(vST); setValorIpi(vIPI); setValorPis(vPIS); setValorCofins(vCOFINS); setValorOutros(vTotTrib);
 
-      // Tratamento da Modalidade de Frete
       if (modFreteTag === "0") setModalidadeFrete("0 - CIF");
       else if (modFreteTag === "1") setModalidadeFrete("1 - FOB");
       else if (modFreteTag === "2") setModalidadeFrete("2 - Terceiros");
       else setModalidadeFrete("9 - Sem Frete");
 
-      // Auto-Vínculo de Fornecedor
       const cnpjFormatado = cnpjEmitente.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
       const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === cnpjEmitente);
       if (fornMatch) { setFornecedorId(fornMatch.id); setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`); } 
       else { setFornecedorId(null); setFornecedorBusca(emitente); }
 
-      // Auto-Vínculo Transportadora (Se houver)
       if (transNome || transCnpj) {
           const transFormatado = transCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
           const transpMatch = fornecedoresBD.find(f => f.cnpj_cpf === transFormatado || f.cnpj_cpf === transCnpj || f.razao_social === transNome);
@@ -245,8 +286,8 @@ export default function Entradas() {
         const vUnCom = parseFloat(det.querySelector("prod vUnCom")?.textContent || "0"); 
 
         const match = produtosBD.find(p => p.sku === cProd);
-        if (match) novosItens.push({ produtoId: match.id, sku: match.sku, nome: match.nome, rastreiaSerie: match.rastreia_serie, quantidade: qCom, custo: vUnCom, series: [] });
-        else novosItens.push({ produtoId: "", sku: cProd, nome: "", rastreiaSerie: false, quantidade: qCom, custo: vUnCom, series: [], precisaMapeamento: true, nomeOriginalXML: xProd });
+        if (match) novosItens.push({ produtoId: match.id, sku: match.sku, nome: match.nome, rastreiaSerie: match.rastreia_serie, quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: match.fator_conversao || 1, custo: vUnCom, custoEmbalagem: vUnCom, series: [] });
+        else novosItens.push({ produtoId: "", sku: cProd, nome: "", rastreiaSerie: false, quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: 1, custo: vUnCom, custoEmbalagem: vUnCom, series: [], precisaMapeamento: true, nomeOriginalXML: xProd });
       });
 
       setItens(prev => [...prev, ...novosItens]);
@@ -261,6 +302,9 @@ export default function Entradas() {
       const novos = [...itens];
       novos[index].produtoId = match.id; novos[index].sku = match.sku; novos[index].nome = match.nome;
       novos[index].rastreiaSerie = match.rastreia_serie; novos[index].precisaMapeamento = false; 
+      novos[index].fatorConversao = match.fator_conversao || 1;
+      novos[index].quantidade = novos[index].qtdEmbalagem * novos[index].fatorConversao;
+      novos[index].custo = novos[index].fatorConversao > 0 ? novos[index].custoEmbalagem / novos[index].fatorConversao : 0;
       if (match.rastreia_serie && novos[index].series.length > novos[index].quantidade) novos[index].series = []; 
       setItens(novos);
     }
@@ -273,24 +317,31 @@ export default function Entradas() {
 
     const indexExistente = itens.findIndex(i => i.produtoId === produtoEncontrado.id && !i.precisaMapeamento);
     if (indexExistente >= 0) {
-      const novosItens = [...itens]; novosItens[indexExistente].quantidade += 1; setItens(novosItens);
+      atualizarItemConversao(indexExistente, 'qtdEmbalagem', itens[indexExistente].qtdEmbalagem + 1);
     } else {
-      setItens([...itens, { produtoId: produtoEncontrado.id, sku: produtoEncontrado.sku, nome: produtoEncontrado.nome, rastreiaSerie: produtoEncontrado.rastreia_serie, quantidade: 1, custo: produtoEncontrado.custo_base || 0, series: [] }]);
+      setItens([...itens, { 
+          produtoId: produtoEncontrado.id, sku: produtoEncontrado.sku, nome: produtoEncontrado.nome, 
+          rastreiaSerie: produtoEncontrado.rastreia_serie, quantidade: 1 * (produtoEncontrado.fator_conversao || 1), 
+          qtdEmbalagem: 1, fatorConversao: produtoEncontrado.fator_conversao || 1, 
+          custo: produtoEncontrado.custo_base || 0, custoEmbalagem: produtoEncontrado.custo_base || 0, series: [] 
+      }]);
     }
     setBuscaProduto(""); 
   };
 
+  // --- LÓGICA DE FATOR DE CONVERSÃO MATEMÁTICO ---
   const atualizarItemConversao = (index: number, campo: 'qtdEmbalagem' | 'fatorConversao' | 'custoEmbalagem', valor: number) => {
     const novosItens = [...itens];
     const item = novosItens[index];
+    
     if (campo === 'qtdEmbalagem') item.qtdEmbalagem = valor;
     if (campo === 'fatorConversao') item.fatorConversao = valor;
     if (campo === 'custoEmbalagem') item.custoEmbalagem = valor;
+
     item.quantidade = item.qtdEmbalagem * item.fatorConversao;
     item.custo = item.fatorConversao > 0 ? item.custoEmbalagem / item.fatorConversao : 0;
-    if (item.rastreiaSerie && item.series.length > item.quantidade) {
-        item.series = item.series.slice(0, item.quantidade);
-    }
+
+    if (item.rastreiaSerie && item.series.length > item.quantidade) item.series = item.series.slice(0, item.quantidade);
     setItens(novosItens);
   };
 
@@ -321,7 +372,6 @@ export default function Entradas() {
     if (!localDestino) return alert("Selecione o Local de Destino.");
     if (itens.length === 0) return alert("Adicione produtos na entrada.");
     
-    // Validação FOB
     if (modalidadeFrete === '1 - FOB' || modalidadeFrete === '2 - Terceiros') {
         if (!transportadoraBusca) return alert("Em fretes FOB/Terceiros, é obrigatório informar a Transportadora.");
     }
@@ -332,11 +382,10 @@ export default function Entradas() {
     }
 
     setSalvando(true);
-    const valorTotalProdutos = itens.reduce((acc, item) => acc + (item.quantidade * item.custo), 0);
+    const valorTotalProdutos = itens.reduce((acc, item) => acc + (item.qtdEmbalagem * item.custoEmbalagem), 0);
     const valorTotalNota = valorTotalProdutos + valorFrete + valorIpi + valorIcmsSt;
 
     try {
-      // 1. Grava NF-e
       const cabecalho = {
         tipo_documento: 'NF-e', cfop: cfop, chave_acesso: chaveAcesso || null, documento: documento, 
         data_emissao: dataEmissao || null, fornecedor_id: fornecedorId, fornecedor_texto: fornecedorBusca,
@@ -345,20 +394,40 @@ export default function Entradas() {
         valor_ipi: valorIpi, valor_pis: valorPis, valor_cofins: valorCofins, valor_impostos: valorOutros, valor_total: valorTotalNota
       };
 
-      const { data: docData, error: docError } = await supabase.from('log_documentos_entrada').insert([cabecalho]).select('id').single();
-      if (docError) throw docError;
-      const docId = docData.id;
+      let docId;
 
-      // 2. Grava CT-e (Se for FOB e tiver CTE)
+      // SE ESTIVER EDITANDO: REVERTE O ESTOQUE ANTIGO E APAGA DEPENDÊNCIAS
+      if (editandoId) {
+         const { data: oldMovs } = await supabase.from('log_movimentacoes').select('produto_id, quantidade').eq('documento_id', editandoId);
+         if (oldMovs) {
+            for (const mov of oldMovs) {
+               const { data: prod } = await supabase.from('log_produtos').select('estoque_atual').eq('id', mov.produto_id).single();
+               if (prod) await supabase.from('log_produtos').update({ estoque_atual: Math.max(0, prod.estoque_atual - mov.quantidade) }).eq('id', mov.produto_id);
+            }
+         }
+         await supabase.from('log_ctes').delete().eq('documento_entrada_id', editandoId);
+         const { data: oldDoc } = await supabase.from('log_documentos_entrada').select('documento').eq('id', editandoId).single();
+         if (oldDoc?.documento) await supabase.from('log_numeros_serie').delete().eq('documento_entrada', oldDoc.documento);
+         await supabase.from('log_movimentacoes').delete().eq('documento_id', editandoId);
+
+         const { error: updateError } = await supabase.from('log_documentos_entrada').update(cabecalho).eq('id', editandoId);
+         if (updateError) throw updateError;
+         docId = editandoId;
+      } else {
+         const { data: docData, error: docError } = await supabase.from('log_documentos_entrada').insert([cabecalho]).select('id').single();
+         if (docError) throw docError;
+         docId = docData.id;
+      }
+
+      // Grava CT-e
       if ((modalidadeFrete === '1 - FOB' || modalidadeFrete === '2 - Terceiros') && cteNumero) {
           await supabase.from('log_ctes').insert({
               numero_cte: cteNumero, chave_acesso: cteChave, transportadora_id: transportadoraId,
-              documento_entrada_id: docId, tipo_frete: 'Inbound/Compra', valor_frete: valorFrete,
-              data_emissao: dataEmissao || null
+              documento_entrada_id: docId, tipo_frete: 'Inbound/Compra', valor_frete: valorFrete, data_emissao: dataEmissao || null
           });
       }
 
-      // 3. Grava Itens
+      // Grava Itens Novos
       for (const item of itens) {
         await supabase.from('log_movimentacoes').insert({
           produto_id: item.produtoId, tipo: 'Entrada', quantidade: item.quantidade, custo_unitario: item.custo, 
@@ -372,13 +441,14 @@ export default function Entradas() {
 
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', item.produtoId).single();
         const novoEstoque = (prodData?.estoque_atual || 0) + item.quantidade;
+        // Atualiza estoque e salva o novo custo (como fator_conversao pode ser ajustado, o custo real é preservado)
         await supabase.from('log_produtos').update({ estoque_atual: novoEstoque, custo_base: item.custo }).eq('id', item.produtoId);
       }
 
-      alert("Entrada registrada com sucesso!");
+      alert(editandoId ? "Entrada editada e atualizada no estoque com sucesso!" : "Entrada registrada com sucesso!");
       sessionStorage.removeItem("entradas_rascunho"); 
       
-      setItens([]); setFornecedorBusca(""); setFornecedorId(null); setDocumento(""); setCfop(""); setChaveAcesso(""); setDataEmissao("");
+      setEditandoId(null); setItens([]); setFornecedorBusca(""); setFornecedorId(null); setDocumento(""); setCfop(""); setChaveAcesso(""); setDataEmissao("");
       setModalidadeFrete("0 - CIF"); setTransportadoraBusca(""); setTransportadoraId(null); setCteNumero(""); setCteChave(""); setValorFrete(0); 
       setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
       setIndexBipagem(null); setModo("formulario"); setBuscaProduto(""); setSerialInput("");
@@ -386,11 +456,13 @@ export default function Entradas() {
       fetchHistorico();
     } catch (error: any) {
       if (error.code === '23505') alert("Esta Chave de Acesso já foi registrada!");
-      else alert("Houve um erro ao salvar.");
+      else alert("Houve um erro ao salvar. " + error.message);
     } finally {
       setSalvando(false);
     }
   };
+
+  const formatarValor = (valor: any) => Number(valor || 0).toFixed(2).replace('.', ',');
 
   const docsFiltrados = historicoDocs.filter(d => {
     const termo = buscaHistorico.toLowerCase();
@@ -405,7 +477,7 @@ export default function Entradas() {
 
         <div className="flex border-b border-slate-200">
           <button onClick={() => setAbaAtiva("receber")} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "receber" ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"}`}>
-            <div className="flex items-center gap-2"><PackageOpen className="w-4 h-4"/> Novo Recebimento</div>
+            <div className="flex items-center gap-2"><PackageOpen className="w-4 h-4"/> {editandoId ? "Editando Recebimento" : "Novo Recebimento"}</div>
           </button>
           <button onClick={() => setAbaAtiva("historico")} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "historico" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"}`}>
             <div className="flex items-center gap-2"><History className="w-4 h-4"/> Histórico de Entradas</div>
@@ -416,16 +488,14 @@ export default function Entradas() {
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">Lançamento de Mercadorias</h1>
-                <p className="text-slate-500">Importe XML ou lance manualmente para alimentar o Almoxarifado.</p>
+                <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">{editandoId ? "Modo Edição" : "Lançamento de Mercadorias"}</h1>
+                <p className="text-slate-500">{editandoId ? "Faça as correções. Ao salvar, o estoque antigo será desfeito." : "Importe XML ou lance manualmente para alimentar o Almoxarifado."}</p>
               </div>
-              {modo === "formulario" ? (
-                <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm">
-                  <FileCode2 className="w-4 h-4" /> Importar XML
-                </Button>
-              ) : (
+              {modo === "formulario" && !editandoId ? (
+                <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><FileCode2 className="w-4 h-4" /> Importar XML</Button>
+              ) : modo !== "formulario" ? (
                 <Button variant="outline" onClick={() => setModo("formulario")} className="gap-2"><ArrowLeft className="w-4 h-4"/> Voltar à Nota</Button>
-              )}
+              ) : null}
             </div>
 
             {modo === "formulario" && (
@@ -476,19 +546,13 @@ export default function Entradas() {
                     </div>
                   </div>
 
-                  {/* BLOCO LOGÍSTICO (NOVO) */}
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <h4 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-2"><Truck className="w-4 h-4"/> Logística e Frete (CT-e)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">Modalidade do Frete</label>
                         <Select value={modalidadeFrete} onValueChange={setModalidadeFrete}>
-                          <SelectTrigger className="bg-white relative z-10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          
-                          {/* CORREÇÃO APLICADA AQUI: position="popper" e z-[99] */}
+                          <SelectTrigger className="bg-white relative z-10"><SelectValue /></SelectTrigger>
                           <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">
                             <SelectItem value="0 - CIF">0 - CIF (Remetente Paga)</SelectItem>
                             <SelectItem value="1 - FOB">1 - FOB (Destinatário Paga)</SelectItem>
@@ -497,44 +561,29 @@ export default function Entradas() {
                           </SelectContent>
                         </Select>
                       </div>
-
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-sm font-semibold text-slate-700">Transportadora Responsável</label>
                         <div className="relative">
-                          <Input value={transportadoraBusca} onChange={e => { setTransportadoraBusca(e.target.value); setTransportadoraId(null); setMostrarDropdownTransp(true); }} onFocus={() => setMostrarDropdownTransp(true)} onBlur={() => setTimeout(() => setMostrarDropdownTransp(false), 200)} placeholder="Buscar Transportadora cadastrada..." className={transportadoraId ? "bg-amber-50 border-amber-200 font-medium" : "bg-white"} disabled={modalidadeFrete === '9 - Sem Frete'} />
+                          <Input value={transportadoraBusca} onChange={e => { setTransportadoraBusca(e.target.value); setTransportadoraId(null); setMostrarDropdownTransp(true); }} onFocus={() => setMostrarDropdownTransp(true)} onBlur={() => setTimeout(() => setMostrarDropdownTransp(false), 200)} placeholder="Buscar Transportadora..." className={transportadoraId ? "bg-amber-50 border-amber-200 font-medium" : "bg-white"} disabled={modalidadeFrete === '9 - Sem Frete'} />
                           {mostrarDropdownTransp && (
-                            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl max-h-60 overflow-y-auto">
-                              {transportadorasFiltradas.length > 0 ? (
-                                transportadorasFiltradas.map(f => (
-                                  <div key={f.id} className="p-3 hover:bg-slate-50 cursor-pointer border-b last:border-0" onClick={() => selecionarTransportadora(f)}>
-                                    <p className="text-sm font-bold text-slate-800"><span className="text-amber-600 bg-amber-50 px-1 rounded mr-1">#{f.codigo_sequencial}</span> {f.nome_fantasia || f.razao_social}</p>
-                                  </div>
-                                ))
-                              ) : (<div className="p-3 text-sm text-slate-500 text-center">Nenhuma transportadora encontrada. Vá no CRM e marque a flag "É Transportadora".</div>)}
+                            <div className="absolute z-[99] w-full mt-1 bg-white border border-slate-200 rounded-md shadow-xl max-h-60 overflow-y-auto">
+                              {transportadorasFiltradas.map(f => (
+                                <div key={f.id} className="p-3 hover:bg-slate-50 cursor-pointer border-b last:border-0" onClick={() => selecionarTransportadora(f)}>
+                                  <p className="text-sm font-bold text-slate-800"><span className="text-amber-600 bg-amber-50 px-1 rounded mr-1">#{f.codigo_sequencial}</span> {f.nome_fantasia || f.razao_social}</p>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
                       </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700">Valor do Frete (R$)</label>
-                        <Input type="number" step="0.01" value={valorFrete} onChange={e => setValorFrete(parseFloat(e.target.value)||0)} className="bg-white font-medium" disabled={modalidadeFrete === '9 - Sem Frete'} />
-                      </div>
-
-                      {/* EXCLUSIVO PARA FOB - LANÇAMENTO DO CTE */}
+                      <div className="space-y-2"><label className="text-sm font-semibold text-slate-700">Valor do Frete (R$)</label><Input type="number" step="0.01" value={valorFrete} onChange={e => setValorFrete(parseFloat(e.target.value)||0)} className="bg-white font-medium" disabled={modalidadeFrete === '9 - Sem Frete'} /></div>
+                      
                       {(modalidadeFrete === '1 - FOB' || modalidadeFrete === '2 - Terceiros') && (
-                        <div className="md:col-span-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-4 mt-2 animate-in fade-in">
+                        <div className="md:col-span-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-4 mt-2">
                           <div className="flex items-center justify-center bg-amber-100 p-3 rounded-full shrink-0"><Receipt className="w-5 h-5 text-amber-700"/></div>
                           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                              <label className="text-xs font-bold text-amber-900 uppercase">Nº do CT-e (Conhecimento de Transporte)</label>
-                              <Input value={cteNumero} onChange={e => setCteNumero(e.target.value)} placeholder="Opcional no momento da NF-e" className="bg-white border-amber-300" />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-xs font-bold text-amber-900 uppercase">Chave de Acesso do CT-e</label>
-                              <Input value={cteChave} onChange={e => setCteChave(e.target.value)} placeholder="44 dígitos" className="bg-white border-amber-300" />
-                            </div>
-                            <p className="text-xs text-amber-700 md:col-span-2">Como o frete é FOB, ao salvar esta nota o sistema gerará automaticamente uma pendência financeira para a Transportadora selecionada.</p>
+                            <div className="space-y-1"><label className="text-xs font-bold text-amber-900 uppercase">Nº do CT-e</label><Input value={cteNumero} onChange={e => setCteNumero(e.target.value)} placeholder="Opcional no momento" className="bg-white border-amber-300" /></div>
+                            <div className="space-y-1"><label className="text-xs font-bold text-amber-900 uppercase">Chave de Acesso CT-e</label><Input value={cteChave} onChange={e => setCteChave(e.target.value)} placeholder="44 dígitos" className="bg-white border-amber-300" /></div>
                           </div>
                         </div>
                       )}
@@ -561,7 +610,7 @@ export default function Entradas() {
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
                         <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome}</SelectItem>))}</SelectContent>
+                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>))}</SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
@@ -572,45 +621,47 @@ export default function Entradas() {
 
                   <div className="p-0 overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                     <thead>
-                      <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
-                        <th className="p-3 font-semibold border-b min-w-[250px]">Produto</th>
-                        <th className="p-3 font-semibold border-b w-24 text-center">Qtd. Pacotes</th>
-                        <th className="p-3 font-semibold border-b w-24 text-center">Un. por Pacote</th>
-                        <th className="p-3 font-semibold border-b w-24 text-center text-indigo-600">Total Unid.</th>
-                        <th className="p-3 font-semibold border-b w-28">Preço Pacote (R$)</th>
-                        <th className="p-3 font-semibold border-b w-28 text-indigo-600">Custo Un. (R$)</th>
-                        <th className="p-3 font-semibold border-b w-32 text-right">Total Item</th>
-                        <th className="p-3 font-semibold border-b w-10"></th>
-                      </tr>
-                    </thead>
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
+                          <th className="p-3 font-semibold border-b min-w-[250px]">Produto</th>
+                          <th className="p-3 font-semibold border-b w-24 text-center">Séries</th>
+                          <th className="p-3 font-semibold border-b w-24 text-center" title="Quantidade de Pacotes/Caixas">Qtd. Emb.</th>
+                          <th className="p-3 font-semibold border-b w-24 text-center" title="Fator de Conversão (Qtd dentro da caixa)">Un. / Emb.</th>
+                          <th className="p-3 font-semibold border-b w-24 text-center text-indigo-600" title="Total Real no Estoque">Estoque</th>
+                          <th className="p-3 font-semibold border-b w-28">Preço Emb. (R$)</th>
+                          <th className="p-3 font-semibold border-b w-28 text-indigo-600">Custo Un. (R$)</th>
+                          <th className="p-3 font-semibold border-b w-32 text-right">Total Item</th>
+                          <th className="p-3 font-semibold border-b w-10"></th>
+                        </tr>
+                      </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {itens.map((item, index) => (
-                          <tr key={index} className="hover:bg-slate-50 text-sm">
-                            <td className="p-3 font-medium text-slate-700">
-                              {item.nome} <br/> <span className="text-[10px] text-slate-400 font-mono">{item.sku}</span>
-                            </td>
-                            <td className="p-3">
-                              <Input type="number" value={item.qtdEmbalagem} onChange={e => atualizarItemConversao(index, 'qtdEmbalagem', parseFloat(e.target.value)||0)} className="h-8 text-center" />
-                            </td>
-                            <td className="p-3">
-                              <Input type="number" value={item.fatorConversao} onChange={e => atualizarItemConversao(index, 'fatorConversao', parseInt(e.target.value)||1)} className="h-8 text-center" />
-                            </td>
-                            <td className="p-3 text-center font-bold text-indigo-600 bg-indigo-50/30">
-                              {item.quantidade}
-                            </td>
-                            <td className="p-3">
-                              <Input type="number" step="0.01" value={item.custoEmbalagem} onChange={e => atualizarItemConversao(index, 'custoEmbalagem', parseFloat(e.target.value)||0)} className="h-8" />
-                            </td>
-                            <td className="p-3 text-indigo-700 font-semibold italic">
-                              R$ {item.custo.toFixed(4)}
-                            </td>
-                            <td className="p-3 text-right font-bold">
-                              R$ {(item.qtdEmbalagem * item.custoEmbalagem).toFixed(2)}
-                            </td>
-                            {/* ... botão de remover ... */}
-                          </tr>
-                        ))}
+                        {itens.length === 0 ? (
+                          <tr><td colSpan={9} className="p-8 text-center text-slate-400">Importe um arquivo XML para iniciar.</td></tr>
+                        ) : (
+                          itens.map((item, index) => (
+                            <tr key={index} className={item.precisaMapeamento ? 'bg-amber-50/50 text-sm' : 'hover:bg-slate-50 text-sm'}>
+                              <td className="p-3">
+                                {!item.precisaMapeamento ? (
+                                  <><p className="font-semibold text-slate-800 text-sm">{item.nome}</p><p className="text-[10px] text-slate-500 font-mono">SKU: {item.sku}</p></>
+                                ) : (
+                                  <div className="space-y-2"><p className="text-xs text-amber-700 font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> XML: {item.nomeOriginalXML}</p><Input list="lista-produtos-bd" placeholder="Vincule ao Catálogo..." className="h-8 text-xs border-amber-300" onChange={(e) => vincularProdutoXML(index, e.target.value)} /></div>
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                {item.precisaMapeamento ? <span className="text-xs text-amber-600">Pendente</span> : item.rastreiaSerie ? (
+                                  <Button size="sm" variant={item.series.length === item.quantidade ? "default" : "secondary"} onClick={() => abrirBipagem(index)} className={`h-7 text-[10px] w-full px-1 ${item.series.length === item.quantidade ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>{item.series.length === item.quantidade ? <CheckCircle2 className="w-3 h-3"/> : <Barcode className="w-3 h-3" />} {item.series.length}/{item.quantidade}</Button>
+                                ) : <span className="text-[10px] text-slate-400">Lote</span>}
+                              </td>
+                              <td className="p-3"><Input type="number" value={item.qtdEmbalagem} onChange={e => atualizarItemConversao(index, 'qtdEmbalagem', parseFloat(e.target.value)||0)} className="h-8 text-center text-xs" /></td>
+                              <td className="p-3"><Input type="number" value={item.fatorConversao} onChange={e => atualizarItemConversao(index, 'fatorConversao', parseInt(e.target.value)||1)} className="h-8 text-center text-xs" /></td>
+                              <td className="p-3 text-center font-bold text-indigo-600 bg-indigo-50/30 text-xs">{item.quantidade}</td>
+                              <td className="p-3"><Input type="number" step="0.01" value={item.custoEmbalagem} onChange={e => atualizarItemConversao(index, 'custoEmbalagem', parseFloat(e.target.value)||0)} className="h-8 text-xs" /></td>
+                              <td className="p-3 text-indigo-700 font-semibold italic text-xs">R$ {item.custo.toFixed(4).replace('.',',')}</td>
+                              <td className="p-3 text-right font-bold text-xs">R$ {(item.qtdEmbalagem * item.custoEmbalagem).toFixed(2).replace('.',',')}</td>
+                              <td className="p-3 text-center"><Button variant="ghost" size="icon" onClick={() => removerItem(index)} className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button></td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -620,19 +671,26 @@ export default function Entradas() {
                 {itens.length > 0 && (
                   <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg flex-wrap gap-4">
                     <div className="flex gap-6 md:gap-8 flex-wrap">
-                      <div><p className="text-stone-400 text-xs uppercase tracking-wider">Itens</p><p className="text-lg font-semibold">R$ {itens.reduce((acc, i) => acc + (i.quantidade * i.custo), 0).toFixed(2).replace('.', ',')}</p></div>
+                      <div><p className="text-stone-400 text-xs uppercase tracking-wider">Itens</p><p className="text-lg font-semibold">R$ {itens.reduce((acc, i) => acc + (i.qtdEmbalagem * i.custoEmbalagem), 0).toFixed(2).replace('.', ',')}</p></div>
                       <div><p className="text-stone-400 text-xs uppercase tracking-wider">Frete ({modalidadeFrete.split(' ')[2] || 'CIF'})</p><p className="text-lg font-semibold text-amber-400">R$ {valorFrete.toFixed(2).replace('.', ',')}</p></div>
-                      <div className="pl-4 md:pl-6 border-l border-stone-600"><p className="text-stone-300 text-xs uppercase tracking-wider font-bold">Total da Nota</p><p className="text-2xl font-bold text-emerald-400">R$ {(itens.reduce((acc, i) => acc + (i.quantidade * i.custo), 0) + valorFrete + valorIcmsSt + valorIpi).toFixed(2).replace('.', ',')}</p></div>
+                      <div><p className="text-stone-400 text-xs uppercase tracking-wider">ST + IPI</p><p className="text-lg font-semibold text-amber-400">R$ {(valorIcmsSt + valorIpi).toFixed(2).replace('.', ',')}</p></div>
+                      <div className="pl-4 md:pl-6 border-l border-stone-600"><p className="text-stone-300 text-xs uppercase tracking-wider font-bold">Total da Nota</p><p className="text-2xl font-bold text-emerald-400">R$ {(itens.reduce((acc, i) => acc + (i.qtdEmbalagem * i.custoEmbalagem), 0) + valorFrete + valorIcmsSt + valorIpi).toFixed(2).replace('.', ',')}</p></div>
                     </div>
-                    <Button onClick={salvarEntrada} disabled={salvando} className="bg-emerald-500 hover:bg-emerald-600 text-white gap-2 h-12 px-6 w-full md:w-auto">
-                      {salvando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Finalizar Recebimento
-                    </Button>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        {editandoId && (
+                            <Button variant="outline" onClick={cancelarEdicao} className="h-12 px-4 bg-stone-700 border-stone-600 text-white hover:bg-stone-600 hover:text-white">Cancelar Edição</Button>
+                        )}
+                        <Button onClick={salvarEntrada} disabled={salvando} className={`${editandoId ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white gap-2 h-12 px-6 flex-1`}>
+                            {salvando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} 
+                            {editandoId ? "Atualizar Recebimento" : "Finalizar Recebimento"}
+                        </Button>
+                    </div>
                   </div>
                 )}
               </div>
             )}
             
-            {/* BIPAGEM... (mantido sem alterações funcionais para poupar espaço mental) */}
+            {/* BIPAGEM */}
             {modo === "bipagem" && indexBipagem !== null && itens[indexBipagem] && (
                <div className="bg-white rounded-xl border shadow-sm p-8 text-center animate-in fade-in zoom-in-95 duration-200">
                 <div className="max-w-md mx-auto space-y-6">
@@ -658,7 +716,7 @@ export default function Entradas() {
           </div>
         )}
 
-        {/* ABA HISTÓRICO... (Mantida a mesma lógica anterior) */}
+        {/* ABA 2: HISTÓRICO DE LANÇAMENTOS */}
         {abaAtiva === "historico" && (
             <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             {modo !== "detalhe_historico" && (
@@ -678,13 +736,13 @@ export default function Entradas() {
                         <th className="p-3 font-semibold border-b">Fornecedor</th>
                         <th className="p-3 font-semibold border-b text-right">Frete</th>
                         <th className="p-3 font-semibold border-b text-right">Valor Total</th>
-                        <th className="p-3 font-semibold border-b text-center w-24">Ação</th>
+                        <th className="p-3 font-semibold border-b text-center w-36">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {docsFiltrados.map(doc => (
                         <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-3 text-center font-mono text-sm text-slate-500">{doc.sequencial?.toString().padStart(4, '0')}</td>
+                          <td className="p-3 text-center font-mono text-sm text-slate-500">{String(doc.sequencial || '').padStart(4, '0')}</td>
                           <td className="p-3">
                             <p className="font-bold text-slate-800 text-sm">{doc.tipo_documento} {doc.documento}</p>
                             {doc.cfop && <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">CFOP: {doc.cfop}</span>}
@@ -692,10 +750,16 @@ export default function Entradas() {
                           <td className="p-3 text-sm text-slate-700">{doc.log_fornecedores?.nome_fantasia || doc.fornecedor_texto}</td>
                           <td className="p-3 text-right">
                             <span className="text-[10px] font-bold uppercase text-slate-400 block">{doc.modalidade_frete?.split('-')[1]?.trim() || "CIF"}</span>
-                            <span className="font-semibold text-slate-600 text-xs">R$ {Number(doc.valor_frete).toFixed(2).replace('.',',')}</span>
+                            <span className="font-semibold text-slate-600 text-xs">R$ {formatarValor(doc.valor_frete)}</span>
                           </td>
-                          <td className="p-3 text-right font-bold text-emerald-600">R$ {Number(doc.valor_total).toFixed(2).replace('.',',')}</td>
-                          <td className="p-3 text-center"><Button onClick={() => abrirDetalhesDocumento(doc)} variant="outline" size="sm"><Eye className="w-3 h-3"/></Button></td>
+                          <td className="p-3 text-right font-bold text-emerald-600">R$ {formatarValor(doc.valor_total)}</td>
+                          <td className="p-3 text-center">
+                             <div className="flex items-center justify-center gap-1">
+                                <Button onClick={() => abrirDetalhesDocumento(doc)} variant="outline" size="icon" className="h-8 w-8 text-slate-600 hover:text-indigo-600" title="Ver Detalhes"><Eye className="w-4 h-4"/></Button>
+                                <Button onClick={() => carregarParaEdicao(doc)} variant="outline" size="icon" className="h-8 w-8 text-slate-600 hover:text-amber-600" title="Editar / Corrigir"><Pencil className="w-4 h-4"/></Button>
+                                <Button onClick={() => excluirEntrada(doc)} variant="outline" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50" title="Excluir / Estornar"><Trash2 className="w-4 h-4"/></Button>
+                             </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -703,8 +767,76 @@ export default function Entradas() {
                 </div>
               </div>
             )}
+
+            {modo === "detalhe_historico" && docSelecionado && (
+              <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6 animate-in slide-in-from-right-4 duration-200">
+                <div className="flex justify-between items-start border-b pb-4">
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm border font-bold">SEQ: {String(docSelecionado?.sequencial || '').padStart(4, '0')}</span>
+                      <h2 className="text-xl font-bold text-slate-800">{docSelecionado?.tipo_documento} Nº {docSelecionado?.documento}</h2>
+                    </div>
+                    <p className="text-sm text-slate-600 font-medium">{docSelecionado?.log_fornecedores?.razao_social || docSelecionado?.fornecedor_texto}</p>
+                    <p className="text-xs text-slate-400 font-mono mt-1">CHAVE: {docSelecionado?.chave_acesso || "Não informada"}</p>
+                  </div>
+                  <Button variant="ghost" onClick={() => setModo("formulario")} className="text-slate-400 hover:text-slate-800 hover:bg-slate-100"><X className="w-5 h-5"/></Button>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 text-center">
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-slate-400 font-bold uppercase">CFOP / Operação</p><p className="text-sm font-semibold text-slate-700">{docSelecionado?.cfop || "-"}</p></div>
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-slate-400 font-bold uppercase">ICMS</p><p className="text-sm font-semibold text-slate-700">R$ {formatarValor(docSelecionado?.valor_icms)}</p></div>
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-amber-500 font-bold uppercase">ICMS ST</p><p className="text-sm font-semibold text-amber-700">R$ {formatarValor(docSelecionado?.valor_icms_st)}</p></div>
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-amber-500 font-bold uppercase">IPI</p><p className="text-sm font-semibold text-amber-700">R$ {formatarValor(docSelecionado?.valor_ipi)}</p></div>
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-slate-400 font-bold uppercase">PIS</p><p className="text-sm font-semibold text-slate-700">R$ {formatarValor(docSelecionado?.valor_pis)}</p></div>
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-slate-400 font-bold uppercase">COFINS</p><p className="text-sm font-semibold text-slate-700">R$ {formatarValor(docSelecionado?.valor_cofins)}</p></div>
+                  <div className="border-r border-slate-200 last:border-0"><p className="text-[10px] text-blue-500 font-bold uppercase">FRETE</p><p className="text-sm font-semibold text-blue-700">R$ {formatarValor(docSelecionado?.valor_frete)}</p></div>
+                  <div><p className="text-[10px] text-emerald-600 font-bold uppercase">TOTAL NOTA</p><p className="text-base font-bold text-emerald-600">R$ {formatarValor(docSelecionado?.valor_total)}</p></div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-slate-700 mb-3 border-b pb-2">Mercadorias Recebidas</h3>
+                  {carregandoDetalhes ? (
+                    <div className="p-8 text-center text-slate-400 flex justify-center"><Loader2 className="w-6 h-6 animate-spin"/></div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                            <th className="p-3 font-semibold border-b">Produto</th>
+                            <th className="p-3 font-semibold border-b text-center">Qtd Final</th>
+                            <th className="p-3 font-semibold border-b text-right">Custo Un.</th>
+                            <th className="p-3 font-semibold border-b text-right" title="Rateio = (Frete + IPI + ICMS ST) / Qtd Total da Nota">Rateio Taxas</th>
+                            <th className="p-3 font-semibold border-b text-right text-indigo-700">Preço Agregado</th>
+                            <th className="p-3 font-semibold border-b">Local de Destino</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {itensDocSelecionado.map(item => {
+                            const qtdTotalNota = itensDocSelecionado.reduce((acc, i) => acc + i.quantidade, 0);
+                            const taxaUnitario = qtdTotalNota > 0 ? (Number(docSelecionado?.valor_frete) + Number(docSelecionado?.valor_icms_st) + Number(docSelecionado?.valor_ipi)) / qtdTotalNota : 0;
+                            const precoAgregado = Number(item.custo_unitario) + taxaUnitario;
+
+                            return (
+                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-3"><p className="font-semibold text-slate-800">{item.log_produtos?.nome}</p><p className="text-xs text-slate-500 font-mono">SKU: {item.log_produtos?.sku}</p></td>
+                                <td className="p-3 text-center font-medium">{item.quantidade}</td>
+                                <td className="p-3 text-right text-slate-600">R$ {formatarValor(item.custo_unitario)}</td>
+                                <td className="p-3 text-right text-amber-600">+ R$ {formatarValor(taxaUnitario)}</td>
+                                <td className="p-3 text-right font-bold text-indigo-700 bg-indigo-50/30">R$ {formatarValor(precoAgregado)}</td>
+                                <td className="p-3 text-slate-600 text-xs font-semibold">{item.log_locais?.nome || "Padrão"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
+
       </div>
     </AppLayout>
   );
