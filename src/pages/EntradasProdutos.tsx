@@ -473,8 +473,12 @@ export default function Entradas() {
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">Modalidade do Frete</label>
                         <Select value={modalidadeFrete} onValueChange={setModalidadeFrete}>
-                          <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectTrigger className="bg-white relative z-10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          
+                          {/* CORREÇÃO APLICADA AQUI: position="popper" e z-[99] */}
+                          <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">
                             <SelectItem value="0 - CIF">0 - CIF (Remetente Paga)</SelectItem>
                             <SelectItem value="1 - FOB">1 - FOB (Destinatário Paga)</SelectItem>
                             <SelectItem value="2 - Terceiros">2 - Terceiros</SelectItem>
@@ -546,7 +550,7 @@ export default function Entradas() {
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
                         <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>))}</SelectContent>
+                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome}</SelectItem>))}</SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
