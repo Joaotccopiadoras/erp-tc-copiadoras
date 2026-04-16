@@ -12,7 +12,8 @@ import {
   Factory,
   ShoppingCart,
   Coins,
-  ShoppingBag
+  ShoppingBag,
+  FileText
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -60,6 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       titulo: "Assistência Técnica",
       menus: [
         { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
+        { nome: "Ordens de Serviço", url: "/os", icone: FileText}
       ]
     }
   ];
