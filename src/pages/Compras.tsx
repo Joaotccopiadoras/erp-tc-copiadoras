@@ -2,18 +2,31 @@ import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ShoppingCart, TrendingDown, FileText, Printer, Check, Plus, Search, Trash2, CheckCircle2, DollarSign, Clock, Truck, ArrowRight, AlertCircle } from "lucide-react";
+import { ShoppingCart, TrendingDown, FileText, Printer, CheckCircle2, Plus, Search, Trash2, DollarSign, Clock, Truck, ArrowRight, AlertCircle, PackagePlus, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+// Tipagens da nova estrutura Multi-Item
+type ItemCotacao = {
+  id: string;
+  produtoId: string;
+  sku: string;
+  nome: string;
+  quantidade: number;
+};
+
+type PrecoFornecedor = {
+  produtoId: string;
+  preco: number;
+};
 
 type FornecedorCotacao = {
   id: string;
   fornecedorId: string;
   nome: string;
-  precoUnitario: number;
   frete: number;
   prazoDias: number;
   condicaoPagamento: string;
+  precos: PrecoFornecedor[]; // Guarda o preço que este fornecedor fez para cada item
 };
 
 export default function Compras() {
@@ -26,13 +39,14 @@ export default function Compras() {
   const [fornecedoresBD, setFornecedoresBD] = useState<any[]>([]);
 
   // ==========================================
-  // ESTADOS: ARENA DE COTAÇÃO
+  // ESTADOS: ARENA DE COTAÇÃO MULTI-ITEM
   // ==========================================
   const [produtoBusca, setProdutoBusca] = useState("");
-  const [produtoId, setProdutoId] = useState<string | null>(null);
   const [quantidadeDesejada, setQuantidadeDesejada] = useState(1);
-  const [fornecedoresCotados, setFornecedoresCotados] = useState<FornecedorCotacao[]>([]);
+  const [itensCotacao, setItensCotacao] = useState<ItemCotacao[]>([]);
+  
   const [fornecedorBusca, setFornecedorBusca] = useState("");
+  const [fornecedoresCotados, setFornecedoresCotados] = useState<FornecedorCotacao[]>([]);
   
   // ==========================================
   // ESTADOS: HISTÓRICO DE PEDIDOS
@@ -40,6 +54,26 @@ export default function Compras() {
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any | null>(null);
   const [gerandoPedido, setGerandoPedido] = useState(false);
+
+  // AUTO-SAVE (Rascunho da Cotação)
+  useEffect(() => {
+    const rascunho = sessionStorage.getItem("compras_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.itensCotacao) setItensCotacao(draft.itensCotacao);
+        if (draft.fornecedoresCotados) setFornecedoresCotados(draft.fornecedoresCotados);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (itensCotacao.length > 0 || fornecedoresCotados.length > 0) {
+      sessionStorage.setItem("compras_rascunho", JSON.stringify({ itensCotacao, fornecedoresCotados }));
+    } else {
+      sessionStorage.removeItem("compras_rascunho");
+    }
+  }, [itensCotacao, fornecedoresCotados]);
 
   useEffect(() => {
     fetchDadosBase();
@@ -60,61 +94,111 @@ export default function Compras() {
     if (data) setPedidos(data);
   };
 
-  // --- LÓGICA DA COTAÇÃO ---
+  // --- PASSO 1: LISTA DE NECESSIDADES ---
+  const adicionarItemCotacao = () => {
+    if (!produtoBusca) return;
+    const prod = produtosBD.find(p => p.nome === produtoBusca || `${p.sku || 'S/N'} - ${p.nome}` === produtoBusca);
+    if (!prod) return alert("Produto não encontrado no catálogo.");
+    
+    if (itensCotacao.find(i => i.produtoId === prod.id)) return alert("Este produto já está na lista de necessidades.");
+
+    setItensCotacao([...itensCotacao, {
+        id: crypto.randomUUID(),
+        produtoId: prod.id,
+        sku: prod.sku || 'S/N',
+        nome: prod.nome,
+        quantidade: quantidadeDesejada
+    }]);
+    
+    setProdutoBusca("");
+    setQuantidadeDesejada(1);
+  };
+
+  const removerItemCotacao = (id: string) => {
+    setItensCotacao(prev => prev.filter(i => i.id !== id));
+  };
+
+  // --- PASSO 2: FORNECEDORES NA DISPUTA ---
   const adicionarFornecedorCotacao = () => {
     if (!fornecedorBusca) return;
     const forn = fornecedoresBD.find(f => f.nome_fantasia === fornecedorBusca || f.razao_social === fornecedorBusca);
     if (!forn) return alert("Fornecedor não encontrado no banco.");
-    if (fornecedoresCotados.find(f => f.fornecedorId === forn.id)) return alert("Este fornecedor já está na arena de cotação.");
+    if (fornecedoresCotados.find(f => f.fornecedorId === forn.id)) return alert("Este fornecedor já está na arena.");
 
     setFornecedoresCotados([...fornecedoresCotados, {
       id: crypto.randomUUID(),
       fornecedorId: forn.id,
       nome: forn.nome_fantasia || forn.razao_social,
-      precoUnitario: 0,
       frete: 0,
       prazoDias: forn.prazo_medio_entrega_dias || 0,
-      condicaoPagamento: "Boleto 30 Dias"
+      condicaoPagamento: "Boleto 30 Dias",
+      precos: [] // Inicia sem preços digitados
     }]);
     setFornecedorBusca("");
   };
 
-  const atualizarCotacao = (id: string, campo: keyof FornecedorCotacao, valor: any) => {
-    setFornecedoresCotados(prev => prev.map(f => f.id === id ? { ...f, [campo]: valor } : f));
-  };
-
-  const removerCotacao = (id: string) => {
+  const removerFornecedorCotacao = (id: string) => {
     setFornecedoresCotados(prev => prev.filter(f => f.id !== id));
   };
 
-  const limparCotacao = () => {
-    if(!confirm("Limpar a arena de cotação?")) return;
-    setProdutoBusca(""); setProdutoId(null); setQuantidadeDesejada(1); setFornecedoresCotados([]);
+  // --- PASSO 3: ARENA (PREENCHIMENTO DE PREÇOS E CÁLCULO) ---
+  const atualizarDadosFornecedor = (id: string, campo: keyof FornecedorCotacao, valor: any) => {
+    setFornecedoresCotados(prev => prev.map(f => f.id === id ? { ...f, [campo]: valor } : f));
   };
 
-  // Encontrar o Vencedor (Menor Custo Total)
-  const custoTotalMaisBaixo = Math.min(...fornecedoresCotados.map(f => (f.precoUnitario * quantidadeDesejada) + f.frete));
+  const atualizarPrecoItem = (fornId: string, produtoId: string, valor: number) => {
+    setFornecedoresCotados(prev => prev.map(f => {
+        if (f.id !== fornId) return f;
+        const precosAtuais = [...f.precos];
+        const index = precosAtuais.findIndex(p => p.produtoId === produtoId);
+        
+        if (index >= 0) precosAtuais[index].preco = valor;
+        else precosAtuais.push({ produtoId, preco: valor });
+        
+        return { ...f, precos: precosAtuais };
+    }));
+  };
 
-  // --- GERAR PEDIDO DE COMPRA ---
+  const calcularTotalFornecedor = (forn: FornecedorCotacao) => {
+    const subtotal = itensCotacao.reduce((acc, item) => {
+        const precoObj = forn.precos.find(p => p.produtoId === item.produtoId);
+        return acc + ((precoObj?.preco || 0) * item.quantidade);
+    }, 0);
+    return subtotal + (forn.frete || 0);
+  };
+
+  const limparCotacao = () => {
+    if(!confirm("Tem certeza que deseja limpar toda a arena e recomeçar?")) return;
+    setItensCotacao([]); setFornecedoresCotados([]);
+  };
+
+  // Lógica Matemática do Vencedor
+  const totaisCalculados = fornecedoresCotados.map(f => calcularTotalFornecedor(f));
+  const custoTotalMaisBaixo = totaisCalculados.length > 0 ? Math.min(...totaisCalculados.filter(t => t > 0)) : 0;
+
+  // --- GERAR PEDIDO DE COMPRA EM LOTE ---
   const gerarPedido = async (fornecedorVencedor: FornecedorCotacao) => {
-    if (!produtoBusca) return alert("Selecione o produto cotado primeiro.");
-    if (fornecedorVencedor.precoUnitario <= 0) return alert("O preço unitário não pode ser zero.");
-    if (!confirm(`Deseja gerar um Pedido de Compra para ${fornecedorVencedor.nome}?`)) return;
+    if (itensCotacao.length === 0) return alert("A lista de necessidades está vazia.");
+    
+    // Validação: Ver se algum item está com preço zero para este fornecedor
+    const temItemZerado = itensCotacao.some(item => {
+        const precoObj = fornecedorVencedor.precos.find(p => p.produtoId === item.produtoId);
+        return !precoObj || precoObj.preco <= 0;
+    });
+
+    if (temItemZerado) {
+        if(!confirm(`Atenção: Existem itens com preço R$ 0,00 na proposta de ${fornecedorVencedor.nome}. Eles entrarão como bonificação/brinde. Deseja continuar?`)) return;
+    } else {
+        if (!confirm(`Deseja gerar um Pedido de Compra Oficial para ${fornecedorVencedor.nome}?`)) return;
+    }
 
     setGerandoPedido(true);
     try {
-      const prod = produtosBD.find(p => p.nome === produtoBusca || `${p.sku} - ${p.nome}` === produtoBusca);
-      const prodNome = prod ? prod.nome : produtoBusca;
-      const prodId = prod ? prod.id : null;
-
-      const valorTotalItem = fornecedorVencedor.precoUnitario * quantidadeDesejada;
-      const valorTotalPedido = valorTotalItem + fornecedorVencedor.frete;
-
-      // Calcula data de previsão
+      const valorTotalPedido = calcularTotalFornecedor(fornecedorVencedor);
       const dataPrev = new Date();
       dataPrev.setDate(dataPrev.getDate() + fornecedorVencedor.prazoDias);
 
-      // 1. Salva Cabeçalho
+      // 1. Salva o Cabeçalho do Pedido
       const cabecalho = {
         fornecedor_id: fornecedorVencedor.fornecedorId,
         fornecedor_nome: fornecedorVencedor.nome,
@@ -128,26 +212,31 @@ export default function Compras() {
       const { data: pedidoData, error: pedidoError } = await supabase.from('log_pedidos_compra').insert([cabecalho]).select('id, numero_pedido').single();
       if (pedidoError) throw pedidoError;
 
-      // 2. Salva Item
-      const item = {
-        pedido_id: pedidoData.id,
-        produto_id: prodId,
-        produto_nome: prodNome,
-        quantidade: quantidadeDesejada,
-        preco_unitario: fornecedorVencedor.precoUnitario,
-        total_item: valorTotalItem
-      };
+      // 2. Salva a Lista de Itens do Pedido
+      const itensDoPedido = itensCotacao.map(item => {
+        const precoObj = fornecedorVencedor.precos.find(p => p.produtoId === item.produtoId);
+        const precoUn = precoObj?.preco || 0;
+        return {
+          pedido_id: pedidoData.id,
+          produto_id: item.produtoId,
+          produto_nome: item.nome,
+          quantidade: item.quantidade,
+          preco_unitario: precoUn,
+          total_item: precoUn * item.quantidade
+        };
+      });
 
-      const { error: itemError } = await supabase.from('log_pedidos_compra_itens').insert([item]);
+      const { error: itemError } = await supabase.from('log_pedidos_compra_itens').insert(itensDoPedido);
       if (itemError) throw itemError;
 
-      alert(`Pedido de Compra #${pedidoData.numero_pedido} gerado com sucesso!`);
-      setProdutoBusca(""); setProdutoId(null); setQuantidadeDesejada(1); setFornecedoresCotados([]);
+      alert(`Pedido de Compra Múltiplo #${pedidoData.numero_pedido} gerado com sucesso! O fornecedor ${fornecedorVencedor.nome} ganhou a cotação.`);
+      setItensCotacao([]); setFornecedoresCotados([]); setProdutoBusca(""); setQuantidadeDesejada(1);
+      
       fetchPedidos();
       setAbaAtiva("pedidos");
 
     } catch (error: any) {
-      console.error(error); alert("Erro ao gerar pedido: " + error.message);
+      console.error(error); alert("Erro crítico ao gerar pedido. Motivo: " + error.message);
     } finally {
       setGerandoPedido(false);
     }
@@ -169,7 +258,7 @@ export default function Compras() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><ShoppingCart className="w-6 h-6 text-indigo-600" /> Módulo de Compras</h1>
-            <p className="text-slate-500">Cotações inteligentes e emissão de Pedidos de Compra (PO).</p>
+            <p className="text-slate-500">Cotações em lote e emissão centralizada de Pedidos de Compra (PO).</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button onClick={() => setAbaAtiva("cotacao")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${abaAtiva === "cotacao" ? "bg-white shadow-sm text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}>Arena de Cotações</button>
@@ -178,109 +267,184 @@ export default function Compras() {
         </div>
 
         {/* ========================================================================= */}
-        {/* ABA: ARENA DE COTAÇÕES */}
+        {/* ABA: ARENA DE COTAÇÕES MULTI-ITEM */}
         {/* ========================================================================= */}
         {abaAtiva === "cotacao" && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             
-            {/* Bloco 1: O que vamos comprar? */}
-            <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Search className="w-5 h-5 text-indigo-600"/> 1. Qual produto deseja cotar?</h3>
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Produto ou Insumo</label>
-                  <Input list="lista-produtos" value={produtoBusca} onChange={e => setProdutoBusca(e.target.value)} placeholder="Digite para buscar no catálogo..." className="text-base bg-slate-50" />
-                </div>
-                <div className="w-full md:w-48 space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Quantidade</label>
-                  <Input type="number" min="1" value={quantidadeDesejada} onChange={e => setQuantidadeDesejada(parseInt(e.target.value)||1)} className="text-base text-center bg-slate-50" />
-                </div>
+            {/* ETAPA 1: O QUE VAMOS COMPRAR? */}
+            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+              <div className="p-4 border-b bg-slate-50">
+                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ListChecks className="w-5 h-5 text-indigo-600"/> 1. Lista de Necessidades</h3>
+                  <p className="text-sm text-slate-500 mt-1">Monte a cesta de produtos que serão cotados com os fornecedores.</p>
               </div>
-            </div>
-
-            {/* Bloco 2: Adicionar Concorrentes */}
-            <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b pb-4">
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingDown className="w-5 h-5 text-indigo-600"/> 2. Arena de Fornecedores</h3>
-                <div className="flex gap-2">
-                  <Input list="lista-fornecedores" value={fornecedorBusca} onChange={e => setFornecedorBusca(e.target.value)} placeholder="Buscar Fornecedor..." className="w-64" onKeyDown={e => { if(e.key === 'Enter') adicionarFornecedorCotacao() }}/>
-                  <Button onClick={adicionarFornecedorCotacao} variant="outline" className="gap-2"><Plus className="w-4 h-4"/> Adicionar</Button>
-                </div>
+              
+              <div className="p-4 flex flex-wrap items-end gap-3 bg-white border-b border-slate-100">
+                  <div className="flex-1 min-w-[250px] space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Buscar Produto no Catálogo</label>
+                    <Input list="lista-produtos" value={produtoBusca} onChange={e => setProdutoBusca(e.target.value)} placeholder="Ex: Toner Brother, Papel Chamex..." className="bg-white border-indigo-200" onKeyDown={e => { if(e.key === 'Enter') adicionarItemCotacao() }}/>
+                  </div>
+                  <div className="w-32 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center block">Qtd Necessária</label>
+                    <Input type="number" min="1" value={quantidadeDesejada} onChange={e => setQuantidadeDesejada(parseInt(e.target.value)||1)} className="bg-white text-center border-indigo-200" />
+                  </div>
+                  <Button onClick={adicionarItemCotacao} className="gap-2 bg-indigo-600 hover:bg-indigo-700 shrink-0"><PackagePlus className="w-4 h-4"/> Incluir na Cesta</Button>
               </div>
 
-              {fornecedoresCotados.length === 0 ? (
-                <div className="text-center p-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <TrendingDown className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500 font-medium">Nenhum fornecedor na disputa.</p>
-                  <p className="text-sm text-slate-400">Busque e adicione fornecedores acima para começar a comparar preços.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {fornecedoresCotados.map((forn) => {
-                    const custoTotal = (forn.precoUnitario * quantidadeDesejada) + forn.frete;
-                    const isVencedor = custoTotal === custoTotalMaisBaixo && custoTotal > 0;
-
-                    return (
-                      <div key={forn.id} className={`relative p-5 rounded-xl border-2 transition-all ${isVencedor ? 'border-emerald-500 bg-emerald-50/30 shadow-md' : 'border-slate-200 bg-white hover:border-indigo-300'}`}>
-                        
-                        {isVencedor && (
-                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                            <CheckCircle2 className="w-3 h-3" /> Melhor Opção
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-between items-start mb-4">
-                          <h4 className="font-bold text-slate-800 text-lg leading-tight truncate pr-2" title={forn.nome}>{forn.nome}</h4>
-                          <button onClick={() => removerCotacao(forn.id)} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                        </div>
-
-                        <div className="space-y-4">
-                          <div>
-                            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 mb-1"><DollarSign className="w-3 h-3"/> Preço Unitário (R$)</label>
-                            <Input type="number" step="0.01" value={forn.precoUnitario || ''} onChange={e => atualizarCotacao(forn.id, 'precoUnitario', parseFloat(e.target.value)||0)} className={`font-medium ${isVencedor ? 'bg-white border-emerald-200' : 'bg-slate-50'}`} placeholder="0,00" />
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 mb-1"><Truck className="w-3 h-3"/> Frete (R$)</label>
-                              <Input type="number" step="0.01" value={forn.frete || ''} onChange={e => atualizarCotacao(forn.id, 'frete', parseFloat(e.target.value)||0)} className={isVencedor ? 'bg-white border-emerald-200' : 'bg-slate-50'} placeholder="0,00"/>
-                            </div>
-                            <div>
-                              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 mb-1"><Clock className="w-3 h-3"/> Prazo (Dias)</label>
-                              <Input type="number" value={forn.prazoDias || ''} onChange={e => atualizarCotacao(forn.id, 'prazoDias', parseInt(e.target.value)||0)} className={isVencedor ? 'bg-white border-emerald-200' : 'bg-slate-50'} placeholder="Ex: 5" />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-semibold text-slate-500 flex items-center gap-1 mb-1"><FileText className="w-3 h-3"/> Pagamento</label>
-                            <Input value={forn.condicaoPagamento} onChange={e => atualizarCotacao(forn.id, 'condicaoPagamento', e.target.value)} className={`text-sm ${isVencedor ? 'bg-white border-emerald-200' : 'bg-slate-50'}`} placeholder="Ex: Boleto 30/60/90" />
-                          </div>
-                        </div>
-
-                        <div className={`mt-5 pt-4 border-t flex items-end justify-between ${isVencedor ? 'border-emerald-200' : 'border-slate-100'}`}>
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Custo Total</p>
-                            <p className={`text-2xl font-black ${isVencedor ? 'text-emerald-600' : 'text-slate-700'}`}>R$ {custoTotal.toFixed(2).replace('.', ',')}</p>
-                          </div>
-                          <Button 
-                            onClick={() => gerarPedido(forn)} 
-                            disabled={gerandoPedido || forn.precoUnitario <= 0}
-                            className={`gap-1 shadow-sm ${isVencedor ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
-                          >
-                            Gerar Pedido <ArrowRight className="w-4 h-4"/>
-                          </Button>
-                        </div>
-
+              {/* LISTA DE ITENS DA CESTA */}
+              <div className="bg-slate-50 p-0">
+                  {itensCotacao.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 font-medium flex flex-col items-center">
+                          A cesta está vazia. Comece incluindo produtos acima.
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                  ) : (
+                      <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                              <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                                  <th className="p-3 font-semibold">SKU / Produto</th>
+                                  <th className="p-3 font-semibold text-center w-32">Qtd Solicitada</th>
+                                  <th className="p-3 font-semibold text-center w-16"></th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                              {itensCotacao.map((item, idx) => (
+                                  <tr key={item.id} className="hover:bg-white transition-colors bg-slate-50">
+                                      <td className="p-3">
+                                          <p className="font-bold text-slate-800">{item.nome}</p>
+                                          <p className="font-mono text-xs text-slate-500">SKU: {item.sku}</p>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                          <span className="font-black text-indigo-600 text-lg px-3 py-1 bg-indigo-50 rounded-lg">{item.quantidade}</span>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                          <button onClick={() => removerItemCotacao(item.id)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 className="w-4 h-4"/></button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  )}
+              </div>
             </div>
 
-            {fornecedoresCotados.length > 0 && (
-               <div className="flex justify-end">
-                   <Button variant="ghost" onClick={limparCotacao} className="text-slate-400 hover:text-red-500">Limpar Arena de Cotação</Button>
+            {/* ETAPA 2: ARENA DE FORNECEDORES (SÓ APARECE SE TIVER ITENS) */}
+            {itensCotacao.length > 0 && (
+              <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+                <div className="flex items-center justify-between border-b pb-4">
+                  <div>
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingDown className="w-5 h-5 text-indigo-600"/> 2. Arena de Concorrentes</h3>
+                      <p className="text-sm text-slate-500">Adicione fornecedores e preencha a proposta de cada um.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input list="lista-fornecedores" value={fornecedorBusca} onChange={e => setFornecedorBusca(e.target.value)} placeholder="Buscar Empresa..." className="w-64 border-amber-200" onKeyDown={e => { if(e.key === 'Enter') adicionarFornecedorCotacao() }}/>
+                    <Button onClick={adicionarFornecedorCotacao} variant="outline" className="gap-2 text-amber-700 hover:bg-amber-50 border-amber-200"><Plus className="w-4 h-4"/> Adicionar para Cotação</Button>
+                  </div>
+                </div>
+
+                {fornecedoresCotados.length === 0 ? (
+                  <div className="text-center p-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                    <TrendingDown className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-500 font-medium">A cesta está pronta. Quem vai cotar?</p>
+                    <p className="text-sm text-slate-400">Busque e adicione fornecedores acima para começar a comparar os orçamentos.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                    {fornecedoresCotados.map((forn) => {
+                      const custoTotal = calcularTotalFornecedor(forn);
+                      const isVencedor = custoTotal === custoTotalMaisBaixo && custoTotal > 0;
+
+                      return (
+                        <div key={forn.id} className={`relative rounded-xl border-2 transition-all flex flex-col bg-white ${isVencedor ? 'border-emerald-500 shadow-lg' : 'border-slate-200 hover:border-indigo-300'}`}>
+                          
+                          {isVencedor && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1 rounded-full flex items-center gap-1 shadow-sm z-10">
+                              <CheckCircle2 className="w-4 h-4" /> Vencedor da Disputa
+                            </div>
+                          )}
+                          
+                          <div className={`p-4 border-b flex justify-between items-center rounded-t-lg ${isVencedor ? 'bg-emerald-50/50' : 'bg-slate-50'}`}>
+                            <h4 className="font-black text-slate-800 text-lg leading-tight truncate pr-2 flex items-center gap-2" title={forn.nome}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${isVencedor ? 'bg-emerald-500' : 'bg-slate-800'}`}>#</div>
+                                {forn.nome}
+                            </h4>
+                            <button onClick={() => removerFornecedorCotacao(forn.id)} className="text-slate-400 hover:text-red-500 transition-colors p-2 bg-white rounded-md border shadow-sm"><Trash2 className="w-4 h-4"/></button>
+                          </div>
+
+                          {/* LISTA DINÂMICA DE PREÇOS DENTRO DO CARD */}
+                          <div className="p-4 space-y-3 bg-white">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b pb-1">Preços Unitários por Item</p>
+                              
+                              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                  {itensCotacao.map(item => {
+                                      const precoObj = forn.precos.find(p => p.produtoId === item.produtoId);
+                                      const precoAtual = precoObj ? precoObj.preco : '';
+                                      
+                                      return (
+                                          <div key={item.id} className="flex items-center justify-between gap-3 bg-slate-50 p-2 rounded border border-slate-100">
+                                              <div className="flex-1 truncate">
+                                                  <p className="text-xs font-bold text-slate-700 truncate" title={item.nome}>{item.nome}</p>
+                                                  <p className="text-[10px] text-slate-500 font-mono">Qtd: {item.quantidade}</p>
+                                              </div>
+                                              <div className="w-28 relative">
+                                                  <span className="absolute left-2 top-2 text-xs font-bold text-slate-400">R$</span>
+                                                  <Input 
+                                                      type="number" step="0.01" 
+                                                      value={precoAtual} 
+                                                      onChange={e => atualizarPrecoItem(forn.id, item.produtoId, parseFloat(e.target.value)||0)} 
+                                                      className="h-8 pl-7 text-sm font-semibold bg-white" 
+                                                      placeholder="0,00" 
+                                                  />
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+
+                          {/* DADOS ADICIONAIS DO FORNECEDOR (FRETE E PRAZO) */}
+                          <div className="p-4 bg-slate-50 border-t border-slate-200 mt-auto rounded-b-lg">
+                              <div className="grid grid-cols-3 gap-3 mb-4">
+                                <div>
+                                  <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider mb-1"><Truck className="w-3 h-3 text-indigo-400"/> Frete Lote</label>
+                                  <Input type="number" step="0.01" value={forn.frete || ''} onChange={e => atualizarDadosFornecedor(forn.id, 'frete', parseFloat(e.target.value)||0)} className="h-8 text-sm font-semibold bg-white" placeholder="0,00"/>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider mb-1"><Clock className="w-3 h-3 text-amber-400"/> Prazo</label>
+                                  <Input type="number" value={forn.prazoDias || ''} onChange={e => atualizarDadosFornecedor(forn.id, 'prazoDias', parseInt(e.target.value)||0)} className="h-8 text-sm font-semibold bg-white" placeholder="Dias" />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider mb-1"><FileText className="w-3 h-3 text-emerald-400"/> Faturamento</label>
+                                  <Input value={forn.condicaoPagamento} onChange={e => atualizarDadosFornecedor(forn.id, 'condicaoPagamento', e.target.value)} className="h-8 text-xs font-semibold bg-white" placeholder="Condição" />
+                                </div>
+                              </div>
+
+                              <div className={`pt-4 border-t flex items-end justify-between ${isVencedor ? 'border-emerald-200' : 'border-slate-200'}`}>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Custo Total (Cesta + Frete)</p>
+                                  <p className={`text-2xl font-black ${isVencedor ? 'text-emerald-600' : 'text-slate-800'}`}>R$ {custoTotal.toFixed(2).replace('.', ',')}</p>
+                                </div>
+                                <Button 
+                                  onClick={() => gerarPedido(forn)} 
+                                  disabled={gerandoPedido || custoTotal <= 0}
+                                  className={`gap-2 shadow-md h-10 px-6 ${isVencedor ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
+                                >
+                                  Gerar Pedido <ArrowRight className="w-4 h-4"/>
+                                </Button>
+                              </div>
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* BOTÃO DE LIMPAR GERAL */}
+            {itensCotacao.length > 0 && (
+               <div className="flex justify-end pt-4">
+                   <Button variant="outline" onClick={limparCotacao} className="text-slate-500 hover:text-red-600 hover:bg-red-50 border-slate-200 gap-2"><Trash2 className="w-4 h-4"/> Descartar Esta Cotação</Button>
                </div>
             )}
 
@@ -289,7 +453,7 @@ export default function Compras() {
 
 
         {/* ========================================================================= */}
-        {/* ABA: HISTÓRICO DE PEDIDOS (PO) */}
+        {/* ABA: HISTÓRICO DE PEDIDOS (PO) - SEM ALTERAÇÕES NESTA ABA */}
         {/* ========================================================================= */}
         {abaAtiva === "pedidos" && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
