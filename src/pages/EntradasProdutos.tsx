@@ -885,4 +885,3 @@ export default function Entradas() {
     </AppLayout>
   );
 }
-```
