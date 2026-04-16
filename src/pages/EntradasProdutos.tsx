@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt, Pencil } from "lucide-react";
+import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt, Pencil, Eraser } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ItemEntrada = {
@@ -11,11 +11,11 @@ type ItemEntrada = {
   sku: string;
   nome: string;
   rastreiaSerie: boolean;
-  quantidade: number; // Qtd Final (Unidades)
-  qtdEmbalagem: number; // Qtd de Caixas/Pacotes
-  fatorConversao: number; // Quantos vêm em cada Caixa
-  custo: number; // Preço Unitário Diluído
-  custoEmbalagem: number; // Preço Fechado da Caixa/Pacote
+  quantidade: number; 
+  qtdEmbalagem: number; 
+  fatorConversao: number; 
+  custo: number; 
+  custoEmbalagem: number; 
   series: string[];
   precisaMapeamento?: boolean;
   nomeOriginalXML?: string;
@@ -130,7 +130,7 @@ export default function Entradas() {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base, fator_conversao').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial, is_transportadora'), 
-      supabase.from('log_locais').select('id, nome, tipo').order('nome')
+      supabase.from('log_locais').select('id, nome').order('nome')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (fornRes.data) setFornecedoresBD(fornRes.data);
@@ -153,6 +153,19 @@ export default function Entradas() {
 
   const selecionarFornecedor = (f: any) => { setFornecedorId(f.id); setFornecedorBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownFornecedor(false); };
   const selecionarTransportadora = (f: any) => { setTransportadoraId(f.id); setTransportadoraBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownTransp(false); };
+
+  // --- FUNÇÃO DE LIMPEZA GERAL ---
+  const limparFormulario = () => {
+    if (!confirm("Deseja realmente limpar todos os campos? Todo o preenchimento não salvo será perdido.")) return;
+    
+    sessionStorage.removeItem("entradas_rascunho");
+    setEditandoId(null);
+    setFornecedorBusca(""); setFornecedorId(null); 
+    setDocumento(""); setCfop(""); setChaveAcesso(""); setDataEmissao("");
+    setModalidadeFrete("0 - CIF"); setTransportadoraBusca(""); setTransportadoraId(null); setCteNumero(""); setCteChave(""); setValorFrete(0);
+    setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
+    setItens([]); setBuscaProduto(""); setSerialInput(""); setIndexBipagem(null); setModo("formulario");
+  };
 
   // --- FUNÇÕES DE HISTÓRICO E GESTÃO ---
   const fetchHistorico = async () => {
@@ -329,7 +342,6 @@ export default function Entradas() {
     setBuscaProduto(""); 
   };
 
-  // --- LÓGICA DE FATOR DE CONVERSÃO MATEMÁTICO ---
   const atualizarItemConversao = (index: number, campo: 'qtdEmbalagem' | 'fatorConversao' | 'custoEmbalagem', valor: number) => {
     const novosItens = [...itens];
     const item = novosItens[index];
@@ -396,7 +408,6 @@ export default function Entradas() {
 
       let docId;
 
-      // SE ESTIVER EDITANDO: REVERTE O ESTOQUE ANTIGO E APAGA DEPENDÊNCIAS
       if (editandoId) {
          const { data: oldMovs } = await supabase.from('log_movimentacoes').select('produto_id, quantidade').eq('documento_id', editandoId);
          if (oldMovs) {
@@ -419,7 +430,6 @@ export default function Entradas() {
          docId = docData.id;
       }
 
-      // Grava CT-e
       if ((modalidadeFrete === '1 - FOB' || modalidadeFrete === '2 - Terceiros') && cteNumero) {
           await supabase.from('log_ctes').insert({
               numero_cte: cteNumero, chave_acesso: cteChave, transportadora_id: transportadoraId,
@@ -427,7 +437,6 @@ export default function Entradas() {
           });
       }
 
-      // Grava Itens Novos
       for (const item of itens) {
         await supabase.from('log_movimentacoes').insert({
           produto_id: item.produtoId, tipo: 'Entrada', quantidade: item.quantidade, custo_unitario: item.custo, 
@@ -441,7 +450,6 @@ export default function Entradas() {
 
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', item.produtoId).single();
         const novoEstoque = (prodData?.estoque_atual || 0) + item.quantidade;
-        // Atualiza estoque e salva o novo custo (como fator_conversao pode ser ajustado, o custo real é preservado)
         await supabase.from('log_produtos').update({ estoque_atual: novoEstoque, custo_base: item.custo }).eq('id', item.produtoId);
       }
 
@@ -491,11 +499,21 @@ export default function Entradas() {
                 <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">{editandoId ? "Modo Edição" : "Lançamento de Mercadorias"}</h1>
                 <p className="text-slate-500">{editandoId ? "Faça as correções. Ao salvar, o estoque antigo será desfeito." : "Importe XML ou lance manualmente para alimentar o Almoxarifado."}</p>
               </div>
+              
+              {/* BLOCO DOS BOTÕES DO TOPO (COM O BOTÃO LIMPAR) */}
               {modo === "formulario" && !editandoId ? (
-                <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><FileCode2 className="w-4 h-4" /> Importar XML</Button>
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" onClick={limparFormulario} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm">
+                    <Eraser className="w-4 h-4" /> Limpar Tela
+                  </Button>
+                  <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm">
+                    <FileCode2 className="w-4 h-4" /> Importar XML
+                  </Button>
+                </div>
               ) : modo !== "formulario" ? (
                 <Button variant="outline" onClick={() => setModo("formulario")} className="gap-2"><ArrowLeft className="w-4 h-4"/> Voltar à Nota</Button>
               ) : null}
+
             </div>
 
             {modo === "formulario" && (
@@ -603,14 +621,13 @@ export default function Entradas() {
                   </div>
                 </div>
 
-                {/* SELEÇÃO DO DESTINO E ITENS */}
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                   <div className="bg-slate-50 p-4 border-b flex flex-wrap items-center gap-4 justify-between">
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
                         <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>))}</SelectContent>
+                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome}</SelectItem>))}</SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
@@ -623,7 +640,7 @@ export default function Entradas() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
-                          <th className="p-3 font-semibold border-b min-w-[250px]">Produto</th>
+                          <th className="p-3 font-semibold border-b min-w-[250px]">Produto / Mapeamento</th>
                           <th className="p-3 font-semibold border-b w-24 text-center">Séries</th>
                           <th className="p-3 font-semibold border-b w-24 text-center" title="Quantidade de Pacotes/Caixas">Qtd. Emb.</th>
                           <th className="p-3 font-semibold border-b w-24 text-center" title="Fator de Conversão (Qtd dentro da caixa)">Un. / Emb.</th>
@@ -667,7 +684,6 @@ export default function Entradas() {
                   </div>
                 </div>
 
-                {/* TOTALIZADORES E SALVAR */}
                 {itens.length > 0 && (
                   <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg flex-wrap gap-4">
                     <div className="flex gap-6 md:gap-8 flex-wrap">
@@ -690,7 +706,6 @@ export default function Entradas() {
               </div>
             )}
             
-            {/* BIPAGEM */}
             {modo === "bipagem" && indexBipagem !== null && itens[indexBipagem] && (
                <div className="bg-white rounded-xl border shadow-sm p-8 text-center animate-in fade-in zoom-in-95 duration-200">
                 <div className="max-w-md mx-auto space-y-6">
@@ -716,7 +731,6 @@ export default function Entradas() {
           </div>
         )}
 
-        {/* ABA 2: HISTÓRICO DE LANÇAMENTOS */}
         {abaAtiva === "historico" && (
             <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             {modo !== "detalhe_historico" && (
