@@ -121,7 +121,7 @@ export default function Entradas() {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base, fator_conversao').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial, is_transportadora'), 
-      supabase.from('log_locais').select('id, nome, tipo').order('nome')
+      supabase.from('log_locais').select('id, nome').order('nome')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (fornRes.data) setFornecedoresBD(fornRes.data);
@@ -650,7 +650,7 @@ export default function Entradas() {
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
                         <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>))}</SelectContent>
+                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome}</SelectItem>))}</SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
