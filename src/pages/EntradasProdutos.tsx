@@ -1,26 +1,3 @@
-Você acaba de descobrir o que chamamos na programação de "Erro Silencioso" (ou "Engolidor de Erros")!
-
-O que aconteceu foi o seguinte: o sistema estava salvando o Cabeçalho da Nota Fiscal e atualizando o saldo do Estoque perfeitamente. Porém, na hora de salvar a lista de produtos (na tabela `log_movimentacoes`), o banco de dados recusava a inserção (provavelmente porque a tabela de movimentações no seu Supabase ainda não tem a coluna `documento_id` ou `local_id` para fazer o vínculo). 
-
-Como eu não havia programado o React para "gritar" caso o banco recusasse essa inserção específica, o código simplesmente ignorava a falha e seguia a vida. O resultado? O cabeçalho foi salvo, mas os itens foram jogados no vácuo!
-
-Para resolver isso definitivamente, faremos duas coisas: garantir que as colunas existam no banco e "blindar" o React para que ele nunca mais engula um erro.
-
-### Passo 1: A Estrutura do Banco (Supabase)
-Vá ao seu **SQL Editor** no Supabase e rode este comando. Se as colunas já existirem, ele não fará nada. Se não existirem, ele criará as pontes exatas que a nota fiscal precisa para salvar os itens:
-
-```sql
-ALTER TABLE log_movimentacoes
-ADD COLUMN IF NOT EXISTS documento_id UUID REFERENCES log_documentos_entrada(id) ON DELETE CASCADE,
-ADD COLUMN IF NOT EXISTS local_id UUID REFERENCES log_locais(id);
-```
-
-### Passo 2: O Código Blindado
-Adicionei "travas de segurança" em cada etapa do salvamento e da consulta. Se o banco recusar salvar um item por qualquer motivo, a tela vai parar, ficar vermelha e te avisar exatamente qual foi o erro, impedindo que você perca dados.
-
-Substitua **100% do seu arquivo `src/pages/Entradas.tsx`** por esta versão:
-
-```tsx
 import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
