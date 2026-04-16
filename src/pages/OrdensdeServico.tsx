@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wrench, Plus, Search, Trash2, Printer, CheckCircle2, Clock, PlayCircle, FileText, ArrowLeft, Package, User, Tool, Landmark, AlertCircle } from "lucide-react";
+import { Wrench, Barcode, Loader2, Plus, Search, Trash2, Printer, CheckCircle2, Clock, PlayCircle, FileText, ArrowLeft, Package, User, Toolbox, Landmark, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type PecaOS = { id: string; produtoId: string; nome: string; quantidade: number; preco: number; estoqueAtual: number };
@@ -393,7 +393,7 @@ export default function OrdensServico() {
                     {/* BLOCO: SERVIÇOS (MÃO DE OBRA) */}
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                         <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
-                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Tool className="w-4 h-4 text-amber-500"/> Mão de Obra e Serviços</h4>
+                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Toolbox className="w-4 h-4 text-amber-500"/> Mão de Obra e Serviços</h4>
                             {osSelecionada.status !== 'Faturada' && (
                                 <div className="flex gap-2">
                                     <Input value={descServico} onChange={e => setDescServico(e.target.value)} placeholder="Descrição do serviço..." className="h-8 text-xs w-48 bg-white" />
