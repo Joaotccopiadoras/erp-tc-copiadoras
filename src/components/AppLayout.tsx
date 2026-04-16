@@ -66,13 +66,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
         { nome: "Ordens de Serviço", url: "/os", icone: FileText}
       ]
-    }
+    },
     {
       titulo: "Tc Serviços",
       menus: [
         { nome: "PCP", url: "/grafica", icone: Copy },
       ]
-    };
+    }
   ];
 
   return (
