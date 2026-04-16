@@ -12,6 +12,7 @@ import Processos from "./pages/Processos"
 import Logistica from "./pages/Logistica"
 import EntradasProdutos from "./pages/EntradasProdutos"
 import Fornecedores from "./pages/Fornecedores";
+import Compras from "./pages/Compras"
 
 const queryClient = new QueryClient();
 export default function App() {
@@ -78,6 +79,7 @@ export default function App() {
 
           <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
           <Route path="/fornecedores" element={<RotaProtegida><Fornecedores /></RotaProtegida>} />
+          <Route path="/compras" element={<RotaProtegida><Compras /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route
