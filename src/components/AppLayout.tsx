@@ -14,7 +14,8 @@ import {
   Coins,
   ShoppingBag,
   FileText,
-  ScrollText
+  ScrollText,
+  Copy
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -66,6 +67,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { nome: "Ordens de Serviço", url: "/os", icone: FileText}
       ]
     }
+    {
+      titulo: "Tc Serviços",
+      menus: [
+        { nome: "PCP", url: "/grafica", icone: Copy },
+      ]
+    };
   ];
 
   return (

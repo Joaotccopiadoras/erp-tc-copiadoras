@@ -4,19 +4,20 @@ import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client"
 import PortalPage from "./pages/PortalPage";
 import Login from "./pages/Login";
-import Configuracoes from "./pages/Configuracoes"
-import Agenda from "./pages/Agenda"
-import Processos from "./pages/Processos"
-import Financeiro from "./pages/Financeiro"
+import Configuracoes from "./pages/Configuracoes";
+import Agenda from "./pages/Agenda";
+import Processos from "./pages/Processos";
+import Financeiro from "./pages/Financeiro";
 import DashboardFinanceiro from "./pages/DashboardFinanceiro";
-import Logistica from "./pages/Logistica"
+import Logistica from "./pages/Logistica";
 import EntradasProdutos from "./pages/EntradasProdutos"
 import Fornecedores from "./pages/Fornecedores";
-import Compras from "./pages/Compras"
+import Compras from "./pages/Compras";
 import Requisicoes from "./pages/Requisicoes";
-import Comercial from "./pages/Comercial"
-import Tecnica from "./pages/Tecnica"
-import OrdensdeServico from "./pages/OrdensdeServico"
+import Comercial from "./pages/Comercial";
+import Tecnica from "./pages/Tecnica";
+import OrdensdeServico from "./pages/OrdensdeServico";
+import Grafica from "./pages/Grafica";
 
 const queryClient = new QueryClient();
 export default function App() {
@@ -92,6 +93,8 @@ export default function App() {
           <Route path="/comercial" element={<RotaProtegida><Comercial /></RotaProtegida>} />
 
           <Route path="/os" element={<RotaProtegida><OrdensdeServico /></RotaProtegida>} />
+
+          <Route path="/grafica" element={<RotaProtegida><Grafica /></RotaProtegida>} />
           
           //pagina nao encontrada
           <Route
