@@ -2,24 +2,27 @@ import { Link, useLocation } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import { 
   Boxes,
-  Calendar, 
-  Receipt, 
-  UploadCloud, 
-  LayoutDashboard,
+  Calendar,
   CalendarClock,
-  Workflow,
-  Factory,
-  ShoppingCart,
+  ChevronDown,
+  ChevronUp,
   Coins,
-  ShoppingBag,
-  FileText,
-  ScrollText,
   Copy,
-  LayoutGrid,
+  Factory,
+  FileText,
   Fingerprint,
+  LayoutDashboard,
+  LayoutGrid,
+  LogOut,
   Network,
   Package, 
-  PackageOpen
+  PackageOpen,
+  Receipt,
+  ScrollText,
+  ShoppingBag,
+  ShoppingCart,
+  UploadCloud,
+  Workflow
 } from "lucide-react";
 
 const MENU_GROUPS = [
