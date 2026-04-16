@@ -167,10 +167,9 @@ export default function Entradas() {
     setDocSelecionado(doc); 
     setModo("detalhe_historico");
     
-    // Tratamento de erro rigoroso na consulta do detalhe
     const { data, error } = await supabase
       .from('log_movimentacoes')
-      .select(`*, log_produtos(sku, nome), log_locais(nome)`)
+      .select(`*, log_produtos(sku, nome), log_locais!local_id(nome)`)
       .eq('documento_id', doc.id);
       
     if (error) {
