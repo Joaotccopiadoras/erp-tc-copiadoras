@@ -15,7 +15,8 @@ import {
   ShoppingBag,
   FileText,
   ScrollText,
-  Copy
+  Copy,
+  Fingerprint
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       titulo: "Administrativo",
       menus: [
         { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
+        { nome: "Departamento Pessoal", url: "/deppessoal", icone: Fingerprint}
       ]
     },
     {

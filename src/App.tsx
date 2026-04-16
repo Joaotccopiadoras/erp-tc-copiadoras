@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
 import Agenda from "./pages/Agenda";
 import Processos from "./pages/Processos";
+import DepartamentoPessoal from "./pages/DepartamentoPessoal";
 import Financeiro from "./pages/Financeiro";
 import DashboardFinanceiro from "./pages/DashboardFinanceiro";
 import Logistica from "./pages/Logistica";
@@ -82,6 +83,7 @@ export default function App() {
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
 
           <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
+          <Route path="/deppessoal" element={<RotaProtegida><DepartamentoPessoal /></RotaProtegida>} />
 
           <Route path="/dashboardfinanceiro" element={<RotaProtegida><DashboardFinanceiro /></RotaProtegida>} />
 
