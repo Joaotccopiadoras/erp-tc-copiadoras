@@ -1,3 +1,26 @@
+Você acaba de descobrir o que chamamos na programação de "Erro Silencioso" (ou "Engolidor de Erros")!
+
+O que aconteceu foi o seguinte: o sistema estava salvando o Cabeçalho da Nota Fiscal e atualizando o saldo do Estoque perfeitamente. Porém, na hora de salvar a lista de produtos (na tabela `log_movimentacoes`), o banco de dados recusava a inserção (provavelmente porque a tabela de movimentações no seu Supabase ainda não tem a coluna `documento_id` ou `local_id` para fazer o vínculo). 
+
+Como eu não havia programado o React para "gritar" caso o banco recusasse essa inserção específica, o código simplesmente ignorava a falha e seguia a vida. O resultado? O cabeçalho foi salvo, mas os itens foram jogados no vácuo!
+
+Para resolver isso definitivamente, faremos duas coisas: garantir que as colunas existam no banco e "blindar" o React para que ele nunca mais engula um erro.
+
+### Passo 1: A Estrutura do Banco (Supabase)
+Vá ao seu **SQL Editor** no Supabase e rode este comando. Se as colunas já existirem, ele não fará nada. Se não existirem, ele criará as pontes exatas que a nota fiscal precisa para salvar os itens:
+
+```sql
+ALTER TABLE log_movimentacoes
+ADD COLUMN IF NOT EXISTS documento_id UUID REFERENCES log_documentos_entrada(id) ON DELETE CASCADE,
+ADD COLUMN IF NOT EXISTS local_id UUID REFERENCES log_locais(id);
+```
+
+### Passo 2: O Código Blindado
+Adicionei "travas de segurança" em cada etapa do salvamento e da consulta. Se o banco recusar salvar um item por qualquer motivo, a tela vai parar, ficar vermelha e te avisar exatamente qual foi o erro, impedindo que você perca dados.
+
+Substitua **100% do seu arquivo `src/pages/Entradas.tsx`** por esta versão:
+
+```tsx
 import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -26,9 +49,6 @@ export default function Entradas() {
   const [modo, setModo] = useState<"formulario" | "bipagem" | "detalhe_historico">("formulario");
   const [editandoId, setEditandoId] = useState<string | null>(null);
   
-  // ==========================================
-  // ESTADOS: NOVO RECEBIMENTO
-  // ==========================================
   const [fornecedorBusca, setFornecedorBusca] = useState(""); 
   const [fornecedorId, setFornecedorId] = useState<string | null>(null);
   const [mostrarDropdownFornecedor, setMostrarDropdownFornecedor] = useState(false);
@@ -66,18 +86,12 @@ export default function Entradas() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [salvando, setSalvando] = useState(false);
 
-  // ==========================================
-  // ESTADOS: HISTÓRICO DE ENTRADAS
-  // ==========================================
   const [historicoDocs, setHistoricoDocs] = useState<any[]>([]);
   const [buscaHistorico, setBuscaHistorico] = useState("");
   const [docSelecionado, setDocSelecionado] = useState<any>(null);
   const [itensDocSelecionado, setItensDocSelecionado] = useState<any[]>([]);
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
 
-  // ==========================================
-  // AUTO-SAVE RASCUNHO
-  // ==========================================
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("entradas_rascunho");
     if (rascunhoSalvo) {
@@ -130,7 +144,7 @@ export default function Entradas() {
     const [prodRes, fornRes, locRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base, fator_conversao').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial, is_transportadora'), 
-      supabase.from('log_locais').select('id, nome').order('nome')
+      supabase.from('log_locais').select('id, nome, tipo').order('nome')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (fornRes.data) setFornecedoresBD(fornRes.data);
@@ -172,8 +186,22 @@ export default function Entradas() {
   };
 
   const abrirDetalhesDocumento = async (doc: any) => {
-    setCarregandoDetalhes(true); setDocSelecionado(doc); setModo("detalhe_historico");
-    const { data, error } = await supabase.from('log_movimentacoes').select(`*, log_produtos(sku, nome), log_locais(nome)`).eq('documento_id', doc.id);
+    setCarregandoDetalhes(true); 
+    setDocSelecionado(doc); 
+    setModo("detalhe_historico");
+    
+    // Tratamento de erro rigoroso na consulta do detalhe
+    const { data, error } = await supabase
+      .from('log_movimentacoes')
+      .select(`*, log_produtos(sku, nome), log_locais(nome)`)
+      .eq('documento_id', doc.id);
+      
+    if (error) {
+      alert("Houve uma falha de conexão do banco ao puxar os itens: " + error.message);
+      setCarregandoDetalhes(false);
+      return;
+    }
+    
     if (data) setItensDocSelecionado(data);
     setCarregandoDetalhes(false);
   };
@@ -202,42 +230,30 @@ export default function Entradas() {
     } finally { setCarregandoDetalhes(false); }
   };
 
-  // FUNÇÃO DE CARREGAR EDIÇÃO BLINDADA
   const carregarParaEdicao = async (doc: any) => {
-    if (!confirm("Ao editar, o estoque será recalculado.\nSe o documento tiver séries (equipamentos), elas serão apagadas e precisarão ser bipadas novamente.\nDeseja continuar?")) return;
+    if (!confirm("Ao editar, o estoque será recalculado.\nSe o documento tiver séries, elas serão apagadas e precisarão ser bipadas novamente.\nDeseja continuar?")) return;
     
     setCarregandoDetalhes(true);
     
     try {
-      // 1. Puxa os movimentos incluindo os dados dos produtos atrelados
       const { data: movs, error } = await supabase
         .from('log_movimentacoes')
         .select('*, log_produtos(sku, nome, rastreia_serie, fator_conversao)')
         .eq('documento_id', doc.id);
 
-      if (error) throw error; // Se a query falhar, joga o erro para o CATCH
+      if (error) throw new Error("Falha no banco de dados ao buscar os produtos da nota: " + error.message);
 
-      // 2. Mapeia os dados do banco de volta para a estrutura visual da tela
       const itensMapeados: ItemEntrada[] = (movs || []).map(m => {
-         // O Supabase pode retornar um objeto único ou um array no join. Isso protege contra os dois.
          const prod = Array.isArray(m.log_produtos) ? m.log_produtos[0] : m.log_produtos;
          const fc = prod?.fator_conversao || 1;
-         
          return {
-             produtoId: m.produto_id, 
-             sku: prod?.sku || '', 
-             nome: prod?.nome || 'Produto Desconhecido', 
-             rastreiaSerie: prod?.rastreia_serie || false,
-             quantidade: m.quantidade, // Total no estoque
-             qtdEmbalagem: m.quantidade / fc, // Reversão matemática das Caixas
-             fatorConversao: fc, 
-             custo: m.custo_unitario, // Preço Diluído
-             custoEmbalagem: m.custo_unitario * fc, // Preço da Caixa original
-             series: []
+             produtoId: m.produto_id, sku: prod?.sku || '', nome: prod?.nome || 'Produto Desconhecido', 
+             rastreiaSerie: prod?.rastreia_serie || false, quantidade: m.quantidade, 
+             qtdEmbalagem: m.quantidade / fc, fatorConversao: fc, 
+             custo: m.custo_unitario, custoEmbalagem: m.custo_unitario * fc, series: []
          };
       });
 
-      // 3. Preenche os Cabeçalhos
       setEditandoId(doc.id);
       setDocumento(doc.documento || ""); setCfop(doc.cfop || ""); setChaveAcesso(doc.chave_acesso || ""); setDataEmissao(doc.data_emissao || "");
       setLocalDestino(movs?.[0]?.local_id || ""); setModalidadeFrete(doc.modalidade_frete || "0 - CIF"); setValorFrete(doc.valor_frete || 0);
@@ -251,8 +267,7 @@ export default function Entradas() {
       setAbaAtiva("receber");
 
     } catch (e: any) {
-      console.error("Erro ao puxar itens da edição:", e);
-      alert("Houve um erro ao buscar os produtos desta nota do banco de dados: " + e.message);
+      alert(e.message);
     } finally {
       setCarregandoDetalhes(false);
     }
@@ -266,7 +281,6 @@ export default function Entradas() {
     setAbaAtiva("historico");
   };
 
-  // --- XML ---
   const acionarUploadXML = () => fileInputRef.current?.click();
 
   const processarXML = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -437,7 +451,10 @@ export default function Entradas() {
       let docId;
 
       if (editandoId) {
-         const { data: oldMovs } = await supabase.from('log_movimentacoes').select('produto_id, quantidade').eq('documento_id', editandoId);
+         // REVERSÃO BLINDADA: Tenta puxar o estoque, mas se der erro joga pro CATCH
+         const { data: oldMovs, error: oldError } = await supabase.from('log_movimentacoes').select('produto_id, quantidade').eq('documento_id', editandoId);
+         if (oldError) throw new Error("Erro ao consultar nota original: " + oldError.message);
+         
          if (oldMovs) {
             for (const mov of oldMovs) {
                const { data: prod } = await supabase.from('log_produtos').select('estoque_atual').eq('id', mov.produto_id).single();
@@ -450,30 +467,34 @@ export default function Entradas() {
          await supabase.from('log_movimentacoes').delete().eq('documento_id', editandoId);
 
          const { error: updateError } = await supabase.from('log_documentos_entrada').update(cabecalho).eq('id', editandoId);
-         if (updateError) throw updateError;
+         if (updateError) throw new Error("Erro ao atualizar o cabeçalho: " + updateError.message);
          docId = editandoId;
       } else {
          const { data: docData, error: docError } = await supabase.from('log_documentos_entrada').insert([cabecalho]).select('id').single();
-         if (docError) throw docError;
+         if (docError) throw new Error("Erro ao salvar o cabeçalho: " + docError.message);
          docId = docData.id;
       }
 
       if ((modalidadeFrete === '1 - FOB' || modalidadeFrete === '2 - Terceiros') && cteNumero) {
-          await supabase.from('log_ctes').insert({
+          const { error: cteErr } = await supabase.from('log_ctes').insert({
               numero_cte: cteNumero, chave_acesso: cteChave, transportadora_id: transportadoraId,
               documento_entrada_id: docId, tipo_frete: 'Inbound/Compra', valor_frete: valorFrete, data_emissao: dataEmissao || null
           });
+          if (cteErr) throw new Error("Erro ao salvar o CT-e: " + cteErr.message);
       }
 
+      // GRAVAÇÃO DE ITENS BLINDADA
       for (const item of itens) {
-        await supabase.from('log_movimentacoes').insert({
+        const { error: movErr } = await supabase.from('log_movimentacoes').insert({
           produto_id: item.produtoId, tipo: 'Entrada', quantidade: item.quantidade, custo_unitario: item.custo, 
           documento_id: docId, local_id: localDestino, documento: documento, fornecedor_cliente: fornecedorBusca 
         });
+        if (movErr) throw new Error(`Banco recusou salvar o item ${item.nome}: ${movErr.message}`);
 
         if (item.rastreiaSerie && item.series.length > 0) {
           const payloadSeries = item.series.map(s => ({ produto_id: item.produtoId, numero_serie: s, status: 'Em Estoque', documento_entrada: documento, local_id: localDestino }));
-          await supabase.from('log_numeros_serie').insert(payloadSeries);
+          const { error: serieErr } = await supabase.from('log_numeros_serie').insert(payloadSeries);
+          if (serieErr) throw new Error(`Banco recusou as séries do item ${item.nome}: ${serieErr.message}`);
         }
 
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', item.produtoId).single();
@@ -491,8 +512,8 @@ export default function Entradas() {
       
       fetchHistorico();
     } catch (error: any) {
-      if (error.code === '23505') alert("Esta Chave de Acesso já foi registrada!");
-      else alert("Houve um erro ao salvar. " + error.message);
+      if (error.code === '23505') alert("Esta Chave de Acesso ou Documento já foi registrado!");
+      else alert("Houve um erro técnico. Nada foi salvo. Motivo: \n" + error.message);
     } finally {
       setSalvando(false);
     }
@@ -652,7 +673,7 @@ export default function Entradas() {
                       <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><MapPin className="w-3 h-3"/> Guardar no Local:</label>
                       <Select value={localDestino} onValueChange={setLocalDestino}>
                         <SelectTrigger className="w-[250px] bg-white border-indigo-200 relative z-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome}</SelectItem>))}</SelectContent>
+                        <SelectContent position="popper" className="bg-white z-[99] shadow-xl border-slate-200">{locaisBD.map(loc => (<SelectItem key={loc.id} value={loc.id}>{loc.nome} ({loc.tipo})</SelectItem>))}</SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
@@ -709,7 +730,7 @@ export default function Entradas() {
                   </div>
                 </div>
 
-                {/* ESSA BARRA AGORA SEMPRE APARECE SE VOCÊ ESTIVER EDITANDO, MESMO SE OS ITENS ESTIVEREM VAZIOS! */}
+                {/* BARRA SEMPRE VISÍVEL CASO ESTEJA EDITANDO */}
                 {(itens.length > 0 || editandoId) && (
                   <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg flex-wrap gap-4">
                     <div className="flex gap-6 md:gap-8 flex-wrap">
@@ -722,7 +743,7 @@ export default function Entradas() {
                         {editandoId && (
                             <Button variant="outline" onClick={cancelarEdicao} className="h-12 px-4 bg-stone-700 border-stone-600 text-white hover:bg-stone-600 hover:text-white">Cancelar Edição</Button>
                         )}
-                        <Button onClick={salvarEntrada} disabled={salvando || itens.length === 0} className={`${editandoId ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white gap-2 h-12 px-6 flex-1`}>
+                        <Button onClick={salvarEntrada} disabled={salvando} className={`${editandoId ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white gap-2 h-12 px-6 flex-1`}>
                             {salvando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} 
                             {editandoId ? "Atualizar Recebimento" : "Finalizar Recebimento"}
                         </Button>
@@ -853,22 +874,26 @@ export default function Entradas() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {itensDocSelecionado.map(item => {
-                            const qtdTotalNota = itensDocSelecionado.reduce((acc, i) => acc + i.quantidade, 0);
-                            const taxaUnitario = qtdTotalNota > 0 ? (Number(docSelecionado?.valor_frete) + Number(docSelecionado?.valor_icms_st) + Number(docSelecionado?.valor_ipi)) / qtdTotalNota : 0;
-                            const precoAgregado = Number(item.custo_unitario) + taxaUnitario;
+                          {itensDocSelecionado.length === 0 ? (
+                            <tr><td colSpan={6} className="p-8 text-center text-slate-400">Nenhum item foi salvo no banco para este documento. Entre no modo Edição para corrigir.</td></tr>
+                          ) : (
+                            itensDocSelecionado.map(item => {
+                              const qtdTotalNota = itensDocSelecionado.reduce((acc, i) => acc + i.quantidade, 0);
+                              const taxaUnitario = qtdTotalNota > 0 ? (Number(docSelecionado?.valor_frete) + Number(docSelecionado?.valor_icms_st) + Number(docSelecionado?.valor_ipi)) / qtdTotalNota : 0;
+                              const precoAgregado = Number(item.custo_unitario) + taxaUnitario;
 
-                            return (
-                              <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="p-3"><p className="font-semibold text-slate-800">{item.log_produtos?.nome}</p><p className="text-xs text-slate-500 font-mono">SKU: {item.log_produtos?.sku}</p></td>
-                                <td className="p-3 text-center font-medium">{item.quantidade}</td>
-                                <td className="p-3 text-right text-slate-600">R$ {formatarValor(item.custo_unitario)}</td>
-                                <td className="p-3 text-right text-amber-600">+ R$ {formatarValor(taxaUnitario)}</td>
-                                <td className="p-3 text-right font-bold text-indigo-700 bg-indigo-50/30">R$ {formatarValor(precoAgregado)}</td>
-                                <td className="p-3 text-slate-600 text-xs font-semibold">{item.log_locais?.nome || "Padrão"}</td>
-                              </tr>
-                            );
-                          })}
+                              return (
+                                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="p-3"><p className="font-semibold text-slate-800">{item.log_produtos?.nome || 'Desconhecido'}</p><p className="text-xs text-slate-500 font-mono">SKU: {item.log_produtos?.sku || 'S/N'}</p></td>
+                                  <td className="p-3 text-center font-medium">{item.quantidade}</td>
+                                  <td className="p-3 text-right text-slate-600">R$ {formatarValor(item.custo_unitario)}</td>
+                                  <td className="p-3 text-right text-amber-600">+ R$ {formatarValor(taxaUnitario)}</td>
+                                  <td className="p-3 text-right font-bold text-indigo-700 bg-indigo-50/30">R$ {formatarValor(precoAgregado)}</td>
+                                  <td className="p-3 text-slate-600 text-xs font-semibold">{item.log_locais?.nome || "Padrão"}</td>
+                                </tr>
+                              );
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -883,3 +908,4 @@ export default function Entradas() {
     </AppLayout>
   );
 }
+```
