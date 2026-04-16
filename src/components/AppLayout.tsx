@@ -25,78 +25,79 @@ import {
   Workflow
 } from "lucide-react";
 
+// Aqui está a correção: padronizamos todas as listas filhas para se chamarem "itens"
 const MENU_GROUPS = [
-    {
-      titulo: "GERAL",
-      itens: [
-        { nome: "Central", url: "/", icone: LayoutGrid },
-        { nome: "Agenda", url: "/agenda", icone: Calendar },
-      ]
-    },
-    {
-      titulo: "ADMINISTRATIVO",
-      menus: [
-        { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
-        { nome: "Departamento Pessoal", url: "/deppessoal", icone: Fingerprint}
-      ]
-    },
-    {
-      titulo: "FINANCEIRO",
-      menus: [
-        { nome: "Central Financeira", url: "/financeiro", icone: Coins},
-        { nome: "Dashboard Financeiro", url: "/dashboardfinanceiro", icone: Receipt },
-      ]
-    },
-    {
-      titulo: "LOGÍSTICA",
-      menus: [
-        { nome: "Catálogo", url: "/logistica", icone: Package },
-        { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
-        { nome: "Fornecedores", url: "/fornecedores", icone: Factory },
-        { nome: "Compras", url: "/compras", icone: ShoppingCart},
-        { nome: "Requisições", url: "/requisicoes", icone: ScrollText}
-      ]
-    },
-    {
-      titulo: "COMERCIAL",
-      menus: [
+  {
+    titulo: "GERAL",
+    itens: [
+      { nome: "Central", url: "/", icone: LayoutGrid },
+      { nome: "Agenda", url: "/agenda", icone: Calendar },
+    ]
+  },
+  {
+    titulo: "ADMINISTRATIVO",
+    itens: [
+      { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
+      { nome: "Departamento Pessoal", url: "/deppessoal", icone: Fingerprint}
+    ]
+  },
+  {
+    titulo: "FINANCEIRO",
+    itens: [
+      { nome: "Central Financeira", url: "/financeiro", icone: Coins},
+      { nome: "Dashboard Financeiro", url: "/dashboardfinanceiro", icone: Receipt },
+    ]
+  },
+  {
+    titulo: "LOGÍSTICA",
+    itens: [
+      { nome: "Catálogo", url: "/logistica", icone: Package },
+      { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
+      { nome: "Fornecedores", url: "/fornecedores", icone: Factory },
+      { nome: "Compras", url: "/compras", icone: ShoppingCart},
+      { nome: "Requisições", url: "/requisicoes", icone: ScrollText}
+    ]
+  },
+  {
+    titulo: "COMERCIAL",
+    itens: [
       {nome: "Central Comercial", url: "/comercial", icone: ShoppingBag},
-      ]
-    },
-    {
-      titulo: "ASSISTÊNCIA TÉCNICA",
-      menus: [
-        { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
-        { nome: "Ordens de Serviço", url: "/os", icone: FileText}
-      ]
-    },
-    {
-      titulo: "TC SERVIÇOS",
-      menus: [
-        { nome: "PCP", url: "/grafica", icone: Copy },
-      ]
-    }
-  ];
+    ]
+  },
+  {
+    titulo: "ASSISTÊNCIA TÉCNICA",
+    itens: [
+      { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
+      { nome: "Ordens de Serviço", url: "/os", icone: FileText}
+    ]
+  },
+  {
+    titulo: "TC SERVIÇOS",
+    itens: [
+      { nome: "PCP", url: "/grafica", icone: Copy },
+    ]
+  }
+];
   
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [menusExpandidos, setMenusExpandidos] = useState<string[]>(["GERAL"])
   const [caminhoAtual, setCaminhoAtual] = useState("");
 
-useEffect(() => {
-  if (typeof window !== "undefined") {
-    setCaminhoAtual (window.location.pathname);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCaminhoAtual (window.location.pathname);
+    }
+  }, []);
+
+  const toggleMenu = (titulo: string) => {
+    setMenusExpandidos(prev =>
+      prev.includes(titulo)
+        ? prev.filter(m => m !== titulo)
+        : [...prev, titulo] // AQUI TINHA UM ERRO DE DIGITAÇÃO (ponto no lugar da vírgula), corrigido!
+    )
   }
-}, []);
 
-const toggleMenu = (titulo: string) => {
-  setMenusExpandidos(prev =>
-    prev.includes(titulo)
-      ? prev.filter(m => m !==titulo)
-      : [...prev. titulo]
-  )
-}
-
- return (
+  return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
       
       {/* BARRA LATERAL (SIDEBAR) */}
@@ -141,13 +142,14 @@ const toggleMenu = (titulo: string) => {
                 {isExpandido && (
                   <div className="mt-1 mb-3 px-3 space-y-1 animate-in slide-in-from-top-2 fade-in duration-200">
                     {grupo.itens.map((item) => {
-                      const isActive = caminhoAtual === item.href;
+                      // Note que mudei item.href para item.url para casar com a sua lista
+                      const isActive = caminhoAtual === item.url;
                       const Icone = item.icone;
 
                       return (
                         <a 
                           key={item.nome} 
-                          href={item.href}
+                          href={item.url}
                           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                             isActive 
                               ? "bg-emerald-50 text-emerald-700" 
