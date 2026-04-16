@@ -154,10 +154,8 @@ export default function Entradas() {
   const selecionarFornecedor = (f: any) => { setFornecedorId(f.id); setFornecedorBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownFornecedor(false); };
   const selecionarTransportadora = (f: any) => { setTransportadoraId(f.id); setTransportadoraBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownTransp(false); };
 
-  // --- FUNÇÃO DE LIMPEZA GERAL ---
   const limparFormulario = () => {
     if (!confirm("Deseja realmente limpar todos os campos? Todo o preenchimento não salvo será perdido.")) return;
-    
     sessionStorage.removeItem("entradas_rascunho");
     setEditandoId(null);
     setFornecedorBusca(""); setFornecedorId(null); 
@@ -184,7 +182,6 @@ export default function Entradas() {
     if (!confirm(`Deseja realmente excluir a entrada do documento ${doc.documento}? \n\nEsta ação descontará o saldo dos produtos no estoque e não pode ser desfeita.`)) return;
     try {
       setCarregandoDetalhes(true);
-      // 1. Reverter Estoque
       const { data: movs } = await supabase.from('log_movimentacoes').select('produto_id, quantidade').eq('documento_id', doc.id);
       if (movs) {
         for (const mov of movs) {
@@ -192,7 +189,6 @@ export default function Entradas() {
           if (prod) await supabase.from('log_produtos').update({ estoque_atual: Math.max(0, prod.estoque_atual - mov.quantidade) }).eq('id', mov.produto_id);
         }
       }
-      // 2. Apagar dependências e documento principal
       await supabase.from('log_ctes').delete().eq('documento_entrada_id', doc.id);
       await supabase.from('log_numeros_serie').delete().eq('documento_entrada', doc.documento);
       await supabase.from('log_movimentacoes').delete().eq('documento_id', doc.id);
@@ -206,28 +202,60 @@ export default function Entradas() {
     } finally { setCarregandoDetalhes(false); }
   };
 
+  // FUNÇÃO DE CARREGAR EDIÇÃO BLINDADA
   const carregarParaEdicao = async (doc: any) => {
     if (!confirm("Ao editar, o estoque será recalculado.\nSe o documento tiver séries (equipamentos), elas serão apagadas e precisarão ser bipadas novamente.\nDeseja continuar?")) return;
+    
     setCarregandoDetalhes(true);
     
-    const { data: movs } = await supabase.from('log_movimentacoes').select('*, log_produtos(sku, nome, rastreia_serie)').eq('documento_id', doc.id);
-    const itensMapeados: ItemEntrada[] = (movs || []).map(m => ({
-       produtoId: m.produto_id, sku: m.log_produtos?.sku || '', nome: m.log_produtos?.nome || '', rastreiaSerie: m.log_produtos?.rastreia_serie || false,
-       quantidade: m.quantidade, qtdEmbalagem: m.quantidade, fatorConversao: 1, custo: m.custo_unitario, custoEmbalagem: m.custo_unitario, series: []
-    }));
+    try {
+      // 1. Puxa os movimentos incluindo os dados dos produtos atrelados
+      const { data: movs, error } = await supabase
+        .from('log_movimentacoes')
+        .select('*, log_produtos(sku, nome, rastreia_serie, fator_conversao)')
+        .eq('documento_id', doc.id);
 
-    setEditandoId(doc.id);
-    setDocumento(doc.documento || ""); setCfop(doc.cfop || ""); setChaveAcesso(doc.chave_acesso || ""); setDataEmissao(doc.data_emissao || "");
-    setLocalDestino(movs?.[0]?.local_id || ""); setModalidadeFrete(doc.modalidade_frete || "0 - CIF"); setValorFrete(doc.valor_frete || 0);
-    setValorIcms(doc.valor_icms || 0); setValorIcmsSt(doc.valor_icms_st || 0); setValorIpi(doc.valor_ipi || 0); setValorPis(doc.valor_pis || 0);
-    setValorCofins(doc.valor_cofins || 0); setValorOutros(doc.valor_impostos || 0);
-    
-    setFornecedorId(doc.fornecedor_id); setFornecedorBusca(doc.fornecedor_texto || "");
-    setTransportadoraId(doc.transportadora_id); setTransportadoraBusca(doc.transportadora || "");
-    setItens(itensMapeados);
-    
-    setCarregandoDetalhes(false);
-    setAbaAtiva("receber");
+      if (error) throw error; // Se a query falhar, joga o erro para o CATCH
+
+      // 2. Mapeia os dados do banco de volta para a estrutura visual da tela
+      const itensMapeados: ItemEntrada[] = (movs || []).map(m => {
+         // O Supabase pode retornar um objeto único ou um array no join. Isso protege contra os dois.
+         const prod = Array.isArray(m.log_produtos) ? m.log_produtos[0] : m.log_produtos;
+         const fc = prod?.fator_conversao || 1;
+         
+         return {
+             produtoId: m.produto_id, 
+             sku: prod?.sku || '', 
+             nome: prod?.nome || 'Produto Desconhecido', 
+             rastreiaSerie: prod?.rastreia_serie || false,
+             quantidade: m.quantidade, // Total no estoque
+             qtdEmbalagem: m.quantidade / fc, // Reversão matemática das Caixas
+             fatorConversao: fc, 
+             custo: m.custo_unitario, // Preço Diluído
+             custoEmbalagem: m.custo_unitario * fc, // Preço da Caixa original
+             series: []
+         };
+      });
+
+      // 3. Preenche os Cabeçalhos
+      setEditandoId(doc.id);
+      setDocumento(doc.documento || ""); setCfop(doc.cfop || ""); setChaveAcesso(doc.chave_acesso || ""); setDataEmissao(doc.data_emissao || "");
+      setLocalDestino(movs?.[0]?.local_id || ""); setModalidadeFrete(doc.modalidade_frete || "0 - CIF"); setValorFrete(doc.valor_frete || 0);
+      setValorIcms(doc.valor_icms || 0); setValorIcmsSt(doc.valor_icms_st || 0); setValorIpi(doc.valor_ipi || 0); setValorPis(doc.valor_pis || 0);
+      setValorCofins(doc.valor_cofins || 0); setValorOutros(doc.valor_impostos || 0);
+      
+      setFornecedorId(doc.fornecedor_id); setFornecedorBusca(doc.fornecedor_texto || "");
+      setTransportadoraId(doc.transportadora_id); setTransportadoraBusca(doc.transportadora || "");
+      
+      setItens(itensMapeados);
+      setAbaAtiva("receber");
+
+    } catch (e: any) {
+      console.error("Erro ao puxar itens da edição:", e);
+      alert("Houve um erro ao buscar os produtos desta nota do banco de dados: " + e.message);
+    } finally {
+      setCarregandoDetalhes(false);
+    }
   };
 
   const cancelarEdicao = () => {
@@ -382,7 +410,7 @@ export default function Entradas() {
   const salvarEntrada = async () => {
     if (!fornecedorBusca || !documento) return alert("Fornecedor e Número da NF são obrigatórios.");
     if (!localDestino) return alert("Selecione o Local de Destino.");
-    if (itens.length === 0) return alert("Adicione produtos na entrada.");
+    if (itens.length === 0) return alert("Adicione produtos na entrada para poder salvar.");
     
     if (modalidadeFrete === '1 - FOB' || modalidadeFrete === '2 - Terceiros') {
         if (!transportadoraBusca) return alert("Em fretes FOB/Terceiros, é obrigatório informar a Transportadora.");
@@ -500,19 +528,16 @@ export default function Entradas() {
                 <p className="text-slate-500">{editandoId ? "Faça as correções. Ao salvar, o estoque antigo será desfeito." : "Importe XML ou lance manualmente para alimentar o Almoxarifado."}</p>
               </div>
               
-              {/* BLOCO DOS BOTÕES DO TOPO (COM O BOTÃO LIMPAR) */}
-              {modo === "formulario" && !editandoId ? (
+              {modo === "formulario" ? (
                 <div className="flex items-center gap-3">
-                  <Button variant="outline" onClick={limparFormulario} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm">
-                    <Eraser className="w-4 h-4" /> Limpar Tela
-                  </Button>
-                  <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm">
-                    <FileCode2 className="w-4 h-4" /> Importar XML
-                  </Button>
+                  {!editandoId && (
+                    <Button variant="outline" onClick={limparFormulario} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm"><Eraser className="w-4 h-4" /> Limpar Tela</Button>
+                  )}
+                  <Button onClick={acionarUploadXML} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><FileCode2 className="w-4 h-4" /> Importar XML</Button>
                 </div>
-              ) : modo !== "formulario" ? (
+              ) : (
                 <Button variant="outline" onClick={() => setModo("formulario")} className="gap-2"><ArrowLeft className="w-4 h-4"/> Voltar à Nota</Button>
-              ) : null}
+              )}
 
             </div>
 
@@ -653,7 +678,7 @@ export default function Entradas() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {itens.length === 0 ? (
-                          <tr><td colSpan={9} className="p-8 text-center text-slate-400">Importe um arquivo XML para iniciar.</td></tr>
+                          <tr><td colSpan={9} className="p-8 text-center text-slate-400">Nenhum item na nota. Importe um XML ou insira manualmente.</td></tr>
                         ) : (
                           itens.map((item, index) => (
                             <tr key={index} className={item.precisaMapeamento ? 'bg-amber-50/50 text-sm' : 'hover:bg-slate-50 text-sm'}>
@@ -684,7 +709,8 @@ export default function Entradas() {
                   </div>
                 </div>
 
-                {itens.length > 0 && (
+                {/* ESSA BARRA AGORA SEMPRE APARECE SE VOCÊ ESTIVER EDITANDO, MESMO SE OS ITENS ESTIVEREM VAZIOS! */}
+                {(itens.length > 0 || editandoId) && (
                   <div className="flex justify-between items-center bg-stone-800 p-4 rounded-xl text-white shadow-lg flex-wrap gap-4">
                     <div className="flex gap-6 md:gap-8 flex-wrap">
                       <div><p className="text-stone-400 text-xs uppercase tracking-wider">Itens</p><p className="text-lg font-semibold">R$ {itens.reduce((acc, i) => acc + (i.qtdEmbalagem * i.custoEmbalagem), 0).toFixed(2).replace('.', ',')}</p></div>
@@ -696,7 +722,7 @@ export default function Entradas() {
                         {editandoId && (
                             <Button variant="outline" onClick={cancelarEdicao} className="h-12 px-4 bg-stone-700 border-stone-600 text-white hover:bg-stone-600 hover:text-white">Cancelar Edição</Button>
                         )}
-                        <Button onClick={salvarEntrada} disabled={salvando} className={`${editandoId ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white gap-2 h-12 px-6 flex-1`}>
+                        <Button onClick={salvarEntrada} disabled={salvando || itens.length === 0} className={`${editandoId ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white gap-2 h-12 px-6 flex-1`}>
                             {salvando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} 
                             {editandoId ? "Atualizar Recebimento" : "Finalizar Recebimento"}
                         </Button>
@@ -706,6 +732,7 @@ export default function Entradas() {
               </div>
             )}
             
+            {/* BIPAGEM */}
             {modo === "bipagem" && indexBipagem !== null && itens[indexBipagem] && (
                <div className="bg-white rounded-xl border shadow-sm p-8 text-center animate-in fade-in zoom-in-95 duration-200">
                 <div className="max-w-md mx-auto space-y-6">
@@ -731,6 +758,7 @@ export default function Entradas() {
           </div>
         )}
 
+        {/* ABA HISTÓRICO... */}
         {abaAtiva === "historico" && (
             <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             {modo !== "detalhe_historico" && (
