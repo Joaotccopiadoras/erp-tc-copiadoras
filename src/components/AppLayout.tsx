@@ -10,7 +10,8 @@ import {
   CalendarClock,
   Workflow,
   Factory,
-  ShoppingCart
+  ShoppingCart,
+  Coins
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -34,7 +35,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     {
       titulo: "Financeiro",
       menus: [
-        { nome: "Dashboard Financeiro", url: "/financeiro", icone: Receipt },
+        { nome: "Central Financeira", url: "/financeiro", icone: Coins},
+        { nome: "Dashboard Financeiro", url: "/dashboardfinanceiro", icone: Receipt },
         // { nome: "Upload CSV", url: "/upload-csv", icone: UploadCloud },
       ]
     },

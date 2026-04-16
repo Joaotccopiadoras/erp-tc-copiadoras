@@ -3,16 +3,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client"
 import PortalPage from "./pages/PortalPage";
-import Financeiro from "./pages/Financeiro";
+
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes"
 import Agenda from "./pages/Agenda"
-import Tecnica from "./pages/Tecnica"
 import Processos from "./pages/Processos"
+import Financeiro from "./pages/Financeiro"
+import DashboardFinanceiro from "./pages/DashboardFinanceiro";
 import Logistica from "./pages/Logistica"
 import EntradasProdutos from "./pages/EntradasProdutos"
 import Fornecedores from "./pages/Fornecedores";
 import Compras from "./pages/Compras"
+import Tecnica from "./pages/Tecnica"
 
 const queryClient = new QueryClient();
 export default function App() {
@@ -76,6 +78,8 @@ export default function App() {
           <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
           <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
+
+          <Route path="/dashboardfinanceiro" element={<RotaProtegida><DashboardFinanceiro /></RotaProtegida>} />
 
           <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
           <Route path="/fornecedores" element={<RotaProtegida><Fornecedores /></RotaProtegida>} />
