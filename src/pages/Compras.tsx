@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShoppingCart, TrendingDown, FileText, Printer, Check, Plus, Search, Trash2, CheckCircle2, DollarSign, Clock, Truck, ArrowRight, AlertCircle } from "lucide-react";
+import { ArrowLeft, ShoppingCart, TrendingDown, FileText, Printer, Check, Plus, Search, Trash2, CheckCircle2, DollarSign, Clock, Truck, ArrowRight, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type FornecedorCotacao = {

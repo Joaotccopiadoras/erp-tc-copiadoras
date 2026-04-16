@@ -44,7 +44,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { nome: "Catálogo", url: "/logistica", icone: Package },
         { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
         { nome: "Fornecedores", url: "/fornecedores", icone: Factory },
-        { nome; "Compras", url: "/compras", icone: ShoppingCart},
+        { nome: "Compras", url: "/compras", icone: ShoppingCart},
         // { nome: "Saídas / OS", url: "/saidas", icone: Boxes },
       ]
     },
