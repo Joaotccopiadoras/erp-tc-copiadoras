@@ -13,7 +13,8 @@ import {
   ShoppingCart,
   Coins,
   ShoppingBag,
-  FileText
+  FileText,
+  ScrollText
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -49,6 +50,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
         { nome: "Fornecedores", url: "/fornecedores", icone: Factory },
         { nome: "Compras", url: "/compras", icone: ShoppingCart},
+        { nome: "Requisições", url: "/requisicoes", icone: ScrollText}
       ]
     },
     {

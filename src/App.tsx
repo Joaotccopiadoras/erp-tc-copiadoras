@@ -13,6 +13,7 @@ import Logistica from "./pages/Logistica"
 import EntradasProdutos from "./pages/EntradasProdutos"
 import Fornecedores from "./pages/Fornecedores";
 import Compras from "./pages/Compras"
+import Requisicoes from "./pages/Requisicoes";
 import Comercial from "./pages/Comercial"
 import Tecnica from "./pages/Tecnica"
 import OrdensdeServico from "./pages/OrdensdeServico"
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
           <Route path="/fornecedores" element={<RotaProtegida><Fornecedores /></RotaProtegida>} />
           <Route path="/compras" element={<RotaProtegida><Compras /></RotaProtegida>} />
+          <Route path="/requisicoes" element={<RotaProtegida><Requisicoes /></RotaProtegida>} />
 
           <Route path="/comercial" element={<RotaProtegida><Comercial /></RotaProtegida>} />
 
