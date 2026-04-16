@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShoppingCart, TrendingDown, FileText, Printer, CheckCircle2, Plus, Search, Trash2, DollarSign, Clock, Truck, ArrowRight, AlertCircle, PackagePlus, ListChecks } from "lucide-react";
+import { ArrowLeft, ShoppingCart, TrendingDown, FileText, Printer, CheckCircle2, Plus, Search, Trash2, DollarSign, Clock, Truck, ArrowRight, AlertCircle, PackagePlus, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // Tipagens da nova estrutura Multi-Item
