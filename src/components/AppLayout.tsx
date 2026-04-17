@@ -32,7 +32,7 @@ const MENU_GROUPS = [
     itens: [
       { nome: "Central", url: "/", icone: LayoutGrid },
       { nome: "Agenda (Ummense)", url: "/agenda", icone: Calendar },
-      { nome: "Agenda (Própria)", url: "/agendakanban", icone: Calendar },
+      { nome: "Agenda (Própria)", url: "/kanban", icone: Calendar },
     ]
   },
   {
