@@ -21,7 +21,7 @@ export default function PortalPage() {
     {
       id: 2,
       nome: "Financeiro",
-      descricao: "Acompanhamento de faturamento, centros de custo e saúde financeira para planilha de custos.",
+      descricao: "Gestão de entradas e saídas, demonstrativos e saúde do negócio",
       icone: <DollarSign className="h-10 w-10 text-emerald-600" />,
       link: "/financeiro",
       corBorda: "border-emerald-200 hover:border-emerald-500",
@@ -30,7 +30,7 @@ export default function PortalPage() {
     {
       id: 3,
       nome: "Assistência Técnica",
-      descricao: "Painel de produtividade e controle de atendimentos técnicos.",
+      descricao: "Painel de produtividade, controle de atendimentos técnicos e ordens de serviço.",
       icone: <Wrench className="h-10 w-10 text-blue-600" />,
       link: "/tecnica",
       corBorda: "border-blue-200 hover:border-blue-500",
@@ -77,20 +77,20 @@ export default function PortalPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center py-16 px-4 font-sans">
       
-      {/* Cabeçalho*/}
+      {/* cabecalho*/}
       <div className="text-center mb-16">
         <div className="bg-white p-4 rounded-2xl inline-block shadow-sm mb-6 border border-slate-100">
           <img src="/logo.png" alt="TC Copiadoras" className="h-16 w-auto object-contain" />
         </div>
         <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">
-          ERP TC Copiadoras
+          ERP Tc Copiadoras
         </h1>
         <p className="text-slate-500 text-lg max-w-lg mx-auto">
           Central de Módulos. Selecione abaixo o módulo que deseja acessar.
         </p>
       </div>
 
-      {/* Grid módulos */}
+      {/* grid modul */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full">
         {sistemas.map((sistema) => (
           <Link
@@ -107,7 +107,7 @@ export default function PortalPage() {
         ))}
       </div>
 
-      {/* Rodapé */}
+      {/* rodap */}
       <div className="mt-auto pt-16 text-sm text-slate-400 font-medium">
         &copy; {new Date().getFullYear()} TC Copiadoras. ERP Interno - v1.0
       </div>

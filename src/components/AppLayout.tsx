@@ -31,7 +31,8 @@ const MENU_GROUPS = [
     titulo: "GERAL",
     itens: [
       { nome: "Central", url: "/", icone: LayoutGrid },
-      { nome: "Agenda", url: "/agenda", icone: Calendar },
+      { nome: "Agenda (Ummense)", url: "/agenda", icone: Calendar },
+      { nome: "Agenda (Própria)", url: "/agendakanban", icone: Calendar },
     ]
   },
   {
@@ -179,19 +180,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* ÁREA CENTRAL DO CONTEÚDO */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        
-        {/* BARRA SUPERIOR (HEADER) */}
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-end px-8 shadow-sm flex-shrink-0 z-0">
-          <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors">
-            <div className="text-right hidden md:block">
-              <p className="text-sm font-bold text-slate-800 leading-tight">Admin TC</p>
-              <p className="text-xs text-slate-500 font-medium">Diretoria</p>
-            </div>
-            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200">
-              AD
-            </div>
-          </div>
-        </header>
 
         {/* CONTEÚDO DA PÁGINA ESPECÍFICA */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">

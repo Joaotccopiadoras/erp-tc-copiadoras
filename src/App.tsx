@@ -6,6 +6,7 @@ import PortalPage from "./pages/PortalPage";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
 import Agenda from "./pages/Agenda";
+import AgendaKanban from "./pages/AgendaKanban";
 import Processos from "./pages/Processos";
 import DepartamentoPessoal from "./pages/DepartamentoPessoal";
 import Financeiro from "./pages/Financeiro";
@@ -81,6 +82,8 @@ export default function App() {
           <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
           <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
+
+          <Route path="/kanban" element={<RotaProtegida><AgendaKanban /></RotaProtegida>} />
 
           <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
           <Route path="/deppessoal" element={<RotaProtegida><DepartamentoPessoal /></RotaProtegida>} />
