@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle } from "lucide-react";
+import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOP = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
@@ -31,6 +31,13 @@ export default function Grafica() {
   const [statusOP, setStatusOP] = useState("");
   const [buscaInsumo, setBuscaInsumo] = useState("");
   const [insumos, setInsumos] = useState<InsumoOP[]>([]);
+
+  // NOVOS ESTADOS: EDIÇÃO E ANEXOS
+  const [editandoObs, setEditandoObs] = useState(false);
+  const [obsTemp, setObsTemp] = useState("");
+  const [anexos, setAnexos] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchDadosBase();
@@ -79,16 +86,74 @@ export default function Grafica() {
   const abrirPrancheta = async (op: any) => {
     setOpSelecionada(op);
     setStatusOP(op.status);
+    setObsTemp(op.observacoes || "");
+    setEditandoObs(false);
 
-    const { data } = await supabase.from('prd_op_insumos').select('*').eq('op_id', op.id);
-    if (data) {
-        setInsumos(data.map(i => ({
+    const [insumosRes, anexosRes] = await Promise.all([
+        supabase.from('prd_op_insumos').select('*').eq('op_id', op.id),
+        supabase.from('prd_op_anexos').select('*').eq('op_id', op.id).order('data_upload', { ascending: false })
+    ]);
+
+    if (insumosRes.data) {
+        setInsumos(insumosRes.data.map(i => ({
             id: i.id, produtoId: i.produto_id, nome: i.produto_nome, 
             quantidade: i.quantidade, custoUn: i.custo_unitario, estoqueAtual: 999 
         })));
     }
+    
+    if (anexosRes.data) setAnexos(anexosRes.data);
   };
 
+  // --- EDIÇÃO DE OBSERVAÇÕES ---
+  const salvarObservacoes = async () => {
+      try {
+          await supabase.from('prd_ordens_producao').update({ observacoes: obsTemp }).eq('id', opSelecionada.id);
+          setOpSelecionada({...opSelecionada, observacoes: obsTemp});
+          setEditandoObs(false);
+          fetchOrdens(); // Atualiza a lista por trás
+      } catch(e: any) { alert("Erro ao salvar observações: " + e.message); }
+  };
+
+  // --- GESTÃO DE ANEXOS (UPLOAD) ---
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      setUploading(true);
+      try {
+          // 1. Gera nome único para não dar conflito
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${opSelecionada.numero_op}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          
+          // 2. Faz o Upload pro Supabase Storage
+          const { error: uploadError } = await supabase.storage.from('grafica_arquivos').upload(fileName, file);
+          if (uploadError) throw uploadError;
+
+          // 3. Pega o Link Público
+          const { data: { publicUrl } } = supabase.storage.from('grafica_arquivos').getPublicUrl(fileName);
+
+          // 4. Salva no Banco de Dados
+          const payload = { op_id: opSelecionada.id, nome_arquivo: file.name, url_arquivo: publicUrl, tamanho_bytes: file.size };
+          const { data: novoAnexo, error: dbError } = await supabase.from('prd_op_anexos').insert([payload]).select().single();
+          if (dbError) throw dbError;
+
+          setAnexos([novoAnexo, ...anexos]);
+          alert("Arquivo anexado com sucesso!");
+      } catch(e: any) {
+          alert("Erro no upload. Verifique se criou o Storage Bucket 'grafica_arquivos' como público. Erro: " + e.message);
+      } finally {
+          setUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+  };
+
+  const deletarAnexo = async (id: string) => {
+      if(!confirm("Tem certeza que deseja remover este arquivo da OP?")) return;
+      await supabase.from('prd_op_anexos').delete().eq('id', id);
+      setAnexos(anexos.filter(a => a.id !== id));
+  };
+
+  // --- INSUMOS E CONCLUSÃO ---
   const adicionarInsumo = () => {
     if (!buscaInsumo) return;
     const prod = produtosBD.find(p => p.nome === buscaInsumo || `${p.sku || 'S/N'} - ${p.nome}` === buscaInsumo);
@@ -106,7 +171,6 @@ export default function Grafica() {
 
       await supabase.from('prd_ordens_producao').update({ status: novoStatus, custo_total_insumos: custoTotalInsumos }).eq('id', opSelecionada.id);
 
-      // Limpa e recria insumos
       await supabase.from('prd_op_insumos').delete().eq('op_id', opSelecionada.id);
       if (insumos.length > 0) {
         const payloadInsumos = insumos.map(i => ({ op_id: opSelecionada.id, produto_id: i.produtoId, produto_nome: i.nome, quantidade: i.quantidade, custo_unitario: i.custoUn, custo_total: i.quantidade * i.custoUn }));
@@ -118,16 +182,13 @@ export default function Grafica() {
     } catch (e: any) { alert(e.message); } finally { setSalvandoOP(false); }
   };
 
-  // --- BAIXAR ESTOQUE E CONCLUIR ---
   const concluirProducao = async () => {
     if (!confirm("Atenção: Ao concluir a OP, toda a matéria-prima listada será IMEDIATAMENTE BAIXADA do estoque. Deseja confirmar a produção?")) return;
     
     setSalvandoOP(true);
     try {
-      // 1. Salva os insumos finais
       await salvarAndamento('Pronto para Entrega');
 
-      // 2. Dá baixa no Estoque
       for (const insumo of insumos) {
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', insumo.produtoId).single();
         if (prodData) {
@@ -198,7 +259,7 @@ export default function Grafica() {
                   <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
               </div>
               <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">Observações (Acabamento, Gramatura, Sangria)</label>
+                  <label className="text-sm font-bold text-slate-700">Ficha Técnica e Acabamento</label>
                   <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Ex: Refilar com 2mm de sangria, encadernação wire-o preto..."></textarea>
               </div>
             </div>
@@ -249,7 +310,7 @@ export default function Grafica() {
                               <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>{op.status}</span>
                           </td>
                           <td className="p-4 text-center">
-                              <Button variant="outline" size="sm" className="text-purple-600 border-purple-200 group-hover:bg-purple-50 h-8 text-xs">Apontar</Button>
+                              <Button variant="outline" size="sm" className="text-purple-600 border-purple-200 group-hover:bg-purple-50 h-8 text-xs">Abrir</Button>
                           </td>
                         </tr>
                       )
@@ -262,7 +323,7 @@ export default function Grafica() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: PRANCHETA DO IMPRESSOR (CONSUMO DE MATÉRIA-PRIMA E CONCLUSÃO) */}
+        {/* ABA: PRANCHETA DO IMPRESSOR */}
         {/* ========================================================================= */}
         {abaAtiva === "painel" && opSelecionada && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
@@ -292,19 +353,60 @@ export default function Grafica() {
                 )}
             </div>
 
-            {/* INFORMAÇÕES TÉCNICAS E MATÉRIA-PRIMA */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {/* LADO ESQUERDO: INFOS */}
+                {/* LADO ESQUERDO: INFOS, EDIÇÃO DE FICHA E ANEXOS */}
                 <div className="space-y-6">
                     <div className="bg-amber-50 p-5 rounded-xl border border-amber-100">
                         <h4 className="text-sm font-bold text-amber-800 uppercase flex items-center gap-2 mb-2"><Clock className="w-4 h-4"/> Prazo de Entrega</h4>
                         <p className="text-xl font-black text-amber-900">{new Date(opSelecionada.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                     </div>
 
-                    <div className="bg-slate-50 p-5 rounded-xl border shadow-sm h-full border-slate-200">
-                        <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2 mb-3"><Scissors className="w-4 h-4 text-purple-500"/> Ficha Técnica / Observações</h4>
-                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{opSelecionada.observacoes || "Nenhuma observação cadastrada."}</p>
+                    {/* Ficha Técnica (Editável) */}
+                    <div className="bg-slate-50 p-5 rounded-xl border shadow-sm border-slate-200">
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Scissors className="w-4 h-4 text-purple-500"/> Ficha Técnica</h4>
+                            {!editandoObs ? (
+                                <Button variant="ghost" size="sm" onClick={() => { setObsTemp(opSelecionada.observacoes || ""); setEditandoObs(true); }} className="h-7 text-xs text-indigo-600 hover:bg-indigo-50 gap-1 px-2 border border-transparent"><Edit2 className="w-3 h-3"/> Editar</Button>
+                            ) : (
+                                <Button variant="default" size="sm" onClick={salvarObservacoes} className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 gap-1 px-3"><Save className="w-3 h-3"/> Salvar</Button>
+                            )}
+                        </div>
+                        {!editandoObs ? (
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{opSelecionada.observacoes || "Nenhuma observação cadastrada."}</p>
+                        ) : (
+                            <textarea value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="w-full min-h-[120px] p-3 text-sm rounded-md border border-slate-300 focus:ring-purple-500 outline-none" placeholder="Digite as especificações de sangria, acabamento, etc..."></textarea>
+                        )}
+                    </div>
+
+                    {/* Anexos (Upload de Arquivos) */}
+                    <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OP</h4>
+                            
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                            <Button variant="outline" size="sm" disabled={uploading || opSelecionada.status === 'Pronto para Entrega' || opSelecionada.status === 'Entregue'} onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
+                                {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar Arte
+                            </Button>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                            {anexos.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado a esta OP.</p>
+                            ) : (
+                                anexos.map(anexo => (
+                                    <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
+                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded" title="Baixar / Visualizar"><Download className="w-3.5 h-3.5"/></a>
+                                            {(opSelecionada.status !== 'Pronto para Entrega' && opSelecionada.status !== 'Entregue') && (
+                                                <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded" title="Excluir Arquivo"><Trash2 className="w-3.5 h-3.5"/></button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
 
