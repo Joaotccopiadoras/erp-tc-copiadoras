@@ -25,6 +25,7 @@ import Requisicoes from "./pages/Requisicoes";
 import Comercial from "./pages/Comercial";
 
 import Tecnica from "./pages/Tecnica";
+import GestaoEquipamentos from "./pages/GestaoEquipamentos";
 import OrdensdeServico from "./pages/OrdensdeServico";
 
 import Grafica from "./pages/Grafica";
@@ -106,6 +107,7 @@ export default function App() {
 
           <Route path="/comercial" element={<RotaProtegida><Comercial /></RotaProtegida>} />
 
+          <Route path="/equipamentos" element={<RotaProtegida><GestaoEquipamentos /></RotaProtegida>} />
           <Route path="/os" element={<RotaProtegida><OrdensdeServico /></RotaProtegida>} />
 
           <Route path="/grafica" element={<RotaProtegida><Grafica /></RotaProtegida>} />

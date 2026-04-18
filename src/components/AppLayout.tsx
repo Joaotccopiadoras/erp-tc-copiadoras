@@ -17,6 +17,7 @@ import {
   Network,
   Package, 
   PackageOpen,
+  Printer,
   Receipt,
   ScrollText,
   ShoppingBag,
@@ -70,6 +71,7 @@ const MENU_GROUPS = [
     titulo: "ASSISTÊNCIA TÉCNICA",
     itens: [
       { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
+      { nome: "Gestão de Equipamentos", url: "/equipamentos", icone: Printer },
       { nome: "Ordens de Serviço", url: "/os", icone: FileText}
     ]
   },
