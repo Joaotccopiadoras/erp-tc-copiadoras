@@ -76,7 +76,7 @@ export default function Requisicoes() {
       const { error } = await supabase.from('log_requisicoes').insert([payload]);
       if (error) throw error;
 
-      alert("Requisição enviada com sucesso! O Almoxarifado/Compras será notificado.");
+      alert("Requisição enviada com sucesso! O Estoquista será notificado.");
       setProdutoBusca(""); setQuantidade(1); setMotivo(""); setPrioridade("Normal");
       fetchRequisicoes();
       setAbaAtiva("painel");
@@ -159,7 +159,7 @@ export default function Requisicoes() {
             <p className="text-slate-500">Solicitação de materiais, ferramentas e insumos para os setores.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button onClick={() => setAbaAtiva("painel")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}><Package className="w-4 h-4"/> Painel do Almoxarifado</button>
+            <button onClick={() => setAbaAtiva("painel")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}><Package className="w-4 h-4"/> Painel do Estoquista</button>
             <button onClick={() => setAbaAtiva("nova")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "nova" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600 hover:text-slate-900"}`}><Plus className="w-4 h-4"/> Nova Solicitação</button>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function Requisicoes() {
             <div className="text-center border-b pb-6">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mb-3"><ClipboardList className="w-6 h-6"/></div>
                 <h2 className="text-xl font-bold text-slate-800">Formulário de Requisição de Material</h2>
-                <p className="text-slate-500 text-sm mt-1">Preencha os dados abaixo para solicitar itens ao Almoxarifado ou Compras.</p>
+                <p className="text-slate-500 text-sm mt-1">Preencha os dados abaixo para solicitar itens ao Estoquista ou Comprador.</p>
             </div>
             
             <div className="space-y-5">
@@ -233,7 +233,7 @@ export default function Requisicoes() {
 
             <div className="pt-4 border-t">
                 <Button onClick={enviarRequisicao} disabled={salvando} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-md gap-2">
-                    {salvando ? "Enviando..." : <><ArrowRight className="w-5 h-5"/> Enviar Requisição ao Almoxarifado</>}
+                    {salvando ? "Enviando..." : <><ArrowRight className="w-5 h-5"/> Enviar Requisição ao Setor de Estoque/Compras</>}
                 </Button>
             </div>
           </div>
@@ -257,7 +257,7 @@ export default function Requisicoes() {
                     <th className="p-4 font-semibold border-b">Material Solicitado</th>
                     <th className="p-4 font-semibold border-b text-center">Prioridade</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
-                    <th className="p-4 font-semibold border-b text-center w-64">Decisão do Almoxarifado</th>
+                    <th className="p-4 font-semibold border-b text-center w-64">Decisão do Estoquista</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">

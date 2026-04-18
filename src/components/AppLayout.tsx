@@ -22,6 +22,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   UploadCloud,
+  Users,
   Workflow
 } from "lucide-react";
 
@@ -32,6 +33,8 @@ const MENU_GROUPS = [
       { nome: "Central", url: "/", icone: LayoutGrid },
       { nome: "Agenda (Ummense)", url: "/agenda", icone: Calendar },
       { nome: "Agenda (Própria)", url: "/kanban", icone: Calendar },
+      { nome: "Fornecedores (SRM)", url: "/fornecedores", icone: Factory },
+      { nome: "Clientes (CRM)", url: "/crm", icone: Users },
     ]
   },
   {
@@ -53,7 +56,6 @@ const MENU_GROUPS = [
     itens: [
       { nome: "Catálogo", url: "/logistica", icone: Package },
       { nome: "Recebimento (NF-e)", url: "/entradasprodutos", icone: PackageOpen },
-      { nome: "Fornecedores", url: "/fornecedores", icone: Factory },
       { nome: "Compras", url: "/compras", icone: ShoppingCart},
       { nome: "Requisições", url: "/requisicoes", icone: ScrollText}
     ]
