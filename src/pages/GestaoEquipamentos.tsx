@@ -61,7 +61,7 @@ export default function GestaoEquipamentos() {
   useEffect (() => {
     if (equipSelecionado || abaDossie || historicoMov) {
         const draft = {
-            equipSelecionado, abaDossie, historicoMov, historicoOS, historicoPecas. leituras
+            equipSelecionado, abaDossie, historicoMov, historicoOS, historicoPecas, leituras
         };
         sessionStorage.setItem("equipamentos_rascunho", JSON.stringify(draft))
     }
