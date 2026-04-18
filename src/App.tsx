@@ -5,20 +5,28 @@ import { supabase } from "./integrations/supabase/client"
 import PortalPage from "./pages/PortalPage";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
+
 import Agenda from "./pages/Agenda";
 import AgendaKanban from "./pages/AgendaKanban";
+import Fornecedores from "./pages/Fornecedores";
+import Crm from "./pages/Crm";
+
 import Processos from "./pages/Processos";
 import DepartamentoPessoal from "./pages/DepartamentoPessoal";
+
 import Financeiro from "./pages/Financeiro";
 import DashboardFinanceiro from "./pages/DashboardFinanceiro";
+
 import Logistica from "./pages/Logistica";
 import EntradasProdutos from "./pages/EntradasProdutos"
-import Fornecedores from "./pages/Fornecedores";
 import Compras from "./pages/Compras";
 import Requisicoes from "./pages/Requisicoes";
+
 import Comercial from "./pages/Comercial";
+
 import Tecnica from "./pages/Tecnica";
 import OrdensdeServico from "./pages/OrdensdeServico";
+
 import Grafica from "./pages/Grafica";
 
 const queryClient = new QueryClient();
@@ -78,12 +86,14 @@ export default function App() {
           <Route path="/configuracoes" element={<RotaProtegida><Configuracoes /></RotaProtegida>} />
 
           {/* As Rotas dos Módulos*/}
-          <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
           <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
-          <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
+          <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
+          <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
 
           <Route path="/kanban" element={<RotaProtegida><AgendaKanban /></RotaProtegida>} />
+          <Route path="/fornecedores" element={<RotaProtegida><Fornecedores /></RotaProtegida>} />
+          <Route path="/crm" element={<RotaProtegida><Crm /></RotaProtegida>} />
 
           <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
           <Route path="/deppessoal" element={<RotaProtegida><DepartamentoPessoal /></RotaProtegida>} />
@@ -91,7 +101,6 @@ export default function App() {
           <Route path="/dashboardfinanceiro" element={<RotaProtegida><DashboardFinanceiro /></RotaProtegida>} />
 
           <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
-          <Route path="/fornecedores" element={<RotaProtegida><Fornecedores /></RotaProtegida>} />
           <Route path="/compras" element={<RotaProtegida><Compras /></RotaProtegida>} />
           <Route path="/requisicoes" element={<RotaProtegida><Requisicoes /></RotaProtegida>} />
 
