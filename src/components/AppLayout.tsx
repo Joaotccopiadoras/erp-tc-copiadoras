@@ -1,7 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import React, { useState, useEffect } from "react";
 import { 
+  ArrowLeft,
   Boxes,
+  Briefcase,
   Calendar,
   CalendarClock,
   ChevronDown,
@@ -9,12 +11,15 @@ import {
   Coins,
   Copy,
   Factory,
+  FileSignature,
   FileText,
   Fingerprint,
   HandCoins,
+  Layers,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  Menu,
   Network,
   Package, 
   PackageOpen,
@@ -74,13 +79,13 @@ const MENU_GROUPS = [
     itens: [
       { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
       { nome: "Gestão de Equipamentos", url: "/equipamentos", icone: Printer },
-      { nome: "Ordens de Serviço", url: "/os", icone: FileText}
+      { nome: "Ordens de Serviço Técnico", url: "/os", icone: FileText}
     ]
   },
   {
     titulo: "TC SERVIÇOS",
     itens: [
-      { nome: "PCP", url: "/grafica", icone: Copy },
+      { nome: "Ordens de Serviço Gráfico", url: "/grafica", icone: Copy },
     ]
   }
 ];
@@ -88,6 +93,7 @@ const MENU_GROUPS = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [menusExpandidos, setMenusExpandidos] = useState<string[]>([""])
   const [caminhoAtual, setCaminhoAtual] = useState("");
+  const [sidebarAberta, setSidebarAberta] = useState(true);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -107,14 +113,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
       
       {/* BARRA LATERAL (SIDEBAR) */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0">
-        
+      <aside 
+        className={`bg-white border-r border-slate-200 flex flex-col shadow-sm z-20 flex-shrink-0 transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden
+        ${sidebarAberta ? "w-64" : "w-0 border-none opacity-0"}`}
+      >
+
         {/* LOGOTIPO */}
         <div className="h-20 flex items-center px-6 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center text-white font-bold text-lg tracking-tighter">
-              TC
-            </div>
+            {/* Aqui a logo em imagem substitui a bolinha antiga */}
+            <img src="/logo.png" alt="Logo TC" className="w-10 h-10 object-contain rounded-md" 
+                 onError={(e) => { e.currentTarget.style.display = 'none'; }} /> 
             <div>
               <h1 className="font-black text-slate-800 leading-tight tracking-tight">TC COPIADORAS</h1>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sistema ERP</p>
@@ -174,17 +183,48 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* RODAPÉ DA SIDEBAR (Sair) */}
         <div className="p-4 border-t border-slate-100 flex-shrink-0">
-          <a href="/login" className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors">
-            <LogOut className="w-4 h-4" />
-            Sair do Sistema
+          <a href="/" className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            Voltar ao Início
           </a>
         </div>
       </aside>
 
       {/* ÁREA CENTRAL DO CONTEÚDO */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+      {/* BARRA SUPERIOR (HEADER) */}
+      <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm flex-shrink-0 z-10 transition-all">
+
+      {/* BOTÃO DE OCULTAR/EXPANDIR A SIDEBAR */}
+        <div className="flex items-center gap-4">
+          <button 
+              onClick={() => setSidebarAberta(!sidebarAberta)} 
+              className="p-2 rounded-md hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              title="Alternar Menu Lateral"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+
+        {/* Logo compacta quando a sidebar está fechada */}
+          {!sidebarAberta && (
+              <div className="flex items-center gap-2 animate-in fade-in duration-300">
+                    <img src="/logo.png" alt="Logo TC" className="w-8 h-8 object-contain rounded" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> 
+                    <span className="font-black text-slate-800 tracking-tight hidden sm:block">TC COPIADORAS</span>
+              </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors">
+            <div className="text-right hidden md:block">
+              <p className="text-sm font-bold text-slate-800 leading-tight">Admin TC</p>
+              <p className="text-xs text-slate-500 font-medium">Diretoria</p>
+            </div>
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm">
+              AD
+            </div>
+          </div>
+        </header>
 
         {/* CONTEÚDO DA PÁGINA ESPECÍFICA */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
