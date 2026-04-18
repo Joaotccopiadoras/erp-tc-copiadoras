@@ -512,6 +512,7 @@ const formatarData = (dataStr: string) => {
           </div>
         )}
       </div>
+    </div>
     </AppLayout>
   );
 }
