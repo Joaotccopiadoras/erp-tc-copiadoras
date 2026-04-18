@@ -25,7 +25,6 @@ import {
   Workflow
 } from "lucide-react";
 
-// Aqui está a correção: padronizamos todas as listas filhas para se chamarem "itens"
 const MENU_GROUPS = [
   {
     titulo: "GERAL",
@@ -81,7 +80,7 @@ const MENU_GROUPS = [
 ];
   
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [menusExpandidos, setMenusExpandidos] = useState<string[]>(["GERAL"])
+  const [menusExpandidos, setMenusExpandidos] = useState<string[]>([""])
   const [caminhoAtual, setCaminhoAtual] = useState("");
 
   useEffect(() => {
@@ -94,7 +93,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setMenusExpandidos(prev =>
       prev.includes(titulo)
         ? prev.filter(m => m !== titulo)
-        : [...prev, titulo] // AQUI TINHA UM ERRO DE DIGITAÇÃO (ponto no lugar da vírgula), corrigido!
+        : [...prev, titulo]
     )
   }
 
