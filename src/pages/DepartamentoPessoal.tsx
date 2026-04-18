@@ -280,7 +280,7 @@ export default function DepartamentoPessoal() {
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Setor <span className="text-red-500">*</span></label>
                     <Select value={setor} onValueChange={setSetor}>
                         <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
-                        <SelectContent><SelectItem value="Administrativo / Frota">Administrativo</SelectItem><SelectItem value="Técnico / Assistência">Técnico</SelectItem><SelectItem value="Comercial / Vendas">Comercial</SelectItem><SelectItem value="Gráfica / Produção">Gráfica</SelectItem><SelectItem value="Almoxarifado">Almoxarifado</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="Administrativo">Administrativo</SelectItem><SelectItem value="Técnico / Assistência">Técnico</SelectItem><SelectItem value="Comercial / Vendas">Comercial</SelectItem><SelectItem value="Gráfica / Produção">Gráfica</SelectItem><SelectItem value="Compras/Estoque">Compras</SelectItem></SelectContent>
                     </Select>
                   </div>
                 </div>
