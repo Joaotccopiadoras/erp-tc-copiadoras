@@ -95,10 +95,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [caminhoAtual, setCaminhoAtual] = useState("");
   const [sidebarAberta, setSidebarAberta] = useState(true);
 
+  const [userName, setUserName] = useState("Carregando...");
+  const [userEmail, setUserEmail] = useState("");
+  const [userInitials, setUserInitials] = useState("--");
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setCaminhoAtual (window.location.pathname);
     }
+
+  const loadUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Tenta pegar o nome dos metadados (que configuraremos na página de Perfil no futuro)
+        // Se não tiver, pega a parte do e-mail antes do @
+        const nomeCompleto = user.user_metadata?.nome || user.user_metadata?.full_name || user.email?.split('@')[0] || "Usuário";
+        
+        setUserName(nomeCompleto);
+        setUserEmail(user.email || "");
+
+        // LÓGICA PARA GERAR AS INICIAIS (Ex: "João Gaia" -> "JG")
+        const partesNome = nomeCompleto.trim().split(" ");
+        if (partesNome.length >= 2) {
+          setUserInitials((partesNome[0][0] + partesNome[partesNome.length - 1][0]).toUpperCase());
+        } else {
+          setUserInitials(nomeCompleto.substring(0, 2).toUpperCase());
+        }
+      }
+    };
+
+    loadUser();
   }, []);
 
   const toggleMenu = (titulo: string) => {
@@ -112,16 +138,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
       
-      {/* BARRA LATERAL (SIDEBAR) */}
+      {/* BARRA LATERAL (SIDEBAR) COM ANIMAÇÃO DE ENTRADA/SAÍDA */}
       <aside 
         className={`bg-white border-r border-slate-200 flex flex-col shadow-sm z-20 flex-shrink-0 transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden
         ${sidebarAberta ? "w-64" : "w-0 border-none opacity-0"}`}
       >
-
+        
         {/* LOGOTIPO */}
         <div className="h-20 flex items-center px-6 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            {/* Aqui a logo em imagem substitui a bolinha antiga */}
             <img src="/logo.png" alt="Logo TC" className="w-10 h-10 object-contain rounded-md" 
                  onError={(e) => { e.currentTarget.style.display = 'none'; }} /> 
             <div>
@@ -138,7 +163,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
             return (
               <div key={grupo.titulo} className="mb-2">
-                {/* TÍTULO DO MÓDULO (BOTÃO ACORDEÃO) */}
                 <button 
                   onClick={() => toggleMenu(grupo.titulo)}
                   className="w-full flex items-center justify-between px-6 py-2 text-left group transition-colors hover:bg-slate-50"
@@ -153,11 +177,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </button>
 
-                {/* LISTA DE PÁGINAS (EXPANDE/CONTRAI) */}
                 {isExpandido && (
                   <div className="mt-1 mb-3 px-3 space-y-1 animate-in slide-in-from-top-2 fade-in duration-200">
                     {grupo.itens.map((item) => {
-                      // Note que mudei item.href para item.url para casar com a sua lista
                       const isActive = caminhoAtual === item.url;
                       const Icone = item.icone;
 
@@ -167,11 +189,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                           href={item.url}
                           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
                             isActive 
-                              ? "bg-emerald-50 text-emerald-700" 
+                              ? "bg-indigo-50 text-indigo-700" 
                               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                           }`}
                         >
-                          <Icone className={`w-4 h-4 ${isActive ? "text-emerald-600" : "text-slate-400"}`} />
+                          <Icone className={`w-4 h-4 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
                           {item.nome}
                         </a>
                       );
@@ -183,6 +205,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {/* RODAPÉ (Voltar ao Início) */}
         <div className="p-4 border-t border-slate-100 flex-shrink-0">
           <a href="/" className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -192,38 +215,41 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ÁREA CENTRAL DO CONTEÚDO */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50/50">
+        
+        {/* BARRA SUPERIOR (HEADER) DINÂMICA */}
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm flex-shrink-0 z-10 transition-all">
+          
+          <div className="flex items-center gap-4">
+            <button 
+                onClick={() => setSidebarAberta(!sidebarAberta)} 
+                className="p-2 rounded-md hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                title="Alternar Menu Lateral"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            
+            {!sidebarAberta && (
+                <div className="flex items-center gap-2 animate-in fade-in duration-300">
+                     <img src="/logo.png" alt="Logo TC" className="w-8 h-8 object-contain rounded" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> 
+                     <span className="font-black text-slate-800 tracking-tight hidden sm:block">TC COPIADORAS</span>
+                </div>
+            )}
+          </div>
 
-      {/* BARRA SUPERIOR (HEADER) */}
-      <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm flex-shrink-0 z-10 transition-all">
-
-      {/* BOTÃO DE OCULTAR/EXPANDIR A SIDEBAR */}
-        <div className="flex items-center gap-4">
-          <button 
-              onClick={() => setSidebarAberta(!sidebarAberta)} 
-              className="p-2 rounded-md hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              title="Alternar Menu Lateral"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-
-        {/* Logo compacta quando a sidebar está fechada */}
-          {!sidebarAberta && (
-              <div className="flex items-center gap-2 animate-in fade-in duration-300">
-                    <img src="/logo.png" alt="Logo TC" className="w-8 h-8 object-contain rounded" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> 
-                    <span className="font-black text-slate-800 tracking-tight hidden sm:block">TC COPIADORAS</span>
-              </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors">
+          {/* ÁREA DO USUÁRIO LOGADO */}
+          <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors">
             <div className="text-right hidden md:block">
-              <p className="text-sm font-bold text-slate-800 leading-tight">Admin TC</p>
-              <p className="text-xs text-slate-500 font-medium">Diretoria</p>
+              {/* Exibe o Nome e o E-mail extraídos do Banco */}
+              <p className="text-sm font-bold text-slate-800 leading-tight capitalize">{userName}</p>
+              <p className="text-xs text-slate-500 font-medium">{userEmail}</p>
             </div>
-            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm">
-              AD
+            {/* Avatar com Iniciais dinâmicas */}
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200 shadow-sm uppercase">
+              {userInitials}
             </div>
           </div>
+
         </header>
 
         {/* CONTEÚDO DA PÁGINA ESPECÍFICA */}

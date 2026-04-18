@@ -382,24 +382,6 @@ const formatarData = (dataStr: string) => {
               <p className="text-muted-foreground text-sm mt-1">Acompanhamento e rastreabilidade de atividades</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            {usuarioAtual && (
-              <div className="text-sm text-gray-500 hidden sm:block text-right">
-                Logado como:<br/>
-                <strong className="text-gray-800">{usuarioAtual.email}</strong>
-              </div>
-            )}
-            
-            {/* BOTÃO DE SAIR */}
-            <Button
-              onClick={handleVoltar}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 hover:text-destructive transition-all font-medium mt-1"
-          >
-            Voltar ao Início
-            </Button>
-          </div>
-        </div>
 
         {/* ÁREA DE FILTROS */}
         <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
