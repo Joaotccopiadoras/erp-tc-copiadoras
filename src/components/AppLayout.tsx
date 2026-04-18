@@ -11,6 +11,7 @@ import {
   Factory,
   FileText,
   Fingerprint,
+  HandCoins,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -65,6 +66,7 @@ const MENU_GROUPS = [
     titulo: "COMERCIAL",
     itens: [
       {nome: "Central Comercial", url: "/comercial", icone: ShoppingBag},
+      {nome: "Contratos", url: "/contratos", icone: HandCoins},
     ]
   },
   {

@@ -23,6 +23,7 @@ import Compras from "./pages/Compras";
 import Requisicoes from "./pages/Requisicoes";
 
 import Comercial from "./pages/Comercial";
+import GestaoContratos from "./pages/GestaoContratos";
 
 import Tecnica from "./pages/Tecnica";
 import GestaoEquipamentos from "./pages/GestaoEquipamentos";
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
           <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
+          <Route path="/comercial" element={<RotaProtegida><Comercial /></RotaProtegida>} />
           <Route path="/tecnica" element={<RotaProtegida><Tecnica /></RotaProtegida>} />
 
           <Route path="/kanban" element={<RotaProtegida><AgendaKanban /></RotaProtegida>} />
@@ -105,7 +107,7 @@ export default function App() {
           <Route path="/compras" element={<RotaProtegida><Compras /></RotaProtegida>} />
           <Route path="/requisicoes" element={<RotaProtegida><Requisicoes /></RotaProtegida>} />
 
-          <Route path="/comercial" element={<RotaProtegida><Comercial /></RotaProtegida>} />
+          <Route path="/contratos" element={<RotaProtegida><GestaoContratos /></RotaProtegida>} />
 
           <Route path="/equipamentos" element={<RotaProtegida><GestaoEquipamentos /></RotaProtegida>} />
           <Route path="/os" element={<RotaProtegida><OrdensdeServico /></RotaProtegida>} />
