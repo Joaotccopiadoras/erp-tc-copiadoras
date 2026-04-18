@@ -67,7 +67,7 @@ export default function Financeiro() {
     sessionStorage.removeItem("financeiro_rascunho");
     setMostrarForm(false);
     setDescricao(""); setValor(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
-    setFornecedorId("nenhum"); setCentroCusto("Geral"); setFormaPagamento("Boleto");
+    setFornecedorId("nenhum"); setCentroCusto(""); setFormaPagamento("");
   };
   // ==========================================
 

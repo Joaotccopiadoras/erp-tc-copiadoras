@@ -43,6 +43,35 @@ export default function GestaoEquipamentos() {
   const [contadoresSelecionados, setContadoresSelecionados] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
+  useEffect (() => {
+    const rascunho = sessionStorage.getItem("equipamentos_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.equipSelecionado !== undefined) setEquipSelecionado(draft.equipSelecionado);
+        if (draft.abaDossie !== undefined) setAbaDossie(draft.abaDossie);
+        if (draft.historicoMov !== undefined) setHistoricoMov(draft.historicoMov);
+        if (draft.historicoOS !== undefined) setHistoricoOS(draft.historicoOS);
+        if (draft.historicoPecas !== undefined) setHistoricoPecas(draft.historicoPecas);
+        if (draft.leituras !== undefined) setLeituras(draft.leituras);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect (() => {
+    if (equipSelecionado || abaDossie || historicoMov) {
+        const draft = {
+            equipSelecionado, abaDossie, historicoMov, historicoOS, historicoPecas. leituras
+        };
+        sessionStorage.setItem("equipamentos_rascunho", JSON.stringify(draft))
+    }
+  }, [equipSelecionado, abaDossie, historicoMov, historicoOS, historicoPecas, leituras]);
+
+  const limparFormulario = () => {
+    sessionStorage.removeItem("equipamentos_rascunho");
+    setEquipSelecionado(""); setAbaDossie(""); setHistoricoMov(""); setHistoricoOS(""); setHistoricoPecas(""); setLeituras("");
+  };
+
   useEffect(() => { fetchDadosBase(); fetchEquipamentos(); }, []);
 
   const fetchDadosBase = async () => {
