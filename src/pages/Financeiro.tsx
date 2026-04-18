@@ -29,6 +29,48 @@ export default function Financeiro() {
   const [formaPagamento, setFormaPagamento] = useState("Boleto");
   const [documentoOrigem, setDocumentoOrigem] = useState("");
 
+  // ==========================================
+  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
+  // ==========================================
+  useEffect(() => {
+    const rascunho = sessionStorage.getItem("financeiro_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.mostrarForm !== undefined) setMostrarForm(draft.mostrarForm);
+        if (draft.descricao) setDescricao(draft.descricao);
+        if (draft.valor) setValor(draft.valor);
+        if (draft.dataEmissao) setDataEmissao(draft.dataEmissao);
+        if (draft.dataVencimento) setDataVencimento(draft.dataVencimento);
+        if (draft.fornecedorId) setFornecedorId(draft.fornecedorId);
+        if (draft.categoriaId) setCategoriaId(draft.categoriaId);
+        if (draft.contaId) setContaId(draft.contaId);
+        if (draft.centroCusto) setCentroCusto(draft.centroCusto);
+        if (draft.formaPagamento) setFormaPagamento(draft.formaPagamento);
+        if (draft.documentoOrigem) setDocumentoOrigem(draft.documentoOrigem);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    // Salva no navegador sempre que um campo for alterado
+    if (mostrarForm || descricao || valor) {
+      const draft = {
+        mostrarForm, descricao, valor, dataEmissao, dataVencimento,
+        fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem
+      };
+      sessionStorage.setItem("financeiro_rascunho", JSON.stringify(draft));
+    }
+  }, [mostrarForm, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem]);
+
+  const limparFormulario = () => {
+    sessionStorage.removeItem("financeiro_rascunho");
+    setMostrarForm(false);
+    setDescricao(""); setValor(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
+    setFornecedorId("nenhum"); setCentroCusto("Geral"); setFormaPagamento("Boleto");
+  };
+  // ==========================================
+
   useEffect(() => {
     fetchDadosBase();
     fetchLancamentos();
@@ -42,7 +84,7 @@ export default function Financeiro() {
     ]);
     if (contas.data) {
         setContasBancarias(contas.data);
-        if (contas.data.length > 0) setContaId(contas.data[0].id);
+        if (contas.data.length > 0 && !contaId) setContaId(contas.data[0].id);
     }
     if (cats.data) setCategorias(cats.data);
     if (forns.data) setFornecedores(forns.data);
@@ -86,8 +128,7 @@ export default function Financeiro() {
       alert("Erro ao salvar: " + error.message);
     } else {
       alert("Lançamento registrado com sucesso!");
-      setMostrarForm(false);
-      setDescricao(""); setValor(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
+      limparFormulario(); // Limpa o formulário e apaga o rascunho
       fetchLancamentos();
     }
   };
@@ -161,10 +202,13 @@ export default function Financeiro() {
               </Button>
             </div>
 
-            {/* FORMULÁRIO DE NOVO LANÇAMENTO MANUAL (Expandido com novos campos) */}
+            {/* FORMULÁRIO DE NOVO LANÇAMENTO MANUAL */}
             {mostrarForm && (
               <div className="p-6 bg-rose-50/30 border-b border-rose-100 space-y-4">
-                <h3 className="font-bold text-rose-800 flex items-center gap-2 mb-4"><DollarSign className="w-5 h-5"/> Registrar Despesa Avulsa</h3>
+                <div className="flex justify-between items-center mb-4">
+                   <h3 className="font-bold text-rose-800 flex items-center gap-2"><DollarSign className="w-5 h-5"/> Registrar Despesa Avulsa</h3>
+                   <span className="text-xs text-rose-500 font-medium italic">Rascunho salvo automaticamente</span>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição <span className="text-red-500">*</span></label><Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Ex: Conta de Luz, Aluguel..." className="bg-white" /></div>
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor (R$) <span className="text-red-500">*</span></label><Input type="number" step="0.01" value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" className="bg-white" /></div>
@@ -207,13 +251,13 @@ export default function Financeiro() {
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setMostrarForm(false)}>Cancelar</Button>
+                  <Button variant="outline" onClick={limparFormulario}>Cancelar</Button>
                   <Button onClick={salvarLancamento} className="bg-rose-600 hover:bg-rose-700 text-white">Salvar Lançamento</Button>
                 </div>
               </div>
             )}
 
-            {/* TABELA DE LANÇAMENTOS (Com os novos campos de Entradas) */}
+            {/* TABELA DE LANÇAMENTOS */}
             <div className="overflow-x-auto min-h-[400px]">
               <table className="w-full text-left border-collapse">
                 <thead>
