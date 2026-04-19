@@ -17,6 +17,7 @@ const COLUNAS = [
 export default function AgendaKanban() {
   const [tarefas, setTarefas] = useState<any[]>([]);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
   // Estados do Formulário
   const [titulo, setTitulo] = useState("");
@@ -26,16 +27,37 @@ export default function AgendaKanban() {
   const [dataPrevisao, setDataPrevisao] = useState("");
 
   useEffect(() => {
-    fetchTarefas();
+    // Quando a tela carrega, descobre quem é o usuário e puxa só as tarefas dele
+    const loadUserAndTasks = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        
+        // Se o responsável estiver em branco, pré-preenche com o nome do usuário logado
+        const nomeCompleto = user.user_metadata?.nome || user.user_metadata?.full_name || user.email?.split('@')[0];
+        if (nomeCompleto) setResponsavel(nomeCompleto);
+
+        fetchTarefas(user.id);
+      }
+    };
+
+    loadUserAndTasks();
   }, []);
 
-  const fetchTarefas = async () => {
-    const { data } = await supabase.from('ger_agenda_tarefas').select('*').order('data_criacao', { ascending: false });
+  // Agora a busca filtra estritamente pelo dono do Card
+  const fetchTarefas = async (userId: string) => {
+    const { data } = await supabase
+      .from('ger_agenda_tarefas')
+      .select('*')
+      .eq('user_id', userId) // <-- O FILTRO MÁGICO AQUI
+      .order('data_criacao', { ascending: false });
+      
     if (data) setTarefas(data);
   };
 
   const salvarTarefa = async () => {
     if (!titulo) return alert("O título da tarefa é obrigatório.");
+    if (!currentUserId) return alert("Erro de autenticação. Atualize a página.");
 
     const novaTarefa = {
       titulo,
@@ -43,15 +65,16 @@ export default function AgendaKanban() {
       prioridade,
       responsavel,
       data_previsao: dataPrevisao || null,
-      status: 'Backlog'
+      status: 'Backlog',
+      user_id: currentUserId // <-- CARIMBA O CARD COM O SEU ID
     };
 
     const { error } = await supabase.from('ger_agenda_tarefas').insert([novaTarefa]);
     
     if (!error) {
       setMostrarForm(false);
-      setTitulo(""); setDescricao(""); setResponsavel(""); setDataPrevisao(""); setPrioridade("Normal");
-      fetchTarefas();
+      setTitulo(""); setDescricao(""); setDataPrevisao(""); setPrioridade("Normal");
+      fetchTarefas(currentUserId);
     } else {
       alert("Erro ao salvar: " + error.message);
     }
@@ -60,7 +83,7 @@ export default function AgendaKanban() {
   const deletarTarefa = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este card?")) return;
     await supabase.from('ger_agenda_tarefas').delete().eq('id', id);
-    fetchTarefas();
+    if (currentUserId) fetchTarefas(currentUserId);
   };
 
   // ==========================================
@@ -68,7 +91,6 @@ export default function AgendaKanban() {
   // ==========================================
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData("taskId", taskId);
-    // Efeito visual enquanto arrasta
     setTimeout(() => {
       const element = document.getElementById(`card-${taskId}`);
       if (element) element.classList.add("opacity-50");
@@ -81,18 +103,17 @@ export default function AgendaKanban() {
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault(); // Necessário para permitir o drop
+    e.preventDefault();
   };
 
   const handleDrop = async (e: React.DragEvent, novoStatus: string) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("taskId");
     
-    // Encontra a tarefa e verifica se o status realmente mudou
     const tarefa = tarefas.find(t => t.id === taskId);
     if (!tarefa || tarefa.status === novoStatus) return;
 
-    // 1. Atualização Otimista (Muda na tela instantaneamente)
+    // Atualização Visual Imediata
     const tarefasAtualizadas = tarefas.map(t => {
       if (t.id === taskId) {
         return { ...t, status: novoStatus, data_conclusao: novoStatus === 'Concluído' ? new Date().toISOString() : null };
@@ -101,7 +122,7 @@ export default function AgendaKanban() {
     });
     setTarefas(tarefasAtualizadas);
 
-    // 2. Atualiza no Banco de Dados em background
+    // Salva no Supabase
     const payload: any = { status: novoStatus };
     if (novoStatus === 'Concluído') payload.data_conclusao = new Date().toISOString();
     
@@ -116,16 +137,16 @@ export default function AgendaKanban() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
-              <LayoutDashboard className="w-6 h-6 text-indigo-600" /> Agenda Kanban (Nativa)
+              <LayoutDashboard className="w-6 h-6 text-indigo-600" /> Minha Agenda (Kanban)
             </h1>
-            <p className="text-slate-500">Gestão de tarefas, projetos e processos da equipe.</p>
+            <p className="text-slate-500">Gestão privada das suas tarefas e processos diários.</p>
           </div>
           <Button onClick={() => setMostrarForm(!mostrarForm)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
             <Plus className="w-4 h-4" /> Novo Card / Tarefa
           </Button>
         </div>
 
-        {/* FORMULÁRIO DE NOVA TAREFA (MOSTRA/ESCONDE) */}
+        {/* FORMULÁRIO DE NOVA TAREFA */}
         {mostrarForm && (
           <div className="bg-white p-5 rounded-xl border border-indigo-100 shadow-md animate-in slide-in-from-top-4 duration-200">
             <h3 className="font-bold text-slate-800 mb-4 border-b pb-2">Criar Novo Card</h3>
@@ -180,7 +201,6 @@ export default function AgendaKanban() {
                   onDrop={(e) => handleDrop(e, coluna.id)}
                   className={`flex-1 min-w-[280px] rounded-xl border ${coluna.borda} ${coluna.cor} flex flex-col max-h-full overflow-hidden transition-colors`}
                 >
-                  {/* Cabeçalho da Coluna */}
                   <div className="p-3 border-b border-black/5 flex justify-between items-center bg-white/50 backdrop-blur-sm">
                     <h3 className="font-bold text-slate-700 uppercase tracking-wide text-sm">{coluna.titulo}</h3>
                     <span className="bg-white text-slate-600 text-xs font-bold px-2 py-1 rounded-full shadow-sm">
@@ -188,7 +208,6 @@ export default function AgendaKanban() {
                     </span>
                   </div>
 
-                  {/* Lista de Cards */}
                   <div className="p-3 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                     {tarefasDaColuna.length === 0 && (
                       <div className="border-2 border-dashed border-black/10 rounded-lg h-24 flex items-center justify-center text-slate-400 text-xs font-medium">
@@ -197,7 +216,6 @@ export default function AgendaKanban() {
                     )}
 
                     {tarefasDaColuna.map(tarefa => {
-                      // Cores de prioridade
                       const corBadge = 
                         tarefa.prioridade === 'Urgente' ? 'bg-red-100 text-red-700 border-red-200' :
                         tarefa.prioridade === 'Alta' ? 'bg-amber-100 text-amber-700 border-amber-200' :
@@ -213,7 +231,6 @@ export default function AgendaKanban() {
                           onDragEnd={(e) => handleDragEnd(e, tarefa.id)}
                           className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-all group relative"
                         >
-                          {/* Pegador visual */}
                           <div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
                             <GripVertical className="w-4 h-4" />
                           </div>
@@ -234,8 +251,8 @@ export default function AgendaKanban() {
                             <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-auto">
                               {tarefa.responsavel ? (
                                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                                  <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center border border-indigo-200">
-                                    {tarefa.responsavel.charAt(0).toUpperCase()}
+                                  <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center border border-indigo-200 uppercase">
+                                    {tarefa.responsavel.charAt(0)}
                                   </div>
                                   <span className="truncate max-w-[100px]">{tarefa.responsavel}</span>
                                 </div>
