@@ -62,13 +62,13 @@ export default function Requisicoes() {
     try {
       const prodMatch = produtosBD.find(p => p.nome === produtoBusca || `${p.sku || 'S/N'} - ${p.nome}` === produtoBusca);
       
-      // Para evitar erro no Supabase, juntamos o Motivo dentro da coluna Setor Solicitante
       const payload = {
-        setor_solicitante: `${setor} (${motivo})`,
+        setor_solicitante: setor,
         colaborador_nome: colaborador,
         produto_id: prodMatch ? prodMatch.id : null,
         produto_texto: prodMatch ? prodMatch.nome : produtoBusca,
         quantidade: quantidade,
+        motivo_aplicacao: motivo,
         prioridade: prioridade,
         status: 'Pendente'
       };
@@ -285,6 +285,7 @@ export default function Requisicoes() {
                                 {req.produto_texto} 
                                 <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full text-xs">x{req.quantidade}</span>
                               </p>
+                              <p className="text-xs text-slate-600 mt-1 border-l-2 border-slate-300 pl-2 italic">"{req.motivo_aplicacao}"</p>
                               
                               {/* Alerta de Estoque visual rápido */}
                               {req.status === 'Pendente' && req.log_produtos && (
