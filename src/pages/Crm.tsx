@@ -63,6 +63,36 @@ export default function CrmGlobal() {
   const [interacaoDataAgend, setInteracaoDataAgend] = useState("");
 
   useEffect(() => {
+    const rascunho = sessionStorage.getItem("clientes_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.mostrarForm !== undefined) setMostrarForm(draft.mostrarForm);
+        if (draft.novoCliRazao) setNovoCliRazao(draft.novoCliRazao);
+        if (draft.novoCliFantasia) setNovoCliFantasia(draft.novoCliFantasia);
+        if (draft.novoCliCnpj) setNovoCliCnpj(draft.novoCliCnpj);
+        if (draft.novoCliTelefone) setNovoCliTelefone(draft.novoCliTelefone);
+        if (draft.novoCliEmail) setNovoCliEmail(draft.novoCliEmail);
+        if (draft.novoCliStatus) setNovoCliStatus(draft.novoCliStatus);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mostrarForm || novoCliRazao || novoCliFantasia) {
+      const draft = { mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus };
+      sessionStorage.setItem("clientes_rascunho", JSON.stringify(draft));
+    }
+  }, [mostrarForm,  novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus]);
+
+  const limparFormulario = () => {
+    sessionStorage.removeItem("financeiro_rascunho");
+    setMostrarForm(false);
+    setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail("");
+    setNovoCliStatus("");
+  };
+
+  useEffect(() => {
     fetchClientes();
   }, []);
 
