@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2 } from "lucide-react";
+import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
@@ -14,6 +14,7 @@ export default function Grafica() {
   // DADOS BASE
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [clientesBD, setClientesBD] = useState<any[]>([]);
+  const [catReceitaId, setCatReceitaId] = useState("");
 
   // ESTADOS: ABRIR ORDEM DE SERVIÇO (OS)
   const [clienteBusca, setClienteBusca] = useState("");
@@ -21,6 +22,11 @@ export default function Grafica() {
   const [qtdProduzir, setQtdProduzir] = useState(1);
   const [dataPrevista, setDataPrevista] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  
+  // NOVOS CAMPOS COMERCIAIS DA OS
+  const [valorCobrado, setValorCobrado] = useState("");
+  const [condicaoPagamento, setCondicaoPagamento] = useState("À Vista");
+  
   const [salvandoOS, setSalvandoOS] = useState(false);
 
   // ESTADOS: PAINEL DE PRODUÇÃO
@@ -45,12 +51,14 @@ export default function Grafica() {
   }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
-    const [prodRes, cliRes] = await Promise.all([
+    const [prodRes, cliRes, catRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
-      supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia')
+      supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia'),
+      supabase.from('fin_categorias').select('id').eq('tipo', 'Receita').limit(1).single()
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
+    if (catRes.data) setCatReceitaId(catRes.data.id);
   };
 
   const fetchOrdens = async () => {
@@ -70,6 +78,8 @@ export default function Grafica() {
         quantidade_produzir: qtdProduzir,
         data_prevista: dataPrevista,
         observacoes: observacoes,
+        valor_total: parseFloat(valorCobrado) || 0,
+        condicao_pagamento: condicaoPagamento,
         status: 'Fila de Impressão'
       };
 
@@ -77,7 +87,7 @@ export default function Grafica() {
       if (error) throw error;
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
-      setClienteBusca(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes("");
+      setClienteBusca(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setValorCobrado(""); setCondicaoPagamento("À Vista");
       setAbaAtiva("painel");
     } catch (e: any) { alert("Erro ao criar OS: " + e.message); } finally { setSalvandoOS(false); }
   };
@@ -202,6 +212,48 @@ export default function Grafica() {
     } catch (e: any) { alert("Erro ao concluir: " + e.message); } finally { setSalvandoOS(false); }
   };
 
+  // --- INTEGRAÇÃO FINANCEIRA (FATURAMENTO) ---
+  const faturarServico = async () => {
+    if (!osSelecionada.valor_total || osSelecionada.valor_total <= 0) {
+        return alert("O valor cobrado deste serviço está zerado. Edite a OS ou crie o lançamento financeiro manualmente.");
+    }
+    
+    if (!confirm(`Deseja Faturar este serviço no valor de R$ ${osSelecionada.valor_total.toFixed(2)}?\nIsso irá gerar uma Conta a Receber no Financeiro.`)) return;
+
+    setSalvandoOS(true);
+    try {
+        // Calcula o vencimento com base na condição de pagamento
+        const vencimento = new Date();
+        if (osSelecionada.condicao_pagamento.includes("30")) vencimento.setDate(vencimento.getDate() + 30);
+        else if (osSelecionada.condicao_pagamento.includes("15")) vencimento.setDate(vencimento.getDate() + 15);
+
+        const payloadFin = {
+            tipo: 'Receita',
+            descricao: `Serviço Gráfico OSG-${String(osSelecionada.numero_op).padStart(4,'0')} - ${osSelecionada.cliente_nome}`,
+            valor: osSelecionada.valor_total,
+            data_emissao: new Date().toISOString().split('T')[0],
+            data_vencimento: vencimento.toISOString().split('T')[0],
+            status: 'Pendente',
+            categoria_id: catReceitaId || null,
+            documento_origem: `OSG-${String(osSelecionada.numero_op).padStart(4,'0')}`,
+            observacoes: `Condição de Pagamento: ${osSelecionada.condicao_pagamento}`
+        };
+
+        const { error: finError } = await supabase.from('fin_lancamentos').insert([payloadFin]);
+        if (finError) throw finError;
+
+        // Atualiza a OS Gráfica como "Faturada"
+        await supabase.from('prd_ordens_producao').update({ status: 'Faturada' }).eq('id', osSelecionada.id);
+
+        alert("Serviço Faturado com sucesso! Título enviado para o Contas a Receber.");
+        fetchOrdens(); setOsSelecionada(null);
+    } catch (e: any) {
+        alert("Erro ao faturar: " + e.message);
+    } finally {
+        setSalvandoOS(false);
+    }
+  };
+
   const ordensFiltradas = ordens.filter(o => 
     (o.cliente_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) || 
     (o.descricao_servico?.toLowerCase() || "").includes(buscaOS.toLowerCase()) ||
@@ -218,7 +270,7 @@ export default function Grafica() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Layers className="w-6 h-6 text-purple-600" /> Produção Gráfica (Serviços)</h1>
-            <p className="text-slate-500">Gestão de Ordens de Serviço Gráfico (OSG) e consumo de insumos.</p>
+            <p className="text-slate-500">Gestão de Ordens de Serviço Gráfico (OSG), insumos e faturamento.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button onClick={() => setAbaAtiva("painel")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-purple-700" : "text-slate-600"}`}><Printer className="w-4 h-4"/> Chão de Fábrica</button>
@@ -227,14 +279,14 @@ export default function Grafica() {
         </div>
 
         {/* ========================================================================= */}
-        {/* ABA: NOVA OS */}
+        {/* ABA: NOVA OS COMERCIAL */}
         {/* ========================================================================= */}
         {abaAtiva === "abrir" && (
           <div className="bg-white p-8 rounded-xl border shadow-sm max-w-3xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="text-center border-b pb-6">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 text-purple-600 mb-3"><FileOutput className="w-6 h-6"/></div>
                 <h2 className="text-xl font-bold text-slate-800">Gerar Ordem de Serviço (OS)</h2>
-                <p className="text-slate-500 text-sm">Insira o serviço gráfico na fila de produção.</p>
+                <p className="text-slate-500 text-sm">Insira o serviço gráfico na fila de produção e defina a cobrança.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -254,6 +306,28 @@ export default function Grafica() {
                   <label className="text-sm font-bold text-slate-700">Data Prevista para Entrega <span className="text-red-500">*</span></label>
                   <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
               </div>
+
+              {/* BLOCO COMERCIAL NOVO */}
+              <div className="md:col-span-2 grid grid-cols-2 gap-5 bg-indigo-50 p-4 rounded-lg border border-indigo-100 mt-2">
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-indigo-900">Valor Cobrado (R$)</label>
+                      <Input type="number" step="0.01" value={valorCobrado} onChange={e => setValorCobrado(e.target.value)} placeholder="0.00" className="bg-white font-bold text-indigo-700" />
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-indigo-900">Condição de Pagto.</label>
+                      <Select value={condicaoPagamento} onValueChange={setCondicaoPagamento}>
+                          <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="À Vista">À Vista</SelectItem>
+                              <SelectItem value="Boleto 15 Dias">Boleto 15 Dias</SelectItem>
+                              <SelectItem value="Boleto 30 Dias">Boleto 30 Dias</SelectItem>
+                              <SelectItem value="Cartão Crédito">Cartão de Crédito</SelectItem>
+                              <SelectItem value="PIX">PIX</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+              </div>
+
               <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-bold text-slate-700">Ficha Técnica e Acabamento</label>
                   <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Ex: Refilar com 2mm de sangria, encadernação wire-o preto..."></textarea>
@@ -279,9 +353,9 @@ export default function Grafica() {
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
                     <th className="p-4 font-semibold border-b text-center w-28">OS Nº</th>
-                    <th className="p-4 font-semibold border-b">Cliente</th>
-                    <th className="p-4 font-semibold border-b">Serviço</th>
+                    <th className="p-4 font-semibold border-b">Cliente / Serviço</th>
                     <th className="p-4 font-semibold border-b text-center">Entrega</th>
+                    <th className="p-4 font-semibold border-b text-right">Valor Venda</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
                     <th className="p-4 font-semibold border-b text-center w-24">Ações</th>
                   </tr>
@@ -291,19 +365,22 @@ export default function Grafica() {
                     <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhuma OS Gráfica na fila.</td></tr>
                   ) : (
                     ordensFiltradas.map(os => {
-                        const corStatus = os.status === 'Fila de Impressão' ? 'bg-slate-100 text-slate-700' : os.status === 'Em Produção' ? 'bg-blue-100 text-blue-700' : os.status === 'Acabamento' ? 'bg-amber-100 text-amber-700' : os.status === 'Pronto para Entrega' ? 'bg-emerald-100 text-emerald-700' : 'bg-green-100 text-green-800';
+                        const isFaturada = os.status === 'Faturada';
+                        const corStatus = os.status === 'Fila de Impressão' ? 'bg-slate-100 text-slate-700' : os.status === 'Em Produção' ? 'bg-blue-100 text-blue-700' : os.status === 'Acabamento' ? 'bg-amber-100 text-amber-700' : os.status === 'Pronto para Entrega' ? 'bg-emerald-100 text-emerald-700' : isFaturada ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-green-100 text-green-800';
 
                         return (
-                        <tr key={os.id} className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => abrirPrancheta(os)}>
+                        <tr key={os.id} className={`transition-colors cursor-pointer group ${isFaturada ? 'bg-slate-50 opacity-75' : 'hover:bg-slate-50'}`} onClick={() => abrirPrancheta(os)}>
                           <td className="p-4 text-center font-black text-purple-700 font-mono text-sm">OSG-{String(os.numero_op).padStart(4,'0')}</td>
-                          <td className="p-4 font-bold text-slate-800 text-sm">{os.cliente_nome}</td>
                           <td className="p-4">
-                              <p className="text-sm font-semibold text-slate-700">{os.descricao_servico}</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5">Qtd: {os.quantidade_produzir}</p>
+                              <p className="font-bold text-slate-800 text-sm leading-tight">{os.cliente_nome}</p>
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-1">{os.descricao_servico} <span className="font-semibold">(Qtd: {os.quantidade_produzir})</span></p>
                           </td>
                           <td className="p-4 text-center text-xs font-bold text-rose-600">{new Date(os.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                          <td className="p-4 text-right font-bold text-emerald-600 text-sm">R$ {Number(os.valor_total || 0).toFixed(2).replace('.',',')}</td>
                           <td className="p-4 text-center">
-                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>{os.status}</span>
+                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>
+                                  {isFaturada ? <><CheckCircle2 className="w-3 h-3 inline mr-1"/> Faturada</> : os.status}
+                              </span>
                           </td>
                           <td className="p-4 text-center">
                               <Button variant="outline" size="sm" className="text-purple-600 border-purple-200 group-hover:bg-purple-50 h-8 text-xs">Abrir</Button>
@@ -336,13 +413,13 @@ export default function Grafica() {
                         <span className="font-bold flex items-center gap-1"><Printer className="w-4 h-4 text-slate-400"/> {osSelecionada.descricao_servico} (Qtd: {osSelecionada.quantidade_produzir})</span>
                     </div>
                 </div>
-                {osSelecionada.status === 'Pronto para Entrega' || osSelecionada.status === 'Entregue' ? (
-                     <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> OS Finalizada</div>
+                {osSelecionada.status === 'Faturada' ? (
+                     <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Serviço Entregue e Faturado</div>
                 ) : (
                     <div className="flex items-center gap-2">
                         <Select value={statusOS} onValueChange={setStatusOS}>
                             <SelectTrigger className="w-44 bg-white font-semibold border-purple-200"><SelectValue/></SelectTrigger>
-                            <SelectContent><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
+                            <SelectContent><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Pronto para Entrega">Pronto para Entrega</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
                         </Select>
                         <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Etapa</Button>
                     </div>
@@ -353,9 +430,15 @@ export default function Grafica() {
                 
                 {/* LADO ESQUERDO: INFOS, EDIÇÃO DE FICHA E ANEXOS */}
                 <div className="space-y-6">
-                    <div className="bg-amber-50 p-5 rounded-xl border border-amber-100">
-                        <h4 className="text-sm font-bold text-amber-800 uppercase flex items-center gap-2 mb-2"><Clock className="w-4 h-4"/> Prazo de Entrega</h4>
-                        <p className="text-xl font-black text-amber-900">{new Date(osSelecionada.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                            <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-1">Prazo Entrega</h4>
+                            <p className="text-lg font-black text-amber-900">{new Date(osSelecionada.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
+                        </div>
+                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                            <h4 className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Valor Venda</h4>
+                            <p className="text-lg font-black text-emerald-900">R$ {Number(osSelecionada.valor_total || 0).toFixed(2).replace('.',',')}</p>
+                        </div>
                     </div>
 
                     {/* Ficha Técnica (Editável) */}
@@ -381,7 +464,7 @@ export default function Grafica() {
                             <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
                             
                             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                            <Button variant="outline" size="sm" disabled={uploading || osSelecionada.status === 'Pronto para Entrega' || osSelecionada.status === 'Entregue'} onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
+                            <Button variant="outline" size="sm" disabled={uploading || osSelecionada.status === 'Faturada'} onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
                                 {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar Arte
                             </Button>
                         </div>
@@ -395,7 +478,7 @@ export default function Grafica() {
                                         <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded" title="Baixar / Visualizar"><Download className="w-3.5 h-3.5"/></a>
-                                            {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Entregue') && (
+                                            {osSelecionada.status !== 'Faturada' && (
                                                 <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded" title="Excluir Arquivo"><Trash2 className="w-3.5 h-3.5"/></button>
                                             )}
                                         </div>
@@ -406,7 +489,7 @@ export default function Grafica() {
                     </div>
                 </div>
 
-                {/* LADO DIREITO: APONTAMENTO DE INSUMOS */}
+                {/* LADO DIREITO: APONTAMENTO DE INSUMOS E FATURAMENTO */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                         <div className="p-4 border-b bg-purple-50 flex flex-wrap justify-between items-center gap-4">
@@ -414,7 +497,7 @@ export default function Grafica() {
                                 <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Matéria-Prima / Insumos Consumidos</h4>
                                 <p className="text-[10px] text-purple-700 mt-1">Aponte o que foi gasto nesta OS para calcular o custo do serviço.</p>
                             </div>
-                            {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Entregue') && (
+                            {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') && (
                                 <div className="flex gap-2">
                                     <Input list="grafica-insumos" value={buscaInsumo} onChange={e => setBuscaInsumo(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') adicionarInsumo() }} placeholder="Buscar insumo..." className="h-9 text-xs w-48 bg-white border-purple-200" />
                                     <Button size="sm" onClick={adicionarInsumo} className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="w-4 h-4"/></Button>
@@ -422,7 +505,7 @@ export default function Grafica() {
                             )}
                         </div>
                         
-                        <div className="overflow-x-auto min-h-[250px]">
+                        <div className="overflow-x-auto min-h-[200px]">
                             <table className="w-full text-left text-sm border-collapse">
                                 <thead>
                                     <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b bg-white">
@@ -430,7 +513,7 @@ export default function Grafica() {
                                         <th className="p-3 font-medium text-center">Qtd Gasta</th>
                                         <th className="p-3 font-medium text-right">Custo Un.</th>
                                         <th className="p-3 font-medium text-right">Custo Total</th>
-                                        {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Entregue') && <th className="p-3"></th>}
+                                        {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') && <th className="p-3"></th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -441,11 +524,11 @@ export default function Grafica() {
                                             <tr key={ins.id} className="bg-white hover:bg-slate-50">
                                                 <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
                                                 <td className="p-3 text-center">
-                                                    <Input type="number" step="0.0001" min="0" disabled={osSelecionada.status === 'Pronto para Entrega' || osSelecionada.status === 'Entregue'} value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200 focus-visible:ring-purple-500"/>
+                                                    <Input type="number" step="0.0001" min="0" disabled={osSelecionada.status === 'Pronto para Entrega' || osSelecionada.status === 'Faturada'} value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200 focus-visible:ring-purple-500"/>
                                                 </td>
                                                 <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
                                                 <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
-                                                {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Entregue') && (
+                                                {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') && (
                                                     <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
                                                 )}
                                             </tr>
@@ -455,15 +538,28 @@ export default function Grafica() {
                             </table>
                         </div>
                         
-                        {/* RODAPÉ COM CUSTO E BOTÃO MAGICO DE BAIXA */}
-                        <div className="bg-slate-800 p-5 text-white flex justify-between items-center">
-                            <div>
-                                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Total do Serviço</p>
-                                <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
+                        {/* RODAPÉ E BOTÕES DE AÇÃO PRINCIPAL */}
+                        <div className="bg-slate-800 p-5 text-white flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex gap-8 w-full md:w-auto">
+                                <div>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Prod.</p>
+                                    <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
+                                </div>
+                                <div className="border-l border-slate-600 pl-8">
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3"/> Venda</p>
+                                    <p className="text-2xl font-black text-emerald-400">R$ {Number(osSelecionada.valor_total || 0).toFixed(2).replace('.',',')}</p>
+                                </div>
                             </div>
-                            {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Entregue') && (
-                                <Button onClick={concluirServico} disabled={salvandoOS} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 px-6 gap-2 shadow-md animate-pulse duration-2000"><PlayCircle className="w-5 h-5"/> Concluir OS e Baixar Estoque</Button>
-                            )}
+                            
+                            <div className="w-full md:w-auto">
+                                {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') ? (
+                                    <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS e Baixar Estoque</Button>
+                                ) : osSelecionada.status === 'Pronto para Entrega' ? (
+                                    <Button onClick={faturarServico} disabled={salvandoOS} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 px-6 gap-2 shadow-md animate-pulse duration-2000"><Landmark className="w-5 h-5"/> Faturar e Gerar Receita</Button>
+                                ) : (
+                                    <div className="bg-white/10 text-emerald-300 font-bold px-6 py-3 rounded-lg border border-emerald-500/30 flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5"/> Faturada</div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
