@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building, Laptop, Car, Shield, Wifi, FileBadge, Wrench, Search, Plus, Calculator, AlertTriangle, CalendarDays, Server, Sofa, Trash2, CheckCircle2 } from "lucide-react";
+import { Building, Laptop, Car, Shield, Wifi, FileBadge, Wrench, Search, Plus, Calculator, AlertTriangle, Server, Sofa, Trash2, Landmark, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function GestaoPatrimonio() {
@@ -21,16 +21,24 @@ export default function GestaoPatrimonio() {
   });
 
   // ==========================================
-  // ESTADOS: SERVIÇOS ESTRUTURAIS
+  // ESTADOS: SERVIÇOS E MOTOR DE PAGAMENTOS
   // ==========================================
   const [servicos, setServicos] = useState<any[]>([]);
   const [fornecedores, setFornecedores] = useState<any[]>([]);
+  const [catInfraId, setCatInfraId] = useState("");
   const [buscaServicos, setBuscaServicos] = useState("");
+  
   const [mostrarFormServico, setMostrarFormServico] = useState(false);
   const [formServico, setFormServico] = useState({
-    categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", valor_custo: "", data_vencimento: "", status: "Ativo"
+    categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", 
+    valor_custo: "", data_vencimento: "", dia_vencimento: "10", status: "Ativo"
   });
 
+  // Motor de Lançamento
+  const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
+  const [mostrarMotor, setMostrarMotor] = useState(false);
+  const [mesLancamento, setMesLancamento] = useState(mesAtualStr);
+  const [processando, setProcessando] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -44,8 +52,11 @@ export default function GestaoPatrimonio() {
     } else {
         const { data: servs } = await supabase.from('adm_servicos_estruturais').select('*').order('data_vencimento', { ascending: true });
         const { data: forns } = await supabase.from('log_fornecedores').select('id, nome_fantasia');
+        const { data: cat } = await supabase.from('fin_categorias').select('id').ilike('nome', '%Infraestrutura%').limit(1).single();
+        
         if (servs) setServicos(servs);
         if (forns) setFornecedores(forns);
+        if (cat) setCatInfraId(cat.id);
     }
   };
 
@@ -74,19 +85,24 @@ export default function GestaoPatrimonio() {
       const anosPassados = (new Date().getTime() - new Date(ativo.data_aquisicao).getTime()) / (1000 * 60 * 60 * 24 * 365);
       const depreciacaoTotal = (ativo.taxa_depreciacao_anual / 100) * anosPassados;
       const residual = ativo.valor_aquisicao * (1 - depreciacaoTotal);
-      return Math.max(0, residual); // Não deixa o valor ficar negativo
+      return Math.max(0, residual);
   };
 
-  // --- LÓGICA DE SERVIÇOS ---
+  // --- LÓGICA DE SERVIÇOS E MOTOR DE PAGAMENTO ---
   const salvarServico = async () => {
     if (!formServico.descricao) return alert("A descrição é obrigatória.");
     setSalvando(true);
     try {
-        const payload = { ...formServico, valor_custo: parseFloat(formServico.valor_custo) || 0, data_vencimento: formServico.data_vencimento || null };
+        const payload = { 
+            ...formServico, 
+            valor_custo: parseFloat(formServico.valor_custo) || 0, 
+            dia_vencimento: parseInt(formServico.dia_vencimento) || 10,
+            data_vencimento: formServico.data_vencimento || null 
+        };
         await supabase.from('adm_servicos_estruturais').insert([payload]);
         alert("Serviço/Contrato registrado!");
         setMostrarFormServico(false);
-        setFormServico({ categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", valor_custo: "", data_vencimento: "", status: "Ativo" });
+        setFormServico({ categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", valor_custo: "", data_vencimento: "", dia_vencimento: "10", status: "Ativo" });
         fetchDados();
     } catch(e:any) { alert(e.message); } finally { setSalvando(false); }
   };
@@ -95,6 +111,49 @@ export default function GestaoPatrimonio() {
       if(!confirm("Tem certeza que deseja excluir este serviço?")) return;
       await supabase.from('adm_servicos_estruturais').delete().eq('id', id);
       fetchDados();
+  };
+
+  // INTEGRAÇÃO FINANCEIRA: Gerar Lote de Contas a Pagar
+  const processarLancamentosDoMes = async () => {
+      if (!mesLancamento || mesLancamento.length !== 7) return alert("Informe o mês no formato MM/AAAA.");
+      
+      const servicosAtivos = servicos.filter(s => s.status === 'Ativo' && Number(s.valor_custo) > 0);
+      if (servicosAtivos.length === 0) return alert("Não há serviços ativos com custo cadastrado para gerar.");
+
+      if (!confirm(`Deseja gerar as obrigações financeiras (Contas a Pagar) para ${servicosAtivos.length} serviços referentes ao mês ${mesLancamento}?`)) return;
+
+      setProcessando(true);
+      try {
+          const [mes, ano] = mesLancamento.split('/');
+          
+          const lancamentosFinanceiros = servicosAtivos.map(s => {
+              // Monta a data de vencimento baseada no dia configurado + mês/ano selecionado
+              const dataVenc = new Date(Number(ano), Number(mes) - 1, s.dia_vencimento || 10);
+              
+              return {
+                  tipo: 'Despesa',
+                  descricao: `${s.categoria}: ${s.descricao} - Ref. ${mesLancamento}`,
+                  valor: s.valor_custo,
+                  data_vencimento: dataVenc.toISOString().split('T')[0],
+                  status: 'Pendente',
+                  categoria_id: catInfraId || null,
+                  centro_custo: 'Administrativo / Infraestrutura',
+                  forma_pagamento: 'Boleto',
+                  documento_origem: `FACIL-${mesLancamento.replace('/','')}`,
+                  observacoes: `Fornecedor: ${s.fornecedor_nome || 'N/A'}`
+              };
+          });
+
+          const { error } = await supabase.from('fin_lancamentos').insert(lancamentosFinanceiros);
+          if (error) throw error;
+
+          alert("Lote de Contas a Pagar gerado com sucesso no Módulo Financeiro!");
+          setMostrarMotor(false);
+      } catch (e: any) {
+          alert("Erro ao integrar com financeiro: " + e.message);
+      } finally {
+          setProcessando(false);
+      }
   };
 
   const ativosFiltrados = ativos.filter(a => a.descricao.toLowerCase().includes(buscaAtivos.toLowerCase()) || a.identificacao_extra?.toLowerCase().includes(buscaAtivos.toLowerCase()));
@@ -238,7 +297,7 @@ export default function GestaoPatrimonio() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: SERVIÇOS E ESTRUTURA (FACILITIES) */}
+        {/* ABA: SERVIÇOS E ESTRUTURA (FACILITIES) COM MOTOR FINANCEIRO */}
         {/* ========================================================================= */}
         {abaAtiva === "servicos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
@@ -250,7 +309,7 @@ export default function GestaoPatrimonio() {
                         <div><p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Custo Fixo Mensal (Estrutura)</p><p className="text-3xl font-black text-slate-800">R$ {custoMensalServicos.toFixed(2).replace('.',',')}</p></div>
                     </div>
                     <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
-                        <h3 className="text-xs font-bold text-amber-800 uppercase flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4"/> Atenção: Vencimentos Próximos</h3>
+                        <h3 className="text-xs font-bold text-amber-800 uppercase flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4"/> Atenção: Contratos Vencendo</h3>
                         <div className="space-y-2">
                             {servicos.filter(s => s.data_vencimento && new Date(s.data_vencimento) < new Date(new Date().setMonth(new Date().getMonth() + 1)) && s.status === 'Ativo').length === 0 ? (
                                 <p className="text-sm text-amber-700/60 font-medium">Nenhum serviço vencendo nos próximos 30 dias.</p>
@@ -268,10 +327,40 @@ export default function GestaoPatrimonio() {
 
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                     <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50">
-                        <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaServicos} onChange={e => setBuscaServicos(e.target.value)} placeholder="Buscar serviço ou fornecedor..." className="pl-9 bg-white" /></div>
-                        <Button onClick={() => setMostrarFormServico(!mostrarFormServico)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"><Plus className="w-4 h-4"/> Registrar Serviço/Contrato</Button>
+                        <div className="relative w-full max-w-sm"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaServicos} onChange={e => setBuscaServicos(e.target.value)} placeholder="Buscar serviço ou fornecedor..." className="pl-9 bg-white" /></div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => setMostrarMotor(!mostrarMotor)} variant="outline" className="text-indigo-700 border-indigo-200 hover:bg-indigo-50 gap-2"><Landmark className="w-4 h-4"/> Gerar Contas a Pagar (Mês)</Button>
+                            <Button onClick={() => setMostrarFormServico(!mostrarFormServico)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"><Plus className="w-4 h-4"/> Registrar Serviço</Button>
+                        </div>
                     </div>
 
+                    {/* MOTOR DE PAGAMENTO FINANCEIRO EM LOTE */}
+                    {mostrarMotor && (
+                        <div className="p-6 bg-indigo-50 border-b border-indigo-200 space-y-4 animate-in slide-in-from-top-4">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Landmark className="w-5 h-5"/> Integração com Contas a Pagar</h3>
+                                    <p className="text-xs text-indigo-700 mt-1">Gere as despesas do mês automaticamente para todos os serviços fixos ativos.</p>
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={() => setMostrarMotor(false)}>Fechar</Button>
+                            </div>
+                            
+                            <div className="flex items-end gap-4 bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Mês de Referência</label>
+                                    <Input value={mesLancamento} onChange={e => { let val = e.target.value.replace(/\D/g, ''); if(val.length > 2) val = val.substring(0,2)+'/'+val.substring(2,6); setMesLancamento(val); }} placeholder="MM/AAAA" className="w-32 text-center font-bold" maxLength={7} />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm text-slate-600">Serão gerados <strong className="text-indigo-700">{servicos.filter(s => s.status === 'Ativo' && Number(s.valor_custo) > 0).length} lançamentos</strong> no valor total de <strong className="text-rose-600">R$ {custoMensalServicos.toFixed(2).replace('.',',')}</strong> no Módulo Financeiro.</p>
+                                </div>
+                                <Button onClick={processarLancamentosDoMes} disabled={processando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 shadow-md gap-2">
+                                    {processando ? "Processando..." : <><CheckCircle2 className="w-4 h-4"/> Confirmar e Lançar no Financeiro</>}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* FORMULÁRIO DE NOVO SERVIÇO */}
                     {mostrarFormServico && (
                         <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 space-y-4">
                             <h3 className="font-bold text-emerald-800 flex items-center gap-2 mb-4"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
@@ -296,7 +385,8 @@ export default function GestaoPatrimonio() {
                                     </Select>
                                 </div>
                                 <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Custo/Mensalidade (R$)</label><Input type="number" step="0.01" value={formServico.valor_custo} onChange={e => setFormServico({...formServico, valor_custo: e.target.value})} className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Vencimento / Renovação</label><Input type="date" value={formServico.data_vencimento} onChange={e => setFormServico({...formServico, data_vencimento: e.target.value})} className="bg-white" /></div>
+                                <div className="space-y-2"><label className="text-xs font-bold text-emerald-600 uppercase">Dia do Vencimento (Mês)</label><Input type="number" min="1" max="31" value={formServico.dia_vencimento} onChange={e => setFormServico({...formServico, dia_vencimento: e.target.value})} className="bg-white border-emerald-300 font-bold" placeholder="Ex: 10" /></div>
+                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Renovação do Contrato</label><Input type="date" value={formServico.data_vencimento} onChange={e => setFormServico({...formServico, data_vencimento: e.target.value})} className="bg-white" /></div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase">Status do Contrato</label>
                                     <Select value={formServico.status} onValueChange={v => setFormServico({...formServico, status: v})}>
@@ -319,7 +409,7 @@ export default function GestaoPatrimonio() {
                                     <th className="p-4 font-semibold border-b">Serviço / Estrutura</th>
                                     <th className="p-4 font-semibold border-b text-center">Status</th>
                                     <th className="p-4 font-semibold border-b text-center">Frequência</th>
-                                    <th className="p-4 font-semibold border-b text-center">Vencimento</th>
+                                    <th className="p-4 font-semibold border-b text-center">Dia Vencimento</th>
                                     <th className="p-4 font-semibold border-b text-right">Custo Declarado</th>
                                     <th className="p-4 font-semibold border-b w-12 text-center">Ações</th>
                                 </tr>
@@ -328,8 +418,7 @@ export default function GestaoPatrimonio() {
                                 {servicosFiltrados.length === 0 ? <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum serviço registrado.</td></tr> : (
                                     servicosFiltrados.map(s => {
                                         const iconeCat = s.categoria === 'Internet/Telefonia' ? <Wifi className="w-4 h-4"/> : s.categoria === 'Segurança/Alarmes' ? <Shield className="w-4 h-4"/> : s.categoria === 'Certificado Digital/Registro' ? <FileBadge className="w-4 h-4"/> : s.categoria === 'Software/Hospedagem' ? <Server className="w-4 h-4"/> : <Wrench className="w-4 h-4"/>;
-                                        const alertaVenc = s.data_vencimento && new Date(s.data_vencimento) < new Date(new Date().setMonth(new Date().getMonth() + 1)) && s.status === 'Ativo';
-
+                                        
                                         return (
                                         <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="p-4">
@@ -343,13 +432,8 @@ export default function GestaoPatrimonio() {
                                                 <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${s.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{s.status}</span>
                                             </td>
                                             <td className="p-4 text-center"><span className="text-[10px] text-slate-500 bg-slate-100 border px-1.5 py-0.5 rounded font-bold uppercase">{s.periodicidade}</span></td>
-                                            <td className="p-4 text-center">
-                                                {s.data_vencimento ? (
-                                                    <p className={`text-xs font-bold ${alertaVenc ? 'text-rose-600 bg-rose-50 px-2 py-1 rounded inline-flex items-center gap-1' : 'text-slate-600'}`}>
-                                                        {alertaVenc && <AlertTriangle className="w-3 h-3"/>}
-                                                        {new Date(s.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'})}
-                                                    </p>
-                                                ) : <span className="text-slate-300">-</span>}
+                                            <td className="p-4 text-center font-bold text-slate-700">
+                                                Dia {s.dia_vencimento || '--'}
                                             </td>
                                             <td className="p-4 text-right font-black text-emerald-700">R$ {Number(s.valor_custo).toFixed(2).replace('.',',')}</td>
                                             <td className="p-4 text-center">
