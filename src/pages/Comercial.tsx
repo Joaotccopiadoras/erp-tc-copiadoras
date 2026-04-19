@@ -229,10 +229,11 @@ export default function Comercial() {
   return (
     <AppLayout>
       {/* A MÁGICA DA IMPRESSÃO ACONTECE AQUI:
-        Essa tag style ensina o navegador a esconder tudo, menos a div #area-impressao 
+        Otimizado para garantir 100% de largura na folha A4 e centralização perfeita
       */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
+          @page { margin: 15mm; size: auto; }
           body * {
             visibility: hidden;
           }
@@ -240,17 +241,24 @@ export default function Comercial() {
             visibility: visible;
           }
           #area-impressao {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 20px;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
           }
           html, body, main, #root {
             height: auto !important;
+            width: 100% !important;
             overflow: visible !important;
             background-color: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           button, .print\\:hidden {
             display: none !important;
