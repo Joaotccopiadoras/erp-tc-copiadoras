@@ -33,6 +33,7 @@ import {
   Users,
   Workflow
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const MENU_GROUPS = [
   {
@@ -49,7 +50,7 @@ const MENU_GROUPS = [
     titulo: "ADMINISTRATIVO",
     itens: [
       { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
-      { nome: "Departamento Pessoal", url: "/deppessoal", icone: Fingerprint}
+      { nome: "Departamento Pessoal", url: "/deppessoal", icone: Fingerprint},
       { nome: "Gestão de Patrimônio", url: "/patrimonio", icone: Building2}
     ]
   },
