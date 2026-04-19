@@ -4,7 +4,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, UserPlus, Trash2, Lock, ShieldAlert } from "lucide-react";
+import {
+  Briefcase,
+  CheckCircle,
+  Fingerprint,
+  Lock,
+  Settings, 
+  Shield,
+  ShieldAlert, 
+  Trash2,
+  User,
+  UserPlus
+  } from "lucide-react";
+import {
+  Select, 
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue } from "@/components/ui/select";
+
 
 type Permissao = {
   id: string;
