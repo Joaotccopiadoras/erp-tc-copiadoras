@@ -13,6 +13,7 @@ import Crm from "./pages/Crm";
 
 import Processos from "./pages/Processos";
 import DepartamentoPessoal from "./pages/DepartamentoPessoal";
+import GestaoPatrimonio from "./pages/GestaoPatrimonio";
 
 import Financeiro from "./pages/Financeiro";
 import DashboardFinanceiro from "./pages/DashboardFinanceiro";
@@ -100,6 +101,8 @@ export default function App() {
 
           <Route path="/processos" element={<RotaProtegida><Processos /></RotaProtegida>} />
           <Route path="/deppessoal" element={<RotaProtegida><DepartamentoPessoal /></RotaProtegida>} />
+          <Route path="/patrimonio" element={<RotaProtegida><GestaoPatrimonio /></RotaProtegida>} />
+
 
           <Route path="/dashboardfinanceiro" element={<RotaProtegida><DashboardFinanceiro /></RotaProtegida>} />
 

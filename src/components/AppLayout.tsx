@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Boxes,
   Briefcase,
+  Building2,
   Calendar,
   CalendarClock,
   ChevronDown,
@@ -49,6 +50,7 @@ const MENU_GROUPS = [
     itens: [
       { nome: "Gestão de Processos", url: "/processos", icone: Workflow },
       { nome: "Departamento Pessoal", url: "/deppessoal", icone: Fingerprint}
+      { nome: "Gestão de Patrimônio", url: "/patrimonio", icone: Building2}
     ]
   },
   {
