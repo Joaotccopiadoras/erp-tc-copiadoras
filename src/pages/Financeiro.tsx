@@ -26,7 +26,7 @@ export default function Financeiro() {
   const [categoriaId, setCategoriaId] = useState("");
   const [contaId, setContaId] = useState("");
   const [centroCusto, setCentroCusto] = useState("Geral");
-  const [formaPagamento, setFormaPagamento] = useState("Boleto");
+  const [formaPagamento, setFormaPagamento] = useState("Boleto"); // AQUI ESTÁ A DECLARAÇÃO CORRETA
   const [documentoOrigem, setDocumentoOrigem] = useState("");
 
   // Variável auxiliar para adaptar a tela (Cores, Textos, Filtros)
@@ -251,7 +251,7 @@ export default function Financeiro() {
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Centro de Custo / Setor</label><Input value={centroCusto} onChange={e => setCentroCusto(e.target.value)} placeholder="Ex: Administrativo" className="bg-white" /></div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase">Forma de Pagamento</label>
-                    <Select value={formaPagamento} onValueChange={setFormPagamento}>
+                    <Select value={formaPagamento} onValueChange={setFormaPagamento}> {/* AQUI ESTAVA O ERRO DE DIGITAÇÃO! CORRIGIDO */}
                         <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                         <SelectContent position="popper" className="z-[99] bg-white"><SelectItem value="Boleto">Boleto Bancário</SelectItem><SelectItem value="PIX">PIX</SelectItem><SelectItem value="Transferência">Transferência Bancária</SelectItem><SelectItem value="Cartão">Cartão de Crédito</SelectItem><SelectItem value="Dinheiro">Dinheiro</SelectItem></SelectContent>
                     </Select>
