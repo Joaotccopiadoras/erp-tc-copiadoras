@@ -4,13 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  CheckCircle2,
-  Edit,
-  DollarSign,
-  Package,
-  Plus,
-  Search, FileDigit, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, Table as TableIcon, Database, Printer, Settings } from "lucide-react";
+import { Package, Plus, Search, Edit, FileDigit, DollarSign, Settings2, Barcode, Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, Table as TableIcon, Database, Printer, Layers, MapPin, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -19,6 +13,7 @@ export default function Logistica() {
   const [modo, setModo] = useState<"lista" | "editar" | "lote">("lista");
 
   const [produtos, setProdutos] = useState<any[]>([]);
+  const [locaisEstoque, setLocaisEstoque] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
@@ -64,6 +59,14 @@ export default function Logistica() {
   const [carregandoPDF, setCarregandoPDF] = useState(false);
   const [cotacoesMercado, setCotacoesMercado] = useState<any[]>([]);
 
+  // ==========================================
+  // ESTADOS DO MODAL DE SALDOS POR LOCAL
+  // ==========================================
+  const [modalSaldosAberto, setModalSaldosAberto] = useState(false);
+  const [produtoSaldos, setProdutoSaldos] = useState<any | null>(null);
+  const [saldosLocais, setSaldosLocais] = useState<any[]>([]);
+  const [salvandoSaldos, setSalvandoSaldos] = useState(false);
+
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("logistica_rascunho");
     if (rascunhoSalvo) {
@@ -94,8 +97,7 @@ export default function Logistica() {
     if (modo === "editar") {
       const draft = {
         modo, produtoId, sku, nome, fabricante, familia, perfil, modelo, categoria, condicao, rastreiaSerie, imagemUrl,
-        isEquipamento, specs,
-        cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada,
+        isEquipamento, specs, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada,
         custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado
       };
       sessionStorage.setItem("logistica_rascunho", JSON.stringify(draft));
@@ -104,12 +106,22 @@ export default function Logistica() {
     }
   }, [modo, produtoId, sku, nome, fabricante, familia, perfil, modelo, categoria, condicao, rastreiaSerie, imagemUrl, isEquipamento, specs, cicloRecomendado, cicloMaximo, rendimentoVolume, vidaUtilEstimada, custoBase, precoVenda, estoqueMinimo, pontoPedido, ncm, cest, cotacoesMercado]);
 
-  useEffect(() => { if (modo === "lista") fetchProdutos(); }, [modo]);
+  useEffect(() => { 
+      if (modo === "lista") {
+          fetchProdutos(); 
+          fetchLocaisEstoque();
+      }
+  }, [modo]);
 
   const fetchProdutos = async () => {
     const { data, error } = await supabase.from('log_produtos').select('*').order('nome', { ascending: true });
     if (data) setProdutos(data);
     if (error) console.error(error);
+  };
+
+  const fetchLocaisEstoque = async () => {
+      const { data } = await supabase.from('log_locais_estoque').select('*').order('nome');
+      if (data) setLocaisEstoque(data);
   };
 
   const novoProduto = () => {
@@ -179,6 +191,60 @@ export default function Logistica() {
     }
   };
 
+  // ==========================================
+  // FUNÇÕES DE DISTRIBUIÇÃO DE SALDOS POR LOCAL
+  // ==========================================
+  const abrirSaldosEstoque = async (prod: any) => {
+      setProdutoSaldos(prod);
+      setModalSaldosAberto(true);
+
+      // Puxa os saldos já salvos deste produto
+      const { data: saldosSalvos } = await supabase.from('log_produto_saldos').select('*').eq('produto_id', prod.id);
+      
+      // Mescla os locais existentes com os saldos salvos (se não tiver salvo, fica 0)
+      const listaSaldos = locaisEstoque.map(local => {
+          const saldoEncontrado = saldosSalvos?.find(s => s.local_id === local.id);
+          return {
+              local_id: local.id,
+              nome: local.nome,
+              tipo: local.tipo,
+              quantidade: saldoEncontrado ? saldoEncontrado.quantidade : 0
+          };
+      });
+      setSaldosLocais(listaSaldos);
+  };
+
+  const salvarSaldosLocais = async () => {
+      setSalvandoSaldos(true);
+      try {
+          // 1. Salva cada local na tabela de saldos detalhados (Fazendo Upsert)
+          for (const s of saldosLocais) {
+              await supabase.from('log_produto_saldos').upsert({
+                  produto_id: produtoSaldos.id,
+                  local_id: s.local_id,
+                  quantidade: s.quantidade
+              }, { onConflict: 'produto_id, local_id' });
+          }
+
+          // 2. Soma tudo e atualiza o Saldo Global (estoque_atual) do Produto
+          const estoqueGlobal = saldosLocais.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
+          await supabase.from('log_produtos').update({ estoque_atual: estoqueGlobal }).eq('id', produtoSaldos.id);
+
+          alert("Saldos por local atualizados e Estoque Global recalculado!");
+          setModalSaldosAberto(false);
+          fetchProdutos(); // Recarrega a tabela principal para mostrar o novo saldo global
+      } catch (e: any) {
+          alert("Erro ao atualizar saldos: " + e.message);
+      } finally {
+          setSalvandoSaldos(false);
+      }
+  };
+
+  const atualizarQuantidadeLocal = (localId: string, novaQtd: number) => {
+      setSaldosLocais(prev => prev.map(s => s.local_id === localId ? { ...s, quantidade: novaQtd } : s));
+  };
+
+
   const toggleSelecao = (id: string) => {
     setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
@@ -186,20 +252,13 @@ export default function Logistica() {
   const aplicarEdicaoLote = async () => {
     if (!loteCampo) return alert("Selecione qual campo deseja alterar!");
     if (!loteValor && !['condicao', 'familia', 'perfil'].includes(loteCampo)) return alert("Informe o novo valor!");
-    
     const payload = { [loteCampo]: loteValor };
-    
     const { error } = await supabase.from('log_produtos').update(payload).in('id', selecionados);
-      
     if (error) {
       alert("Erro ao atualizar produtos: " + error.message);
     } else {
       alert(`${selecionados.length} produtos atualizados com sucesso!`);
-      fetchProdutos();
-      setModo("lista");
-      setSelecionados([]);
-      setLoteCampo("");
-      setLoteValor("");
+      fetchProdutos(); setModo("lista"); setSelecionados([]); setLoteCampo(""); setLoteValor("");
     }
   };
 
@@ -212,14 +271,8 @@ export default function Logistica() {
         body: JSON.stringify({ produto: nome, categoria: categoria })
       });
       const dadosIA = await resposta.json();
-      setNcm(dadosIA.ncm || "");
-      setCest(dadosIA.cest || "");
-    } catch (error) {
-      console.error("Erro na IA:", error);
-      alert("Houve um erro ao consultar a IA. Verifique sua conexão ou o n8n.");
-    } finally {
-      setCarregandoIAFiscal(false);
-    }
+      setNcm(dadosIA.ncm || ""); setCest(dadosIA.cest || "");
+    } catch (error) { alert("Houve um erro ao consultar a IA. Verifique sua conexão ou o n8n."); } finally { setCarregandoIAFiscal(false); }
   };
 
   const cotarNoMercadoComIA = async () => {
@@ -233,12 +286,7 @@ export default function Logistica() {
           { loja: "AliExpress", preco: "R$ 89,50", link: "https://aliexpress.com" }
         ]);
       }, 3000);
-    } catch (error) {
-      console.error("Erro na cotação:", error);
-      alert("Erro ao buscar cotações.");
-    } finally {
-      setCarregandoIAMercado(false);
-    }
+    } catch (error) { alert("Erro ao buscar cotações."); } finally { setCarregandoIAMercado(false); }
   };
 
   const extrairUnicos = (campo: string) => Array.from(new Set(produtos.map(p => p[campo]).filter(f => f && f.trim() !== ""))).sort();
@@ -274,53 +322,29 @@ export default function Logistica() {
 
   const exportarPDFProdutos = async () => {
     if (produtosFiltrados.length === 0) return alert("Não há produtos para exportar!");
-    
     setCarregandoPDF(true); 
-    
     try {
       const doc = new jsPDF("l", "mm", "a4");
-
       const adicionarCabecalhoRodape = (data: any) => {
-        doc.setFillColor(41, 37, 36); 
-        doc.rect(14, 10, 269, 14, 'F');
-        
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(41, 37, 36); doc.rect(14, 10, 269, 14, 'F');
+        doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(255, 255, 255);
         doc.text("TC COPIADORAS - Catálogo de Produtos", 18, 19);
-        
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
         doc.text(`Filtros: Categoria: ${filtroCategoria} | Fabricante: ${filtroFabricante} | Total de Itens: ${produtosFiltrados.length}`, 14, 30);
-
-        const numPagina = data.pageNumber;
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
+        doc.setFontSize(8); doc.setTextColor(150, 150, 150);
         doc.text("TC COPIADORAS - Sistema ERP", 14, doc.internal.pageSize.height - 10);
-        doc.text(`Página ${numPagina}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 10, { align: "right" });
+        doc.text(`Página ${data.pageNumber}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 10, { align: "right" });
       };
 
       const carregarImagem = (url: string) => {
         return new Promise<string | null>((resolve) => {
-          const img = new Image();
-          img.crossOrigin = "Anonymous";
-          img.src = url;
+          const img = new Image(); img.crossOrigin = "Anonymous"; img.src = url;
           img.onload = () => {
             try {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.width;
-              canvas.height = img.height;
+              const canvas = document.createElement("canvas"); canvas.width = img.width; canvas.height = img.height;
               const ctx = canvas.getContext("2d");
-              if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL("image/jpeg", 0.5)); 
-              } else {
-                resolve(null);
-              }
-            } catch(e) {
-              resolve(null);
-            }
+              if (ctx) { ctx.drawImage(img, 0, 0); resolve(canvas.toDataURL("image/jpeg", 0.5)); } else resolve(null);
+            } catch(e) { resolve(null); }
           };
           img.onerror = () => resolve(null); 
         });
@@ -328,33 +352,16 @@ export default function Logistica() {
 
       const listaDeImagens: (string | null)[] = [];
       const bodyDataParaTabela = [];
-
       for (const p of produtosFiltrados) {
-        let imgData = null;
-        if (p.imagem_url) {
-          imgData = await carregarImagem(p.imagem_url);
-        }
+        let imgData = null; if (p.imagem_url) imgData = await carregarImagem(p.imagem_url);
         listaDeImagens.push(imgData);
-
-        bodyDataParaTabela.push([
-          { content: "", styles: { minCellHeight: 16 } }, 
-          p.sku || "S/N", 
-          p.nome, 
-          p.categoria, 
-          p.familia || "-", 
-          p.perfil || "-", 
-          p.fabricante || "-", 
-          `R$ ${Number(p.custo_base).toFixed(2)}`, 
-          `R$ ${Number(p.preco_venda).toFixed(2)}`
-        ]);
+        bodyDataParaTabela.push([ { content: "", styles: { minCellHeight: 16 } }, p.sku || "S/N", p.nome, p.categoria, p.familia || "-", p.perfil || "-", p.fabricante || "-", `R$ ${Number(p.custo_base).toFixed(2)}`, `R$ ${Number(p.preco_venda).toFixed(2)}` ]);
       }
 
       autoTable(doc, {
-        startY: 35,
-        margin: { top: 35},
+        startY: 35, margin: { top: 35},
         head: [['FOTO', 'SKU', 'NOME', 'CATEGORIA', 'FAMÍLIA', 'PERFIL', 'FABRICANTE', 'CUSTO BASE', 'PREÇO VENDA']],
-        body: bodyDataParaTabela,
-        theme: 'grid',
+        body: bodyDataParaTabela, theme: 'grid',
         headStyles: { fillColor: [41, 37, 36], textColor: [255,255,255], valign: 'middle', halign: 'center' },
         styles: { fontSize: 7, cellPadding: 2, valign: 'middle' },
         columnStyles: { 0: { cellWidth: 20, halign: 'center' } },
@@ -362,107 +369,58 @@ export default function Logistica() {
         didDrawCell: (data) => {
           if (data.section === 'body' && data.column.index === 0) {
             const imgData = listaDeImagens[data.row.index];
-            
             if (imgData) {
               try {
-                const tamanho = 12; 
-                const x = data.cell.x + (data.cell.width - tamanho) / 2;
-                const y = data.cell.y + (data.cell.height - tamanho) / 2;
+                const tamanho = 12; const x = data.cell.x + (data.cell.width - tamanho) / 2; const y = data.cell.y + (data.cell.height - tamanho) / 2;
                 doc.addImage(imgData as string, 'JPEG', x, y, tamanho, tamanho);
-              } catch(e) {
-                doc.setFontSize(6); doc.setTextColor(200, 0, 0);
-                doc.text("Erro", data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center' });
-              }
-            } else {
-              doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-              doc.text("Sem foto", data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center' });
-            }
+              } catch(e) { doc.setFontSize(6); doc.setTextColor(200, 0, 0); doc.text("Erro", data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center' }); }
+            } else { doc.setFontSize(6); doc.setTextColor(150, 150, 150); doc.text("Sem foto", data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center' }); }
           }
         }
       });
-
       doc.save("Catalogo_TC_Copiadoras.pdf");
-    } catch (error) {
-      console.error("Erro fatal ao gerar PDF:", error);
-      alert("Houve um problema ao processar o PDF. Verifique o console.");
-    } finally {
-      setCarregandoPDF(false); 
-    }
+    } catch (error) { alert("Houve um problema ao processar o PDF. Verifique o console."); } finally { setCarregandoPDF(false); }
   };
 
   const exportarExcelProdutos = () => {
     if (produtosFiltrados.length === 0) return alert("Não há produtos para exportar!");
     let csvContent = "SKU;NOME;CATEGORIA;CONDIÇÃO;FAMÍLIA;PERFIL;FABRICANTE;CUSTO_BASE;PRECO_VENDA;ESTOQUE_MINIMO;NCM;CEST\n";
     produtosFiltrados.forEach(p => {
-      const linha = [
-        p.sku || "", `"${p.nome || ""}"`, p.categoria || "", p.condicao || "", p.familia || "", p.perfil || "", p.fabricante || "",
-        Number(p.custo_base || 0).toFixed(2).replace('.', ','), Number(p.preco_venda || 0).toFixed(2).replace('.', ','),
-        p.estoque_minimo || "0", `"${p.ncm || ""}"`, `"${p.cest || ""}"`
-      ].join(";");
+      const linha = [ p.sku || "", `"${p.nome || ""}"`, p.categoria || "", p.condicao || "", p.familia || "", p.perfil || "", p.fabricante || "", Number(p.custo_base || 0).toFixed(2).replace('.', ','), Number(p.preco_venda || 0).toFixed(2).replace('.', ','), p.estoque_minimo || "0", `"${p.ncm || ""}"`, `"${p.cest || ""}"` ].join(";");
       csvContent += linha + "\n";
     });
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = "Produtos_TC_Copiadoras.csv";
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "Produtos_TC_Copiadoras.csv"; a.click();
   };
 
   const exportarAuxiliaresPDF = () => {
     const doc = new jsPDF("p", "mm", "a4");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("Relatório de Cadastros Auxiliares", 14, 20);
-    
+    doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("Relatório de Cadastros Auxiliares", 14, 20);
     let yPos = 30;
     const adicionarTabela = (titulo: string, itens: string[]) => {
       if (itens.length === 0) return;
-      doc.setFontSize(12);
-      doc.text(titulo, 14, yPos);
-      autoTable(doc, {
-        startY: yPos + 4,
-        head: [[titulo.toUpperCase()]],
-        body: itens.map(i => [i]),
-        theme: 'grid',
-        headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0] },
-        styles: { fontSize: 9, cellPadding: 2 }
-      });
-      yPos = (doc as any).lastAutoTable.finalY + 15;
-      if (yPos > 270) { doc.addPage(); yPos = 20; }
+      doc.setFontSize(12); doc.text(titulo, 14, yPos);
+      autoTable(doc, { startY: yPos + 4, head: [[titulo.toUpperCase()]], body: itens.map(i => [i]), theme: 'grid', headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0] }, styles: { fontSize: 9, cellPadding: 2 } });
+      yPos = (doc as any).lastAutoTable.finalY + 15; if (yPos > 270) { doc.addPage(); yPos = 20; }
     };
-
-    adicionarTabela("Categorias Ativas", categoriasUnicas as string[]);
-    adicionarTabela("Famílias de Produtos", familiasUnicas as string[]);
-    adicionarTabela("Perfis de Produtos", perfisUnicos as string[]);
-    adicionarTabela("Condições", condicoesUnicas as string[]);
-    adicionarTabela("Fabricantes / Marcas", fabricantesUnicos as string[]);
-    adicionarTabela("NCMs Registrados", ncmUnicos as string[]);
-    adicionarTabela("CESTs Registrados", cestUnicos as string[]);
-
+    adicionarTabela("Categorias Ativas", categoriasUnicas as string[]); adicionarTabela("Famílias de Produtos", familiasUnicas as string[]); adicionarTabela("Perfis de Produtos", perfisUnicos as string[]); adicionarTabela("Condições", condicoesUnicas as string[]); adicionarTabela("Fabricantes / Marcas", fabricantesUnicos as string[]); adicionarTabela("NCMs Registrados", ncmUnicos as string[]); adicionarTabela("CESTs Registrados", cestUnicos as string[]);
     doc.save("Cadastros_Auxiliares.pdf");
   };
 
   const exportarAuxiliaresExcel = () => {
     const maxLinhas = Math.max(categoriasUnicas.length, familiasUnicas.length, perfisUnicos.length, condicoesUnicas.length, fabricantesUnicos.length, ncmUnicos.length, cestUnicos.length);
     let csvContent = "CATEGORIAS;FAMILIAS;PERFIS;CONDICOES;FABRICANTES;NCM;CEST\n";
-    
     for (let i = 0; i < maxLinhas; i++) {
-      const linha = [
-        categoriasUnicas[i] || "", familiasUnicas[i] || "", perfisUnicos[i] || "", condicoesUnicas[i] || "",
-        fabricantesUnicos[i] || "", `"${ncmUnicos[i] || ""}"`, `"${cestUnicos[i] || ""}"`
-      ].join(";");
+      const linha = [ categoriasUnicas[i] || "", familiasUnicas[i] || "", perfisUnicos[i] || "", condicoesUnicas[i] || "", fabricantesUnicos[i] || "", `"${ncmUnicos[i] || ""}"`, `"${cestUnicos[i] || ""}"` ].join(";");
       csvContent += linha + "\n";
     }
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = "Cadastros_Auxiliares.csv";
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = "Cadastros_Auxiliares.csv"; a.click();
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
         {/* Renderiz datalists */}
         <datalist id="lista-fabricantes">{fabricantesUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
@@ -470,6 +428,67 @@ export default function Logistica() {
         <datalist id="lista-perfis">{perfisUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
         <datalist id="lista-ncm">{ncmUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
         <datalist id="lista-cest">{cestUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
+
+        {/* ========================================================================= */}
+        {/* MODAL DE DISTRIBUIÇÃO DE SALDOS (NOVO) */}
+        {/* ========================================================================= */}
+        {modalSaldosAberto && produtoSaldos && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col">
+                    <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
+                        <div>
+                            <h2 className="text-lg font-black text-emerald-900 flex items-center gap-2"><Layers className="w-5 h-5 text-emerald-600"/> Gestão de Saldos e Estoque</h2>
+                            <p className="text-xs text-emerald-700 font-bold mt-1 uppercase tracking-widest">{produtoSaldos.sku} - {produtoSaldos.nome}</p>
+                        </div>
+                        <button onClick={() => setModalSaldosAberto(false)} className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-full"><X className="w-5 h-5"/></button>
+                    </div>
+
+                    <div className="p-6 bg-slate-50 border-b">
+                        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                            <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase">Estoque Global (Soma Atual)</p>
+                                <p className="text-sm text-slate-400 mt-1">Este é o valor que aparecerá no catálogo principal.</p>
+                            </div>
+                            <div className="text-3xl font-black text-slate-800 bg-slate-100 px-6 py-2 rounded-lg border">
+                                {saldosLocais.reduce((acc, curr) => acc + Number(curr.quantidade), 0)} <span className="text-base font-medium text-slate-500">un</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 space-y-3 max-h-[50vh] overflow-y-auto">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Distribuição por Locais Físicos/Lógicos</h3>
+                        
+                        {saldosLocais.map(local => (
+                            <div key={local.local_id} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-emerald-300 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-slate-100 p-2 rounded-lg"><MapPin className="w-4 h-4 text-slate-500"/></div>
+                                    <div>
+                                        <p className="font-bold text-slate-800 text-sm">{local.nome}</p>
+                                        <p className="text-[10px] uppercase text-slate-500">{local.tipo}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase mr-2">Qtd:</span>
+                                    <Input 
+                                        type="number" 
+                                        value={local.quantidade} 
+                                        onChange={e => atualizarQuantidadeLocal(local.local_id, parseFloat(e.target.value) || 0)}
+                                        className="w-24 text-center font-bold text-emerald-700 bg-emerald-50 border-emerald-200 focus-visible:ring-emerald-500"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="p-5 border-t border-slate-100 bg-white flex justify-end gap-3">
+                        <Button variant="outline" onClick={() => setModalSaldosAberto(false)}>Cancelar</Button>
+                        <Button onClick={salvarSaldosLocais} disabled={salvandoSaldos} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2">
+                            {salvandoSaldos ? "Atualizando..." : <><Save className="w-4 h-4"/> Salvar Saldos e Atualizar Global</>}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )}
 
         <div className="flex justify-between items-center">
           <div>
@@ -722,12 +741,24 @@ export default function Logistica() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="text-right mr-4 hidden md:block">
+                    <div className="flex items-center gap-3">
+                        <div className="text-right hidden md:block">
                             <p className="text-xs font-semibold text-slate-500">Custo: R$ {Number(prod.custo_base || 0).toFixed(2).replace('.', ',')}</p>
                             <p className="text-sm font-bold text-emerald-600">Venda: R$ {Number(prod.preco_venda || 0).toFixed(2).replace('.', ',')}</p>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => editarProduto(prod)} className="text-slate-400 hover:text-stone-700"><Edit className="w-4 h-4" /></Button>
+                        <div className="text-center bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase leading-none mb-1">Estoque</p>
+                            <p className={`text-lg font-black leading-none ${prod.estoque_atual > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{prod.estoque_atual || 0}</p>
+                        </div>
+                        
+                        <div className="flex flex-col gap-1 ml-2 border-l border-slate-200 pl-3">
+                            <Button variant="outline" size="sm" onClick={() => abrirSaldosEstoque(prod)} className="h-7 text-xs font-bold text-emerald-700 border-emerald-200 hover:bg-emerald-50 gap-1 bg-emerald-50/30">
+                                <MapPin className="w-3 h-3"/> Saldos
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => editarProduto(prod)} className="h-7 text-xs text-slate-500 hover:text-stone-700 gap-1">
+                                <Edit className="w-3 h-3" /> Editar
+                            </Button>
+                        </div>
                     </div>
                   </div>
                 )})
@@ -844,7 +875,7 @@ export default function Logistica() {
                                 <div className="text-xs font-bold text-slate-800"><Barcode className="w-3 h-3 inline mr-1"/> Rastrear Série</div>
                             </label>
                             
-                            {/* NOSSO BOTÃO NOVO AQUI */}
+                            {/* AQUI ESTÁ O BOTÃO DE EQUIPAMENTO */}
                             <Select value={isEquipamento} onValueChange={setIsEquipamento}>
                                 <SelectTrigger className={`h-8 w-44 font-bold text-xs ${isEquipamento === "Sim" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "bg-white"}`}><SelectValue/></SelectTrigger>
                                 <SelectContent><SelectItem value="Sim">É Equipamento (Máquina)</SelectItem><SelectItem value="Não">Insumo / Peça comum</SelectItem></SelectContent>
