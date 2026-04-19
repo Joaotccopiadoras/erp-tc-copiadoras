@@ -229,44 +229,37 @@ export default function Comercial() {
   return (
     <AppLayout>
       {/* A MÁGICA DA IMPRESSÃO ACONTECE AQUI:
-        Otimizado para garantir 100% de largura na folha A4 e centralização perfeita
+        Força a ocultação da barra do AppLayout e expande os containers para 100%
       */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          @page { margin: 15mm; size: auto; }
-          body * {
-            visibility: hidden;
-          }
-          #area-impressao, #area-impressao * {
-            visibility: visible;
-          }
-          #area-impressao {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+          @page { size: A4 portrait; margin: 15mm; }
+          
+          /* Oculta os elementos estruturais do sistema (Menu Lateral e Topo) */
+          aside, header { display: none !important; }
+          
+          /* Libera os containeres para ocuparem toda a tela e ignora barras de rolagem */
+          html, body, #root, main, .overflow-y-auto, .overflow-hidden {
+            display: block !important;
+            position: static !important;
             width: 100% !important;
-            max-width: 100% !important;
-            min-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
-          }
-          html, body, main, #root {
             height: auto !important;
-            width: 100% !important;
             overflow: visible !important;
-            background-color: white !important;
-            margin: 0 !important;
+            background: white !important;
             padding: 0 !important;
+            margin: 0 !important;
           }
-          button, .print\\:hidden {
-            display: none !important;
+
+          /* Garante que cores de fundo (como a barra azul da tabela) sejam impressas */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}} />
 
-      <div className="space-y-6 max-w-6xl mx-auto mb-12">
+      {/* Adicionadas as regras print:w-full e print:max-w-none para esticar no papel */}
+      <div className="space-y-6 max-w-6xl mx-auto mb-12 print:max-w-none print:w-full print:m-0 print:p-0 print:space-y-0">
         <datalist id="lista-produtos-venda">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
         <datalist id="lista-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>
 
@@ -411,7 +404,7 @@ export default function Comercial() {
         {/* ABA 2: HISTÓRICO DE VENDAS E FATURAMENTO */}
         {/* ========================================================================= */}
         {abaAtiva === "historico" && (
-          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="animate-in fade-in zoom-in-95 duration-200">
              
             {!pedidoSelecionado ? (
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden print:hidden">
@@ -462,7 +455,7 @@ export default function Comercial() {
                 </div>
             ) : (
                 /* VISÃO DE IMPRESSÃO DO DOCUMENTO E AÇÕES DE FATURAMENTO */
-                <div className="max-w-4xl mx-auto space-y-6">
+                <div className="max-w-4xl mx-auto space-y-6 print:max-w-none print:w-full print:m-0 print:p-0 print:space-y-0">
                     
                     {/* BARRA DE AÇÕES SUPERIOR */}
                     <div className="flex flex-col md:flex-row justify-between gap-4 bg-white p-4 rounded-xl border shadow-sm print:hidden">
@@ -489,8 +482,8 @@ export default function Comercial() {
                         </div>
                     </div>
 
-                    {/* FOLHA DE IMPRESSÃO A4 COM O ID MÁGICO */}
-                    <div id="area-impressao" className="bg-white p-12 rounded-xl shadow-lg border border-slate-200 print:shadow-none print:border-none print:p-0">
+                    {/* FOLHA DE IMPRESSÃO A4 */}
+                    <div id="area-impressao" className="bg-white p-12 rounded-xl shadow-lg border border-slate-200 print:p-0 print:border-none print:shadow-none print:w-full print:block">
                         {/* CABEÇALHO DO PDF */}
                         <div className="flex justify-between items-start border-b-2 border-indigo-800 pb-6 mb-8">
                             <div>
