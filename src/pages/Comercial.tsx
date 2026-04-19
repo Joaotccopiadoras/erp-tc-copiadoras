@@ -86,7 +86,7 @@ export default function Comercial() {
         sku: prod.sku || 'S/N',
         nome: prod.nome,
         quantidade: 1,
-        precoUnitario: prod.preco_venda || 0, // Puxa o preço de venda padrão, se existir
+        precoUnitario: prod.preco_venda || 0, 
         estoqueAtual: prod.estoque_atual || 0
       }]);
     }
@@ -118,18 +118,14 @@ export default function Comercial() {
 
     setSalvando(true);
     try {
-      // 1. Identificar ou Criar Cliente (simplificado)
       let idClienteFinal = clienteId;
       if (!idClienteFinal) {
         const cliMatch = clientesBD.find(c => c.nome_fantasia === clienteBusca || c.razao_social === clienteBusca);
         if (cliMatch) {
           idClienteFinal = cliMatch.id;
-        } else {
-           // Se quiser, aqui poderia ter uma lógica para cadastrar o cliente rápido no banco
         }
       }
 
-      // Validade padrão de 7 dias para orçamentos
       const dataValidade = new Date();
       dataValidade.setDate(dataValidade.getDate() + 7);
 
@@ -178,20 +174,16 @@ export default function Comercial() {
     if (!confirm(`Deseja Faturar o Pedido #${pedido.numero_pedido}?\nIsso irá dar baixa no estoque e gerar uma Conta a Receber no Financeiro.`)) return;
 
     try {
-      // 1. Puxar os itens do pedido
       const { data: itensDoPedido } = await supabase.from('com_pedidos_venda_itens').select('*').eq('pedido_id', pedido.id);
       
       if (!itensDoPedido || itensDoPedido.length === 0) return alert("Pedido sem itens.");
 
-      // 2. Dar baixa no Estoque e gerar Log de Movimentação
       for (const item of itensDoPedido) {
-        // Reduz o estoque
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', item.produto_id).single();
         if (prodData) {
             const novoEstoque = Math.max(0, prodData.estoque_atual - item.quantidade);
             await supabase.from('log_produtos').update({ estoque_atual: novoEstoque }).eq('id', item.produto_id);
         }
-        // Gera o Log de Saída
         await supabase.from('log_movimentacoes').insert({
             produto_id: item.produto_id, tipo: 'Saída', quantidade: item.quantidade, 
             documento: `PED-${pedido.numero_pedido}`, fornecedor_cliente: pedido.cliente_nome,
@@ -199,13 +191,12 @@ export default function Comercial() {
         });
       }
 
-      // 3. Gerar a Conta a Receber no Financeiro
       const payloadFin = {
           tipo: 'Receita',
           descricao: `Venda Pedido #${pedido.numero_pedido} - ${pedido.cliente_nome}`,
           valor: pedido.valor_total,
           data_emissao: new Date().toISOString().split('T')[0],
-          data_vencimento: new Date().toISOString().split('T')[0], // Para simplificar, vencimento = hoje
+          data_vencimento: new Date().toISOString().split('T')[0], 
           status: 'Pendente',
           categoria_id: categoriaReceitaId || null,
           documento_origem: `PED-${pedido.numero_pedido}`,
@@ -214,7 +205,6 @@ export default function Comercial() {
       const { error: finError } = await supabase.from('fin_lancamentos').insert([payloadFin]);
       if (finError) throw new Error("Erro ao gerar financeiro: " + finError.message);
 
-      // 4. Atualizar Status do Pedido
       await supabase.from('com_pedidos_venda').update({ status: 'Faturado' }).eq('id', pedido.id);
 
       alert(`Pedido #${pedido.numero_pedido} Faturado com sucesso! Estoque atualizado e Receita gerada.`);
@@ -238,12 +228,42 @@ export default function Comercial() {
 
   return (
     <AppLayout>
+      {/* A MÁGICA DA IMPRESSÃO ACONTECE AQUI:
+        Essa tag style ensina o navegador a esconder tudo, menos a div #area-impressao 
+      */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #area-impressao, #area-impressao * {
+            visibility: visible;
+          }
+          #area-impressao {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 20px;
+          }
+          html, body, main, #root {
+            height: auto !important;
+            overflow: visible !important;
+            background-color: white !important;
+          }
+          button, .print\\:hidden {
+            display: none !important;
+          }
+        }
+      `}} />
+
       <div className="space-y-6 max-w-6xl mx-auto mb-12">
         <datalist id="lista-produtos-venda">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
         <datalist id="lista-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>
 
         {/* CABEÇALHO E ABAS */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4 print:hidden">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Briefcase className="w-6 h-6 text-indigo-600" /> Módulo Comercial</h1>
             <p className="text-slate-500">Orçamentos, Pedidos de Venda e Faturamento.</p>
@@ -258,7 +278,7 @@ export default function Comercial() {
         {/* ABA 1: PDV / NOVO ORÇAMENTO */}
         {/* ========================================================================= */}
         {abaAtiva === "pdv" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in zoom-in-95 duration-200 print:hidden">
             
             {/* LADO ESQUERDO: SELEÇÃO DE PRODUTOS */}
             <div className="lg:col-span-2 space-y-4">
@@ -386,7 +406,7 @@ export default function Comercial() {
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
              
             {!pedidoSelecionado ? (
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                <div className="bg-white rounded-xl border shadow-sm overflow-hidden print:hidden">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                         <div className="relative w-72">
                             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -461,8 +481,8 @@ export default function Comercial() {
                         </div>
                     </div>
 
-                    {/* FOLHA DE IMPRESSÃO A4 */}
-                    <div className="bg-white p-12 rounded-xl shadow-lg border border-slate-200 print:shadow-none print:border-none print:p-0">
+                    {/* FOLHA DE IMPRESSÃO A4 COM O ID MÁGICO */}
+                    <div id="area-impressao" className="bg-white p-12 rounded-xl shadow-lg border border-slate-200 print:shadow-none print:border-none print:p-0">
                         {/* CABEÇALHO DO PDF */}
                         <div className="flex justify-between items-start border-b-2 border-indigo-800 pb-6 mb-8">
                             <div>
