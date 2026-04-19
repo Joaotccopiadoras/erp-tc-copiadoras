@@ -49,6 +49,35 @@ export default function Comercial() {
   const [pedidoSelecionado, setPedidoSelecionado] = useState<any | null>(null);
   const [buscaHistorico, setBuscaHistorico] = useState("");
 
+  // ==========================================
+  // AUTO-SAVE: RASCUNHO DO PDV
+  // ==========================================
+  useEffect(() => {
+    const rascunho = sessionStorage.getItem("comercial_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.clienteBusca) setClienteBusca(draft.clienteBusca);
+        if (draft.clienteId !== undefined) setClienteId(draft.clienteId);
+        if (draft.itensVenda) setItensVenda(draft.itensVenda);
+        if (draft.desconto !== undefined) setDesconto(draft.desconto);
+        if (draft.tipoDesconto) setTipoDesconto(draft.tipoDesconto);
+        if (draft.frete !== undefined) setFrete(draft.frete);
+        if (draft.condicaoPagamento) setCondicaoPagamento(draft.condicaoPagamento);
+        if (draft.observacoes) setObservacoes(draft.observacoes);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (clienteBusca || itensVenda.length > 0 || observacoes) {
+      const draft = { clienteBusca, clienteId, itensVenda, desconto, tipoDesconto, frete, condicaoPagamento, observacoes };
+      sessionStorage.setItem("comercial_rascunho", JSON.stringify(draft));
+    }
+  }, [clienteBusca, clienteId, itensVenda, desconto, tipoDesconto, frete, condicaoPagamento, observacoes]);
+
+  // ==========================================
+
   useEffect(() => {
     fetchDadosBase();
     fetchPedidos();
@@ -103,6 +132,7 @@ export default function Comercial() {
 
   const limparPDV = () => {
     if (!confirm("Limpar todos os dados do orçamento atual?")) return;
+    sessionStorage.removeItem("comercial_rascunho");
     setClienteBusca(""); setClienteId(null); setItensVenda([]); setDesconto(0); setFrete(0); setObservacoes("");
   };
 
@@ -158,7 +188,10 @@ export default function Comercial() {
       if (itensError) throw itensError;
 
       alert(`${statusInicial} #${pedidoData.numero_pedido} salvo com sucesso!`);
+      
+      sessionStorage.removeItem("comercial_rascunho"); // Limpa após salvar
       setClienteBusca(""); setClienteId(null); setItensVenda([]); setDesconto(0); setFrete(0); setObservacoes("");
+      
       fetchPedidos();
       setAbaAtiva("historico");
 
@@ -228,37 +261,19 @@ export default function Comercial() {
 
   return (
     <AppLayout>
-      {/* A MÁGICA DA IMPRESSÃO ACONTECE AQUI:
-        Força a ocultação da barra do AppLayout e expande os containers para 100%
-      */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { size: A4 portrait; margin: 15mm; }
-          
-          /* Oculta os elementos estruturais do sistema (Menu Lateral e Topo) */
           aside, header { display: none !important; }
-          
-          /* Libera os containeres para ocuparem toda a tela e ignora barras de rolagem */
           html, body, #root, main, .overflow-y-auto, .overflow-hidden {
-            display: block !important;
-            position: static !important;
-            width: 100% !important;
-            height: auto !important;
-            overflow: visible !important;
-            background: white !important;
-            padding: 0 !important;
-            margin: 0 !important;
+            display: block !important; position: static !important; width: 100% !important;
+            height: auto !important; overflow: visible !important; background: white !important;
+            padding: 0 !important; margin: 0 !important;
           }
-
-          /* Garante que cores de fundo (como a barra azul da tabela) sejam impressas */
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
       `}} />
 
-      {/* Adicionadas as regras print:w-full e print:max-w-none para esticar no papel */}
       <div className="space-y-6 max-w-6xl mx-auto mb-12 print:max-w-none print:w-full print:m-0 print:p-0 print:space-y-0">
         <datalist id="lista-produtos-venda">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
         <datalist id="lista-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>

@@ -40,6 +40,50 @@ export default function CrmGlobal() {
   const [interacaoProxPasso, setInteracaoProxPasso] = useState("");
   const [interacaoDataAgend, setInteracaoDataAgend] = useState("");
 
+  // ==========================================
+  // AUTO-SAVE: RASCUNHOS
+  // ==========================================
+  useEffect(() => {
+    const cliDraft = sessionStorage.getItem("crm_cliente_rascunho");
+    if (cliDraft) {
+      try {
+        const parsed = JSON.parse(cliDraft);
+        if (parsed.mostrarForm !== undefined) setMostrarForm(parsed.mostrarForm);
+        if (parsed.novoCliRazao) setNovoCliRazao(parsed.novoCliRazao);
+        if (parsed.novoCliFantasia) setNovoCliFantasia(parsed.novoCliFantasia);
+        if (parsed.novoCliCnpj) setNovoCliCnpj(parsed.novoCliCnpj);
+        if (parsed.novoCliTelefone) setNovoCliTelefone(parsed.novoCliTelefone);
+        if (parsed.novoCliEmail) setNovoCliEmail(parsed.novoCliEmail);
+        if (parsed.novoCliStatus) setNovoCliStatus(parsed.novoCliStatus);
+      } catch(e) {}
+    }
+
+    const intDraft = sessionStorage.getItem("crm_interacao_rascunho");
+    if (intDraft) {
+      try {
+        const parsed = JSON.parse(intDraft);
+        if (parsed.interacaoTipo) setInteracaoTipo(parsed.interacaoTipo);
+        if (parsed.interacaoDesc) setInteracaoDesc(parsed.interacaoDesc);
+        if (parsed.interacaoProxPasso) setInteracaoProxPasso(parsed.interacaoProxPasso);
+        if (parsed.interacaoDataAgend) setInteracaoDataAgend(parsed.interacaoDataAgend);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mostrarForm || novoCliFantasia || novoCliRazao || novoCliCnpj) {
+      sessionStorage.setItem("crm_cliente_rascunho", JSON.stringify({ mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus }));
+    }
+  }, [mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus]);
+
+  useEffect(() => {
+    if (interacaoDesc || interacaoProxPasso) {
+      sessionStorage.setItem("crm_interacao_rascunho", JSON.stringify({ interacaoTipo, interacaoDesc, interacaoProxPasso, interacaoDataAgend }));
+    }
+  }, [interacaoTipo, interacaoDesc, interacaoProxPasso, interacaoDataAgend]);
+
+  // ==========================================
+
   useEffect(() => {
     fetchClientes();
   }, []);
@@ -119,6 +163,7 @@ export default function CrmGlobal() {
           alert("Cliente cadastrado com sucesso!");
       }
       
+      sessionStorage.removeItem("crm_cliente_rascunho"); // Limpa o rascunho após salvar
       setMostrarForm(false);
       setEditandoId(null);
       setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail("");
@@ -161,8 +206,11 @@ export default function CrmGlobal() {
     try {
       const payload = { cliente_id: clienteSelecionado.id, tipo: interacaoTipo, descricao: interacaoDesc, proximo_passo: interacaoProxPasso, data_agendamento: interacaoDataAgend || null };
       await supabase.from('com_crm_historico').insert([payload]);
+      
       alert("Interação registrada!");
+      sessionStorage.removeItem("crm_interacao_rascunho"); // Limpa o rascunho após salvar
       setInteracaoDesc(""); setInteracaoProxPasso(""); setInteracaoDataAgend("");
+      
       const { data } = await supabase.from('com_crm_historico').select('*').eq('cliente_id', clienteSelecionado.id).order('data_interacao', { ascending: false });
       if (data) setHistorico(data);
     } catch (e: any) { alert("Erro: " + e.message); } finally { setSalvando(false); }
@@ -223,7 +271,11 @@ export default function CrmGlobal() {
                             </div>
                         </div>
                         <div className="flex justify-end gap-2 pt-4 border-t border-indigo-100">
-                            <Button variant="outline" onClick={() => {setMostrarForm(false); setEditandoId(null);}}>Cancelar</Button>
+                            <Button variant="outline" onClick={() => {
+                                sessionStorage.removeItem("crm_cliente_rascunho");
+                                setMostrarForm(false); setEditandoId(null);
+                                setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail(""); setNovoCliStatus("Lead");
+                            }}>Cancelar / Limpar Rascunho</Button>
                             <Button onClick={salvarCliente} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                                 {editandoId ? 'Atualizar Cliente' : 'Salvar Cliente'}
                             </Button>
