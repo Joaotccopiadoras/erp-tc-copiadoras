@@ -2,31 +2,8 @@ import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-    Select, 
-    SelectContent, 
-    SelectItem, 
-    SelectTrigger, 
-    SelectValue } from "@/components/ui/select";
-import {
-    Activity,
-    ArrowLeft,
-    Building2,
-    Calendar as CalendarIcon,
-    Clock,
-    FileSignature,
-    Layers,
-    Loader2,
-    Mail,
-    MessageSquare,
-    Phone,
-    Printer, 
-    Search,
-    ShoppingBag,
-    Target,
-    Users, 
-    UserPlus,
-    Wrench } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Users, Search, UserPlus, Phone, Mail, Building2, MessageSquare, Target, Calendar as CalendarIcon, Clock, ShoppingBag, Wrench, Printer, FileSignature, ArrowLeft, Activity, Layers, Loader2, Edit } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function CrmGlobal() {
@@ -36,8 +13,9 @@ export default function CrmGlobal() {
   const [abaDossie, setAbaDossie] = useState<"timeline" | "comercial" | "tecnica" | "grafica" | "contratos">("timeline");
   const [salvando, setSalvando] = useState(false);
 
-  // Form Novo Cliente
+  // Form Novo/Editar Cliente
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [novoCliRazao, setNovoCliRazao] = useState("");
   const [novoCliFantasia, setNovoCliFantasia] = useState("");
   const [novoCliCnpj, setNovoCliCnpj] = useState("");
@@ -61,36 +39,6 @@ export default function CrmGlobal() {
   const [interacaoDesc, setInteracaoDesc] = useState("");
   const [interacaoProxPasso, setInteracaoProxPasso] = useState("");
   const [interacaoDataAgend, setInteracaoDataAgend] = useState("");
-
-  useEffect(() => {
-    const rascunho = sessionStorage.getItem("clientes_rascunho");
-    if (rascunho) {
-      try {
-        const draft = JSON.parse(rascunho);
-        if (draft.mostrarForm !== undefined) setMostrarForm(draft.mostrarForm);
-        if (draft.novoCliRazao) setNovoCliRazao(draft.novoCliRazao);
-        if (draft.novoCliFantasia) setNovoCliFantasia(draft.novoCliFantasia);
-        if (draft.novoCliCnpj) setNovoCliCnpj(draft.novoCliCnpj);
-        if (draft.novoCliTelefone) setNovoCliTelefone(draft.novoCliTelefone);
-        if (draft.novoCliEmail) setNovoCliEmail(draft.novoCliEmail);
-        if (draft.novoCliStatus) setNovoCliStatus(draft.novoCliStatus);
-      } catch(e) {}
-    }
-  }, []);
-
-  useEffect(() => {
-    if (mostrarForm || novoCliRazao || novoCliFantasia) {
-      const draft = { mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus };
-      sessionStorage.setItem("clientes_rascunho", JSON.stringify(draft));
-    }
-  }, [mostrarForm,  novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus]);
-
-  const limparFormulario = () => {
-    sessionStorage.removeItem("financeiro_rascunho");
-    setMostrarForm(false);
-    setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail("");
-    setNovoCliStatus("");
-  };
 
   useEffect(() => {
     fetchClientes();
@@ -119,7 +67,6 @@ export default function CrmGlobal() {
       setNovoCliFantasia(data.nome_fantasia || data.razao_social || "");
       setNovoCliEmail(data.email || "");
       
-      // Formata o telefone se existir
       if (data.ddd_telefone1) {
           setNovoCliTelefone(`(${data.ddd_telefone1}) ${data.telefone1}`);
       }
@@ -132,17 +79,48 @@ export default function CrmGlobal() {
     }
   };
 
-  const salvarNovoCliente = async () => {
+  const abrirNovoCliente = () => {
+      setEditandoId(null);
+      setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail(""); setNovoCliStatus("Lead");
+      setMostrarForm(true);
+  };
+
+  const abrirEditarCliente = (cli: any) => {
+      setEditandoId(cli.id);
+      setNovoCliRazao(cli.razao_social || "");
+      setNovoCliFantasia(cli.nome_fantasia || "");
+      setNovoCliCnpj(cli.cnpj_cpf || "");
+      setNovoCliTelefone(cli.telefone || "");
+      setNovoCliEmail(cli.email || "");
+      setNovoCliStatus(cli.status_funil || "Lead");
+      setMostrarForm(true);
+  };
+
+  const salvarCliente = async () => {
     if (!novoCliFantasia && !novoCliRazao) return alert("Preencha o Nome Fantasia ou Razão Social.");
     setSalvando(true);
     try {
-      const { error } = await supabase.from('log_clientes').insert([{
-        razao_social: novoCliRazao || novoCliFantasia, nome_fantasia: novoCliFantasia || novoCliRazao,
-        cnpj_cpf: novoCliCnpj, telefone: novoCliTelefone, email: novoCliEmail, status_funil: novoCliStatus
-      }]);
-      if (error) throw error;
-      alert("Cliente cadastrado com sucesso!");
+      const payload = {
+        razao_social: novoCliRazao || novoCliFantasia, 
+        nome_fantasia: novoCliFantasia || novoCliRazao,
+        cnpj_cpf: novoCliCnpj, 
+        telefone: novoCliTelefone, 
+        email: novoCliEmail, 
+        status_funil: novoCliStatus
+      };
+
+      if (editandoId) {
+          const { error } = await supabase.from('log_clientes').update(payload).eq('id', editandoId);
+          if (error) throw error;
+          alert("Cliente atualizado com sucesso!");
+      } else {
+          const { error } = await supabase.from('log_clientes').insert([payload]);
+          if (error) throw error;
+          alert("Cliente cadastrado com sucesso!");
+      }
+      
       setMostrarForm(false);
+      setEditandoId(null);
       setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail("");
       fetchClientes();
     } catch (e: any) { alert("Erro ao salvar: " + e.message); } finally { setSalvando(false); }
@@ -214,13 +192,13 @@ export default function CrmGlobal() {
                         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                         <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente por nome, CNPJ..." className="pl-9 bg-white" />
                     </div>
-                    <Button onClick={() => setMostrarForm(!mostrarForm)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"><UserPlus className="w-4 h-4"/> Novo Cliente</Button>
+                    <Button onClick={abrirNovoCliente} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"><UserPlus className="w-4 h-4"/> Novo Cliente</Button>
                 </div>
 
                 {mostrarForm && (
                     <div className="p-6 bg-indigo-50/50 border-b border-indigo-100 space-y-4">
                         <div className="flex justify-between items-center mb-2">
-                            <h3 className="font-bold text-indigo-800 flex items-center gap-2"><Target className="w-5 h-5"/> Ficha do Cliente</h3>
+                            <h3 className="font-bold text-indigo-800 flex items-center gap-2"><Target className="w-5 h-5"/> {editandoId ? 'Editar Cliente' : 'Nova Ficha de Cliente'}</h3>
                             <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
                                 <Input value={novoCliCnpj} onChange={e => setNovoCliCnpj(e.target.value)} placeholder="CNPJ para busca..." className="h-8 w-44 border-none focus-visible:ring-0 text-xs font-mono" />
                                 <Button size="sm" onClick={buscarDadosCnpj} disabled={buscandoCnpj} variant="ghost" className="h-8 text-indigo-600 font-bold gap-2">
@@ -245,8 +223,10 @@ export default function CrmGlobal() {
                             </div>
                         </div>
                         <div className="flex justify-end gap-2 pt-4 border-t border-indigo-100">
-                            <Button variant="outline" onClick={() => setMostrarForm(false)}>Cancelar</Button>
-                            <Button onClick={salvarNovoCliente} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white">Salvar Cliente</Button>
+                            <Button variant="outline" onClick={() => {setMostrarForm(false); setEditandoId(null);}}>Cancelar</Button>
+                            <Button onClick={salvarCliente} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                                {editandoId ? 'Atualizar Cliente' : 'Salvar Cliente'}
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -258,7 +238,7 @@ export default function CrmGlobal() {
                                 <th className="p-4 font-semibold border-b">Empresa / Cliente</th>
                                 <th className="p-4 font-semibold border-b text-center">Status (Funil)</th>
                                 <th className="p-4 font-semibold border-b">Contatos</th>
-                                <th className="p-4 font-semibold border-b text-center w-36">Visão 360º</th>
+                                <th className="p-4 font-semibold border-b text-center w-44">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -269,7 +249,7 @@ export default function CrmGlobal() {
                                     const corFunil = cli.status_funil === 'Lead' ? 'bg-slate-100 text-slate-700' : cli.status_funil === 'Prospecção' ? 'bg-blue-100 text-blue-700' : cli.status_funil === 'Negociação' ? 'bg-amber-100 text-amber-700' : cli.status_funil === 'Cliente Ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
                                     
                                     return (
-                                    <tr key={cli.id} className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => abrirVisao360(cli)}>
+                                    <tr key={cli.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => abrirVisao360(cli)}>
                                         <td className="p-4">
                                             <p className="font-bold text-slate-800 text-base">{cli.nome_fantasia || cli.razao_social}</p>
                                             <p className="text-xs text-slate-500 mt-0.5 font-mono">{cli.cnpj_cpf}</p>
@@ -282,7 +262,14 @@ export default function CrmGlobal() {
                                             {cli.email && <p className="text-xs text-slate-500 flex items-center gap-2 mt-1"><Mail className="w-3 h-3 text-slate-400"/> {cli.email}</p>}
                                         </td>
                                         <td className="p-4 text-center">
-                                            <Button variant="outline" size="sm" className="text-indigo-600 border-indigo-200 group-hover:bg-indigo-50 w-full gap-2"><Activity className="w-4 h-4"/> Dossiê</Button>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Button variant="outline" size="sm" className="text-indigo-600 border-indigo-200 group-hover:bg-indigo-50 flex-1 gap-2" onClick={(e) => { e.stopPropagation(); abrirVisao360(cli); }}>
+                                                    <Activity className="w-4 h-4"/> Dossiê
+                                                </Button>
+                                                <Button variant="outline" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={(e) => { e.stopPropagation(); abrirEditarCliente(cli); }} title="Editar Cadastro">
+                                                    <Edit className="w-4 h-4"/>
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 )})
@@ -301,6 +288,7 @@ export default function CrmGlobal() {
                         <div className="flex items-center gap-3 mb-2">
                             <Button variant="ghost" size="sm" onClick={() => setClienteSelecionado(null)} className="h-8 px-2 text-slate-400 hover:text-slate-700"><ArrowLeft className="w-4 h-4"/></Button>
                             <h2 className="text-2xl font-black text-slate-800 tracking-tight">{clienteSelecionado.nome_fantasia || clienteSelecionado.razao_social}</h2>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => { setClienteSelecionado(null); abrirEditarCliente(clienteSelecionado); }} title="Editar Dados"><Edit className="w-3 h-3"/></Button>
                         </div>
                         <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 ml-12">
                             <span className="flex items-center gap-1 font-semibold"><Building2 className="w-4 h-4 text-slate-400"/> {clienteSelecionado.cnpj_cpf}</span>
