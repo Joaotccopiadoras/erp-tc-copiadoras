@@ -43,34 +43,42 @@ export default function GestaoEquipamentos() {
   const [contadoresSelecionados, setContadoresSelecionados] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  useEffect (() => {
+  // ==========================================
+  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO CORRIGIDO)
+  // ==========================================
+  useEffect(() => {
     const rascunho = sessionStorage.getItem("equipamentos_rascunho");
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
-        if (draft.equipSelecionado !== undefined) setEquipSelecionado(draft.equipSelecionado);
-        if (draft.abaDossie !== undefined) setAbaDossie(draft.abaDossie);
-        if (draft.historicoMov !== undefined) setHistoricoMov(draft.historicoMov);
-        if (draft.historicoOS !== undefined) setHistoricoOS(draft.historicoOS);
-        if (draft.historicoPecas !== undefined) setHistoricoPecas(draft.historicoPecas);
-        if (draft.leituras !== undefined) setLeituras(draft.leituras);
+        if (draft.form) setForm(draft.form);
+        if (draft.specs) setSpecs(draft.specs);
+        if (draft.contadoresSelecionados) setContadoresSelecionados(draft.contadoresSelecionados);
+        if (draft.abaAtiva === "novo") setAbaAtiva("novo"); // Mantém na aba de cadastro se estava lá
       } catch(e) {}
     }
   }, []);
 
-  useEffect (() => {
-    if (equipSelecionado || abaDossie || historicoMov) {
-        const draft = {
-            equipSelecionado, abaDossie, historicoMov, historicoOS, historicoPecas, leituras
-        };
-        sessionStorage.setItem("equipamentos_rascunho", JSON.stringify(draft))
+  useEffect(() => {
+    // Salva o rascunho se a aba de cadastro estiver ativa ou se algo foi preenchido
+    if (abaAtiva === "novo" || form.produto_id || form.numero_serie) {
+      const draft = { form, specs, contadoresSelecionados, abaAtiva };
+      sessionStorage.setItem("equipamentos_rascunho", JSON.stringify(draft));
     }
-  }, [equipSelecionado, abaDossie, historicoMov, historicoOS, historicoPecas, leituras]);
+  }, [form, specs, contadoresSelecionados, abaAtiva]);
 
   const limparFormulario = () => {
     sessionStorage.removeItem("equipamentos_rascunho");
-    setEquipSelecionado(""); setAbaDossie(""); setHistoricoMov(""); setHistoricoOS(""); setHistoricoPecas(""); setLeituras("");
+    setForm({
+      produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
+      numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
+      vendido_por_tc: "Não", vendedor: "", garantia_fornecedor_id: "nenhum", garantia_nf_compra: "", garantia_inicio: "", garantia_fim: ""
+    });
+    setSpecs({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
+    setContadoresSelecionados([]);
   };
+
+  // ==========================================
 
   useEffect(() => { fetchDadosBase(); fetchEquipamentos(); }, []);
 
@@ -143,7 +151,9 @@ export default function GestaoEquipamentos() {
       }
 
       alert("Equipamento cadastrado com sucesso!");
-      setAbaAtiva("lista"); fetchEquipamentos();
+      limparFormulario(); // <-- Limpa o rascunho e reseta os estados após salvar!
+      setAbaAtiva("lista"); 
+      fetchEquipamentos();
     } catch (e: any) {
       if (e.code === '23505') alert("Este Número de Série já está cadastrado no sistema.");
       else alert("Erro: " + e.message);
@@ -162,7 +172,6 @@ export default function GestaoEquipamentos() {
     if (movRes.data) setHistoricoMov(movRes.data);
     if (osRes.data) {
         setHistoricoOS(osRes.data);
-        // Puxar as peças trocadas vinculadas a essas OS
         if (osRes.data.length > 0) {
             const osIds = osRes.data.map(os => os.id);
             const { data: pecasRes } = await supabase.from('srv_os_pecas').select('*, srv_ordens_servico(numero_os, data_abertura)').in('os_id', osIds);
@@ -257,9 +266,12 @@ export default function GestaoEquipamentos() {
         {/* ========================================================================= */}
         {abaAtiva === "novo" && (
           <div className="bg-white rounded-xl border shadow-sm p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="border-b pb-4 mb-4">
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Printer className="w-5 h-5 text-blue-600"/> Cadastrar Novo Equipamento</h2>
-                <p className="text-sm text-slate-500 mt-1">Insira os dados técnicos, de propriedade e alocação inicial.</p>
+            <div className="border-b pb-4 mb-4 flex justify-between items-center">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Printer className="w-5 h-5 text-blue-600"/> Cadastrar Novo Equipamento</h2>
+                    <p className="text-sm text-slate-500 mt-1">Insira os dados técnicos, de propriedade e alocação inicial.</p>
+                </div>
+                <Button variant="ghost" onClick={limparFormulario} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50">Limpar Rascunho</Button>
             </div>
 
             {/* SEÇÃO 1: IDENTIFICAÇÃO E MODELO */}
