@@ -2,8 +2,31 @@ import { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Search, UserPlus, Phone, Mail, Building2, MessageSquare, Target, Calendar as CalendarIcon, Clock, ShoppingBag, Wrench, Printer, FileSignature, ArrowLeft, Activity, Layers } from "lucide-react";
+import { 
+    Select, 
+    SelectContent, 
+    SelectItem, 
+    SelectTrigger, 
+    SelectValue } from "@/components/ui/select";
+import {
+    Activity,
+    ArrowLeft,
+    Building2,
+    Calendar as CalendarIcon,
+    Clock,
+    FileSignature,
+    Layers,
+    Loader2,
+    Mail,
+    MessageSquare,
+    Phone,
+    Printer, 
+    Search,
+    ShoppingBag,
+    Target,
+    Users, 
+    UserPlus,
+    Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function CrmGlobal() {
@@ -21,6 +44,9 @@ export default function CrmGlobal() {
   const [novoCliTelefone, setNovoCliTelefone] = useState("");
   const [novoCliEmail, setNovoCliEmail] = useState("");
   const [novoCliStatus, setNovoCliStatus] = useState("Lead");
+  
+  // Estado para busca de CNPJ
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
 
   // Dados da Visão 360º
   const [historico, setHistorico] = useState<any[]>([]);
@@ -45,6 +71,37 @@ export default function CrmGlobal() {
     if (data) setClientes(data);
   };
 
+  // --- FUNÇÃO DE BUSCA CNPJ (BrasilAPI) ---
+  const buscarDadosCnpj = async () => {
+    const cnpjLimpo = novoCliCnpj.replace(/\D/g, "");
+    if (cnpjLimpo.length !== 14) {
+      return alert("Digite um CNPJ válido com 14 números.");
+    }
+
+    setBuscandoCnpj(true);
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+      if (!response.ok) throw new Error("CNPJ não encontrado.");
+      
+      const data = await response.json();
+      
+      setNovoCliRazao(data.razao_social || "");
+      setNovoCliFantasia(data.nome_fantasia || data.razao_social || "");
+      setNovoCliEmail(data.email || "");
+      
+      // Formata o telefone se existir
+      if (data.ddd_telefone1) {
+          setNovoCliTelefone(`(${data.ddd_telefone1}) ${data.telefone1}`);
+      }
+
+      alert("Dados importados com sucesso da Receita Federal!");
+    } catch (error: any) {
+      alert("Erro ao buscar CNPJ: " + error.message);
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  };
+
   const salvarNovoCliente = async () => {
     if (!novoCliFantasia && !novoCliRazao) return alert("Preencha o Nome Fantasia ou Razão Social.");
     setSalvando(true);
@@ -65,7 +122,6 @@ export default function CrmGlobal() {
     setClienteSelecionado(cliente);
     setAbaDossie("timeline");
     
-    // Puxa tudo do cliente em paralelo para montar o Dossiê
     const [histRes, pedRes, osRes, eqRes, opRes, contRes] = await Promise.all([
       supabase.from('com_crm_historico').select('*').eq('cliente_id', cliente.id).order('data_interacao', { ascending: false }),
       supabase.from('com_pedidos_venda').select('*').eq('cliente_id', cliente.id).order('data_emissao', { ascending: false }),
@@ -133,7 +189,17 @@ export default function CrmGlobal() {
 
                 {mostrarForm && (
                     <div className="p-6 bg-indigo-50/50 border-b border-indigo-100 space-y-4">
-                        <h3 className="font-bold text-indigo-800 flex items-center gap-2 mb-4"><Target className="w-5 h-5"/> Ficha do Cliente</h3>
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-bold text-indigo-800 flex items-center gap-2"><Target className="w-5 h-5"/> Ficha do Cliente</h3>
+                            <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
+                                <Input value={novoCliCnpj} onChange={e => setNovoCliCnpj(e.target.value)} placeholder="CNPJ para busca..." className="h-8 w-44 border-none focus-visible:ring-0 text-xs font-mono" />
+                                <Button size="sm" onClick={buscarDadosCnpj} disabled={buscandoCnpj} variant="ghost" className="h-8 text-indigo-600 font-bold gap-2">
+                                    {buscandoCnpj ? <Loader2 className="w-3 h-3 animate-spin"/> : <Search className="w-3 h-3"/>}
+                                    Puxar da BrasilAPI
+                                </Button>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Razão Social</label><Input value={novoCliRazao} onChange={e => setNovoCliRazao(e.target.value)} className="bg-white" /></div>
                             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome Fantasia (Principal)</label><Input value={novoCliFantasia} onChange={e => setNovoCliFantasia(e.target.value)} className="bg-white" /></div>
@@ -227,7 +293,7 @@ export default function CrmGlobal() {
                     <button onClick={() => setAbaDossie("contratos")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "contratos" ? "bg-amber-50 text-amber-700" : "text-slate-500 hover:bg-slate-50"}`}><FileSignature className="w-4 h-4"/> Contratos</button>
                     <button onClick={() => setAbaDossie("comercial")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "comercial" ? "bg-emerald-50 text-emerald-700" : "text-slate-500 hover:bg-slate-50"}`}><ShoppingBag className="w-4 h-4"/> Comercial</button>
                     <button onClick={() => setAbaDossie("tecnica")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "tecnica" ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50"}`}><Wrench className="w-4 h-4"/> Técnica & Equip.</button>
-                    <button onClick={() => setAbaDossie("grafica")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "grafica" ? "bg-purple-50 text-purple-700" : "text-slate-500 hover:bg-slate-50"}`}><Layers className="w-4 h-4"/> Gráfica (OPs)</button>
+                    <button onClick={() => setAbaDossie("grafica")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "grafica" ? "bg-purple-50 text-purple-700" : "text-slate-500 hover:bg-slate-50"}`}><Layers className="w-4 h-4"/> Gráfica (OSG)</button>
                 </div>
 
                 {/* CONTEÚDO DAS ABAS */}
@@ -350,14 +416,14 @@ export default function CrmGlobal() {
 
                     {abaDossie === "grafica" && (
                         <div>
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><Layers className="w-5 h-5 text-purple-600"/> Ordens de Produção Gráfica</h3>
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><Layers className="w-5 h-5 text-purple-600"/> Ordens de Serviço Gráfico (OSG)</h3>
                             <table className="w-full text-left text-sm border-collapse">
-                                <thead><tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider"><th className="p-3">Data</th><th className="p-3">Nº OP</th><th className="p-3">Serviço / Produto</th><th className="p-3 text-center">Status</th><th className="p-3 text-center">Qtd</th></tr></thead>
+                                <thead><tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider"><th className="p-3">Data</th><th className="p-3">Nº OSG</th><th className="p-3">Serviço / Produto</th><th className="p-3 text-center">Status</th><th className="p-3 text-center">Qtd</th></tr></thead>
                                 <tbody>
                                     {ordensProducao.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-slate-400">Nenhum serviço gráfico encomendado.</td></tr> : ordensProducao.map(op => (
                                         <tr key={op.id} className="border-b border-slate-100 hover:bg-slate-50">
                                             <td className="p-3 font-medium text-slate-600">{new Date(op.data_entrada).toLocaleDateString('pt-BR')}</td>
-                                            <td className="p-3 font-bold text-slate-800">OP-{String(op.numero_op).padStart(4,'0')}</td>
+                                            <td className="p-3 font-bold text-slate-800">OSG-{String(op.numero_op).padStart(4,'0')}</td>
                                             <td className="p-3 text-slate-700 font-medium">{op.descricao_servico}</td>
                                             <td className="p-3 text-center"><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${op.status === 'Entregue' || op.status === 'Pronto para Entrega' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}`}>{op.status}</span></td>
                                             <td className="p-3 text-center font-bold text-purple-700">{op.quantidade_produzir}</td>
