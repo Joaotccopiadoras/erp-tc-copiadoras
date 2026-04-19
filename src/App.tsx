@@ -29,6 +29,7 @@ import GestaoContratos from "./pages/GestaoContratos";
 import Tecnica from "./pages/Tecnica";
 import GestaoEquipamentos from "./pages/GestaoEquipamentos";
 import OrdensdeServico from "./pages/OrdensdeServico";
+import Recondicionamento from "./pages/Recondicionamento";
 
 import Grafica from "./pages/Grafica";
 
@@ -103,7 +104,6 @@ export default function App() {
           <Route path="/deppessoal" element={<RotaProtegida><DepartamentoPessoal /></RotaProtegida>} />
           <Route path="/patrimonio" element={<RotaProtegida><GestaoPatrimonio /></RotaProtegida>} />
 
-
           <Route path="/dashboardfinanceiro" element={<RotaProtegida><DashboardFinanceiro /></RotaProtegida>} />
 
           <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
@@ -114,6 +114,7 @@ export default function App() {
 
           <Route path="/equipamentos" element={<RotaProtegida><GestaoEquipamentos /></RotaProtegida>} />
           <Route path="/os" element={<RotaProtegida><OrdensdeServico /></RotaProtegida>} />
+          <Route path="/recondicionamento" element={<RotaProtegida><Recondicionamento /></RotaProtegida>} />
 
           <Route path="/grafica" element={<RotaProtegida><Grafica /></RotaProtegida>} />
           

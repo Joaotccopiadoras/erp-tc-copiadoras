@@ -26,6 +26,7 @@ import {
   PackageOpen,
   Printer,
   Receipt,
+  Recycle,
   ScrollText,
   ShoppingBag,
   ShoppingCart,
@@ -82,7 +83,8 @@ const MENU_GROUPS = [
     itens: [
       { nome: "Programação Técnica", url: "/tecnica", icone: CalendarClock },
       { nome: "Gestão de Equipamentos", url: "/equipamentos", icone: Printer },
-      { nome: "Ordens de Serviço Técnico", url: "/os", icone: FileText}
+      { nome: "Ordens de Serviço Técnico", url: "/os", icone: FileText},
+      { nome: "Recondicionamento", url: "/recondicionamento", icone: Recycle},
     ]
   },
   {
