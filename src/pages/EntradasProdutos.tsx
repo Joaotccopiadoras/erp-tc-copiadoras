@@ -21,6 +21,12 @@ type ItemEntrada = {
   nomeOriginalXML?: string;
 };
 
+type FaturaXML = {
+  numero: string;
+  vencimento: string;
+  valor: number;
+};
+
 export default function Entradas() {
   const [abaAtiva, setAbaAtiva] = useState<"receber" | "historico">("receber");
   const [modo, setModo] = useState<"formulario" | "bipagem" | "detalhe_historico">("formulario");
@@ -51,9 +57,9 @@ export default function Entradas() {
   const [valorCofins, setValorCofins] = useState(0);
   const [valorOutros, setValorOutros] = useState(0);
   
-  // NOVO: INTEGRAÇÃO FINANCEIRA
+  // NOVO: INTEGRAÇÃO FINANCEIRA (AGORA COM MÚLTIPLAS PARCELAS)
   const [gerarFinanceiro, setGerarFinanceiro] = useState(true);
-  const [dataVencimento, setDataVencimento] = useState("");
+  const [faturas, setFaturas] = useState<FaturaXML[]>([]);
   const [formaPagamento, setFormaPagamento] = useState("Boleto");
   const [centroCusto, setCentroCusto] = useState("ShowRoom / Geral");
   const [categoriasFin, setCategoriasFin] = useState<any[]>([]);
@@ -89,7 +95,7 @@ export default function Entradas() {
           setTransportadoraId(draft.transportadoraId || null); setCteNumero(draft.cteNumero || ""); setCteChave(draft.cteChave || "");
           setValorFrete(draft.valorFrete || 0); setValorIcms(draft.valorIcms || 0); setValorIcmsSt(draft.valorIcmsSt || 0);
           setValorIpi(draft.valorIpi || 0); setValorPis(draft.valorPis || 0); setValorCofins(draft.valorCofins || 0); setValorOutros(draft.valorOutros || 0);
-          setGerarFinanceiro(draft.gerarFinanceiro ?? true); setDataVencimento(draft.dataVencimento || ""); setFormaPagamento(draft.formaPagamento || "Boleto");
+          setGerarFinanceiro(draft.gerarFinanceiro ?? true); setFaturas(draft.faturas || []); setFormaPagamento(draft.formaPagamento || "Boleto");
           setCentroCusto(draft.centroCusto || "ShowRoom / Geral"); setCategoriaFinId(draft.categoriaFinId || "");
           setItens(draft.itens || []);
           if (draft.modo) setModo(draft.modo);
@@ -104,7 +110,7 @@ export default function Entradas() {
         editandoId, fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, localDestino,
         modalidadeFrete, transportadoraBusca, transportadoraId, cteNumero, cteChave, valorFrete,
         valorIcms, valorIcmsSt, valorIpi, valorPis, valorCofins, valorOutros, itens, modo,
-        gerarFinanceiro, dataVencimento, formaPagamento, centroCusto, categoriaFinId
+        gerarFinanceiro, faturas, formaPagamento, centroCusto, categoriaFinId
       };
       sessionStorage.setItem("entradas_rascunho", JSON.stringify(draft));
     }
@@ -112,7 +118,7 @@ export default function Entradas() {
     editandoId, fornecedorBusca, fornecedorId, documento, cfop, chaveAcesso, dataEmissao, localDestino,
     modalidadeFrete, transportadoraBusca, transportadoraId, cteNumero, cteChave, valorFrete,
     valorIcms, valorIcmsSt, valorIpi, valorPis, valorCofins, valorOutros, itens, modo, abaAtiva,
-    gerarFinanceiro, dataVencimento, formaPagamento, centroCusto, categoriaFinId
+    gerarFinanceiro, faturas, formaPagamento, centroCusto, categoriaFinId
   ]);
 
   useEffect(() => { fetchDadosBase(); }, []);
@@ -165,7 +171,7 @@ export default function Entradas() {
     setDocumento(""); setCfop(""); setChaveAcesso(""); setDataEmissao("");
     setModalidadeFrete("0 - CIF"); setTransportadoraBusca(""); setTransportadoraId(null); setCteNumero(""); setCteChave(""); setValorFrete(0);
     setValorIcms(0); setValorIcmsSt(0); setValorIpi(0); setValorPis(0); setValorCofins(0); setValorOutros(0);
-    setDataVencimento("");
+    setFaturas([]);
     setItens([]); setBuscaProduto(""); setSerialInput(""); setIndexBipagem(null); setModo("formulario");
   };
 
@@ -234,15 +240,21 @@ export default function Entradas() {
       setTransportadoraId(doc.transportadora_id); setTransportadoraBusca(doc.transportadora || "");
       
       // Puxa info financeira do banco
-      const { data: finData } = await supabase.from('fin_lancamentos').select('*').eq('documento_origem', doc.documento).eq('status', 'Pendente').single();
-      if (finData) {
+      const { data: finData } = await supabase.from('fin_lancamentos').select('*').eq('documento_origem', doc.documento).eq('status', 'Pendente').order('data_vencimento', { ascending: true });
+      if (finData && finData.length > 0) {
           setGerarFinanceiro(true);
-          setDataVencimento(finData.data_vencimento || "");
-          setFormaPagamento(finData.forma_pagamento || "Boleto");
-          setCentroCusto(finData.centro_custo || "ShowRoom / Geral");
-          setCategoriaFinId(finData.categoria_id || "");
+          const mapFaturas = finData.map((f, i) => ({
+             numero: String(i + 1),
+             vencimento: f.data_vencimento,
+             valor: Number(f.valor)
+          }));
+          setFaturas(mapFaturas);
+          setFormaPagamento(finData[0].forma_pagamento || "Boleto");
+          setCentroCusto(finData[0].centro_custo || "ShowRoom / Geral");
+          setCategoriaFinId(finData[0].categoria_id || "");
       } else {
           setGerarFinanceiro(false);
+          setFaturas([]);
       }
 
       setItens(itensMapeados); setAbaAtiva("receber");
@@ -272,14 +284,27 @@ export default function Entradas() {
       const transCnpj = xmlDoc.querySelector("transporta CNPJ")?.textContent || "";
       const modFreteTag = xmlDoc.querySelector("transp modFrete")?.textContent || "0"; 
 
-      // MAGIA DA DATA DE VENCIMENTO DO XML
+      // MAGIA DA DATA DE VENCIMENTO E PARCELAS DO XML
       const dupNodes = xmlDoc.querySelectorAll("cobr dup");
+      const novasFaturas: FaturaXML[] = [];
+      
       if (dupNodes.length > 0) {
-          const firstVenc = dupNodes[0].querySelector("dVenc")?.textContent || "";
-          if (firstVenc) {
-             setGerarFinanceiro(true);
-             setDataVencimento(firstVenc);
-          }
+          dupNodes.forEach(dup => {
+              const nDup = dup.querySelector("nDup")?.textContent || "";
+              const dVenc = dup.querySelector("dVenc")?.textContent || "";
+              const vDup = parseFloat(dup.querySelector("vDup")?.textContent || "0");
+              if (dVenc && vDup > 0) {
+                  novasFaturas.push({ numero: nDup, vencimento: dVenc, valor: vDup });
+              }
+          });
+      }
+
+      if (novasFaturas.length > 0) {
+          setGerarFinanceiro(true);
+          setFaturas(novasFaturas);
+      } else {
+          // Se o fornecedor não enviou as parcelas, deixa a lista vazia (o usuário pode adicionar à mão)
+          setFaturas([]);
       }
 
       const vFrete = parseFloat(xmlDoc.querySelector("total ICMSTot vFrete")?.textContent || "0");
@@ -378,7 +403,7 @@ export default function Entradas() {
     if (!fornecedorBusca || !documento) return alert("Fornecedor e Número da NF são obrigatórios.");
     if (!localDestino) return alert("Selecione o Local de Destino.");
     if (itens.length === 0) return alert("Adicione produtos na entrada.");
-    if (gerarFinanceiro && !dataVencimento) return alert("Para gerar o Financeiro, informe a Data de Vencimento.");
+    if (gerarFinanceiro && faturas.length === 0) return alert("Para gerar o Financeiro, você precisa adicionar pelo menos uma parcela na lista.");
 
     for (let i = 0; i < itens.length; i++) {
       if (itens[i].precisaMapeamento) return alert(`Mapeie o item: "${itens[i].nomeOriginalXML}" antes de salvar.`);
@@ -425,12 +450,13 @@ export default function Entradas() {
       // INTEGRAÇÃO FINANCEIRA: SALVA EM fin_lancamentos
       if (gerarFinanceiro) {
           const obsFin = `Referência: Lançamento de NF-e Nr. ${documento} | CFOP/Operação: ${cfop || 'N/A'}`;
-          const payloadFin = {
+          
+          const payloadFin = faturas.map((fat, idx) => ({
               tipo: 'Despesa',
-              descricao: `NF-e ${documento} - ${fornecedorBusca.split(']')[1]?.trim() || fornecedorBusca}`,
-              valor: valorTotalNota,
+              descricao: `NF-e ${documento} (Parc. ${fat.numero || idx+1}) - ${fornecedorBusca.split(']')[1]?.trim() || fornecedorBusca}`,
+              valor: fat.valor,
               data_emissao: dataEmissao || null,
-              data_vencimento: dataVencimento,
+              data_vencimento: fat.vencimento,
               status: 'Pendente',
               fornecedor_id: fornecedorId,
               categoria_id: categoriaFinId || null,
@@ -438,9 +464,10 @@ export default function Entradas() {
               observacoes: obsFin,
               centro_custo: centroCusto,
               forma_pagamento: formaPagamento,
-              valor_impostos: valorIcms + valorIpi + valorIcmsSt + valorPis + valorCofins
-          };
-          const { error: finError } = await supabase.from('fin_lancamentos').insert([payloadFin]);
+              valor_impostos: idx === 0 ? (valorIcms + valorIpi + valorIcmsSt + valorPis + valorCofins) : 0 // Joga os impostos todos na primeira parcela
+          }));
+
+          const { error: finError } = await supabase.from('fin_lancamentos').insert(payloadFin);
           if (finError) throw new Error("Erro ao integrar com o Financeiro: " + finError.message);
       }
 
@@ -545,7 +572,7 @@ export default function Entradas() {
                     </div>
                   </div>
 
-                  {/* NOVO BLOCO: INTEGRAÇÃO FINANCEIRA */}
+                  {/* NOVO BLOCO: INTEGRAÇÃO FINANCEIRA COM MULTIPLAS PARCELAS */}
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <div className="flex justify-between items-center mb-3 bg-emerald-50/50 p-2 rounded border border-emerald-100">
                       <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2"><Landmark className="w-5 h-5"/> Integração Financeira (Contas a Pagar)</h4>
@@ -553,35 +580,59 @@ export default function Entradas() {
                           <button type="button" className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${gerarFinanceiro ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                             <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${gerarFinanceiro ? 'translate-x-5' : 'translate-x-1'}`} />
                           </button>
-                          <label className="text-sm font-bold text-slate-700 cursor-pointer">Gerar Parcela</label>
+                          <label className="text-sm font-bold text-slate-700 cursor-pointer">Gerar Parcela(s)</label>
                       </div>
                     </div>
                     
                     {gerarFinanceiro && (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-emerald-50 p-4 rounded-lg border border-emerald-200 shadow-inner">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-emerald-900 uppercase flex items-center gap-1"><Calendar className="w-3 h-3"/> Vencimento do Boleto</label>
-                                <Input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="bg-white border-emerald-300 shadow-sm" />
+                        <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200 shadow-inner space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-emerald-900 uppercase">Forma de Pagamento</label>
+                                    <Select value={formaPagamento} onValueChange={setFormaPagamento}>
+                                        <SelectTrigger className="bg-white border-emerald-300"><SelectValue /></SelectTrigger>
+                                        <SelectContent position="popper" className="z-[99] bg-white"><SelectItem value="Boleto">Boleto Bancário</SelectItem><SelectItem value="PIX">PIX</SelectItem><SelectItem value="Transferência">Transferência Bancária</SelectItem><SelectItem value="Cartão">Cartão de Crédito</SelectItem></SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-emerald-900 uppercase">Centro de Custo</label>
+                                    <Input value={centroCusto} onChange={e => setCentroCusto(e.target.value)} className="bg-white border-emerald-300" placeholder="Ex: ShowRoom" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-emerald-900 uppercase">Transação Financeira</label>
+                                    <Select value={categoriaFinId} onValueChange={setCategoriaFinId}>
+                                        <SelectTrigger className="bg-white border-emerald-300"><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                                        <SelectContent position="popper" className="z-[99] bg-white max-h-48 overflow-y-auto">
+                                            {categoriasFin.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-emerald-900 uppercase">Forma de Pagamento</label>
-                                <Select value={formaPagamento} onValueChange={setFormaPagamento}>
-                                    <SelectTrigger className="bg-white border-emerald-300"><SelectValue /></SelectTrigger>
-                                    <SelectContent position="popper" className="z-[99] bg-white"><SelectItem value="Boleto">Boleto Bancário</SelectItem><SelectItem value="PIX">PIX</SelectItem><SelectItem value="Transferência">Transferência Bancária</SelectItem><SelectItem value="Cartão">Cartão de Crédito</SelectItem></SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-emerald-900 uppercase">Centro de Custo</label>
-                                <Input value={centroCusto} onChange={e => setCentroCusto(e.target.value)} className="bg-white border-emerald-300" placeholder="Ex: ShowRoom" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-emerald-900 uppercase">Transação Financeira</label>
-                                <Select value={categoriaFinId} onValueChange={setCategoriaFinId}>
-                                    <SelectTrigger className="bg-white border-emerald-300"><SelectValue placeholder="Selecione..."/></SelectTrigger>
-                                    <SelectContent position="popper" className="z-[99] bg-white max-h-48 overflow-y-auto">
-                                        {categoriasFin.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+
+                            {/* LISTA DE PARCELAS / DUPLICATAS */}
+                            <div className="space-y-3 border-t border-emerald-200/60 pt-4">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-bold text-emerald-900 uppercase flex items-center gap-1">
+                                        <Receipt className="w-3 h-3"/> Parcelas a Pagar ({faturas.length})
+                                    </label>
+                                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-100" onClick={() => setFaturas([...faturas, {numero: String(faturas.length + 1), vencimento: '', valor: 0}])}>
+                                        <Plus className="w-3 h-3 mr-1"/> Adicionar Parcela
+                                    </Button>
+                                </div>
+                                {faturas.length === 0 ? (
+                                    <p className="text-xs text-emerald-700 italic bg-white p-3 rounded border border-emerald-100">Nenhuma parcela definida. O sistema gerará 1 parcela única com o valor total da nota para hoje se você salvar assim.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {faturas.map((fat, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-emerald-100 shadow-sm">
+                                                <Input value={fat.numero} onChange={e => { const n = [...faturas]; n[idx].numero = e.target.value; setFaturas(n); }} placeholder="Nº" className="w-20 h-8 text-xs font-bold text-center" />
+                                                <Input type="date" value={fat.vencimento} onChange={e => { const n = [...faturas]; n[idx].vencimento = e.target.value; setFaturas(n); }} className="w-40 h-8 text-xs" />
+                                                <Input type="number" step="0.01" value={fat.valor} onChange={e => { const n = [...faturas]; n[idx].valor = parseFloat(e.target.value)||0; setFaturas(n); }} className="flex-1 h-8 text-xs font-bold text-emerald-700" placeholder="Valor R$" />
+                                                <Button variant="ghost" size="icon" onClick={() => { const n = [...faturas]; n.splice(idx, 1); setFaturas(n); }} className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 className="w-4 h-4"/></Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
