@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wrench, Barcode, Loader2, Plus, Search, Trash2, Printer, CheckCircle2, Clock, PlayCircle, FileText, ArrowLeft, Package, User, Toolbox, Landmark, AlertCircle } from "lucide-react";
+import { Wrench, Barcode, Loader2, Plus, Search, Trash2, Printer, CheckCircle2, Clock, PlayCircle, FileText, ArrowLeft, Package, User, Toolbox, Landmark, AlertCircle, Eraser } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type PecaOS = { id: string; produtoId: string; nome: string; quantidade: number; preco: number; estoqueAtual: number };
@@ -39,6 +39,37 @@ export default function OrdensServico() {
   const [descServico, setDescServico] = useState("");
   const [valorServico, setValorServico] = useState("");
   const [servicos, setServicos] = useState<ServicoOS[]>([]);
+
+  // ==========================================
+  // AUTO-SAVE: RASCUNHO ABERTURA DE CHAMADO
+  // ==========================================
+  useEffect(() => {
+    const rascunho = sessionStorage.getItem("os_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.clienteBusca) setClienteBusca(draft.clienteBusca);
+        if (draft.clienteId !== undefined) setClienteId(draft.clienteId);
+        if (draft.equipamento) setEquipamento(draft.equipamento);
+        if (draft.numeroSerie) setNumeroSerie(draft.numeroSerie);
+        if (draft.defeito) setDefeito(draft.defeito);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (clienteBusca || equipamento || numeroSerie || defeito) {
+      const draft = { clienteBusca, clienteId, equipamento, numeroSerie, defeito };
+      sessionStorage.setItem("os_rascunho", JSON.stringify(draft));
+    }
+  }, [clienteBusca, clienteId, equipamento, numeroSerie, defeito]);
+
+  const limparFormulario = () => {
+    if (!confirm("Deseja limpar os dados do chamado?")) return;
+    sessionStorage.removeItem("os_rascunho");
+    setClienteBusca(""); setClienteId(null); setEquipamento(""); setNumeroSerie(""); setDefeito("");
+  };
+  // ==========================================
 
   useEffect(() => {
     fetchDadosBase();
@@ -81,6 +112,9 @@ export default function OrdensServico() {
       if (error) throw error;
 
       alert("Ordem de Serviço aberta com sucesso!");
+      
+      // Limpa o rascunho após salvar com sucesso
+      sessionStorage.removeItem("os_rascunho");
       setClienteBusca(""); setClienteId(null); setEquipamento(""); setNumeroSerie(""); setDefeito("");
       setAbaAtiva("painel");
     } catch (e: any) { alert("Erro ao abrir OS: " + e.message); } finally { setSalvandoOS(false); }
@@ -230,7 +264,8 @@ export default function OrdensServico() {
         {/* ========================================================================= */}
         {abaAtiva === "abrir" && (
           <div className="bg-white p-8 rounded-xl border shadow-sm max-w-2xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="text-center border-b pb-6">
+            <div className="relative text-center border-b pb-6">
+                <Button variant="ghost" onClick={limparFormulario} className="absolute right-0 top-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 gap-2"><Eraser className="w-4 h-4"/> Limpar</Button>
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-3"><Plus className="w-6 h-6"/></div>
                 <h2 className="text-xl font-bold text-slate-800">Abertura de Chamado Técnico</h2>
                 <p className="text-slate-500 text-sm">Registre o equipamento e o relato do cliente.</p>
@@ -320,7 +355,7 @@ export default function OrdensServico() {
                         <h2 className="text-2xl font-black text-slate-800">OS Nº {String(osSelecionada.numero_os).padStart(4,'0')}</h2>
                         <span className={`text-[10px] font-bold uppercase px-3 py-1 rounded-full ${statusOS === 'Aberta' ? 'bg-slate-100 text-slate-700' : statusOS === 'Em Andamento' ? 'bg-blue-100 text-blue-700' : statusOS === 'Aguardando Peça' ? 'bg-amber-100 text-amber-700' : statusOS === 'Concluída' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}`}>{statusOS}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 ml-12">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700 ml-12">
                         <span className="flex items-center gap-1 font-semibold"><User className="w-4 h-4 text-slate-400"/> {osSelecionada.cliente_nome}</span>
                         <span className="flex items-center gap-1"><Printer className="w-4 h-4 text-slate-400"/> {osSelecionada.equipamento} {osSelecionada.numero_serie && `(S/N: ${osSelecionada.numero_serie})`}</span>
                     </div>
@@ -346,9 +381,14 @@ export default function OrdensServico() {
                         <p className="text-sm text-rose-900/80 italic">"{osSelecionada.defeito_relatado}"</p>
                     </div>
 
-                    <div className="bg-white p-5 rounded-xl border shadow-sm h-full">
+                    <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200 h-full">
                         <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2 mb-3"><FileText className="w-4 h-4 text-blue-500"/> Laudo Técnico</h4>
-                        <textarea value={laudo} onChange={e => setLaudo(e.target.value)} disabled={osSelecionada.status === 'Faturada'} className="w-full h-48 p-3 border rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none" placeholder="Descreva o diagnóstico, causa do defeito e solução adotada..."></textarea>
+                        <textarea 
+                            value={laudo} 
+                            onChange={e => setLaudo(e.target.value)} 
+                            disabled={osSelecionada.status === 'Faturada'}
+                            className="w-full min-h-[150px] p-3 text-sm rounded-md border border-slate-300 focus:ring-blue-500 outline-none disabled:bg-slate-50 resize-none" 
+                            placeholder="Descreva o diagnóstico, causa do defeito e solução adotada..."></textarea>
                     </div>
                 </div>
 
@@ -433,7 +473,7 @@ export default function OrdensServico() {
                             <div className="pl-6 border-l border-slate-600"><p className="text-[10px] text-slate-300 uppercase tracking-widest font-bold mb-1">Total da OS</p><p className="text-3xl font-black text-emerald-400">R$ {(pecas.reduce((a,b) => a+(b.quantidade*b.preco), 0) + servicos.reduce((a,b) => a+(b.quantidade*b.preco), 0)).toFixed(2).replace('.',',')}</p></div>
                         </div>
                         {osSelecionada.status !== 'Faturada' && (
-                            <Button onClick={faturarOS} disabled={salvandoOS || (pecas.length === 0 && servicos.length === 0)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 px-6 gap-2 shadow-md animate-pulse duration-2000"><Landmark className="w-5 h-5"/> Encerrar e Faturar OS</Button>
+                            <Button onClick={faturarOS} disabled={salvandoOS || (pecas.length === 0 && servicos.length === 0)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 px-6 gap-2 shadow-md animate-pulse duration-2000"><Landmark className="w-5 h-5"/> Encerrar e Faturar</Button>
                         )}
                     </div>
 
