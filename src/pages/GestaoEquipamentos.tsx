@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert } from "lucide-react";
+import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function GestaoEquipamentos() {
@@ -30,8 +30,9 @@ export default function GestaoEquipamentos() {
   const [leituras, setLeituras] = useState<any[]>([]);
   
   // ==========================================
-  // ESTADOS: FORMULÁRIO NOVO EQUIPAMENTO
+  // ESTADOS: FORMULÁRIO (NOVO E EDIÇÃO)
   // ==========================================
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [form, setForm] = useState({
     produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
     numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
@@ -44,7 +45,7 @@ export default function GestaoEquipamentos() {
   const [salvando, setSalvando] = useState(false);
 
   // ==========================================
-  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO CORRIGIDO)
+  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
   // ==========================================
   useEffect(() => {
     const rascunho = sessionStorage.getItem("equipamentos_rascunho");
@@ -54,21 +55,23 @@ export default function GestaoEquipamentos() {
         if (draft.form) setForm(draft.form);
         if (draft.specs) setSpecs(draft.specs);
         if (draft.contadoresSelecionados) setContadoresSelecionados(draft.contadoresSelecionados);
-        if (draft.abaAtiva === "novo") setAbaAtiva("novo"); // Mantém na aba de cadastro se estava lá
+        if (draft.abaAtiva === "novo") setAbaAtiva("novo");
+        if (draft.editandoId !== undefined) setEditandoId(draft.editandoId);
       } catch(e) {}
     }
   }, []);
 
   useEffect(() => {
-    // Salva o rascunho se a aba de cadastro estiver ativa ou se algo foi preenchido
     if (abaAtiva === "novo" || form.produto_id || form.numero_serie) {
-      const draft = { form, specs, contadoresSelecionados, abaAtiva };
+      const draft = { form, specs, contadoresSelecionados, abaAtiva, editandoId };
       sessionStorage.setItem("equipamentos_rascunho", JSON.stringify(draft));
     }
-  }, [form, specs, contadoresSelecionados, abaAtiva]);
+  }, [form, specs, contadoresSelecionados, abaAtiva, editandoId]);
 
   const limparFormulario = () => {
+    if(!confirm("Deseja realmente limpar o formulário e cancelar a edição/cadastro?")) return;
     sessionStorage.removeItem("equipamentos_rascunho");
+    setEditandoId(null);
     setForm({
       produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
       numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
@@ -76,6 +79,7 @@ export default function GestaoEquipamentos() {
     });
     setSpecs({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
     setContadoresSelecionados([]);
+    setAbaAtiva("lista");
   };
 
   // ==========================================
@@ -97,7 +101,7 @@ export default function GestaoEquipamentos() {
 
   const fetchEquipamentos = async () => {
     const { data } = await supabase.from('srv_equipamentos').select(`
-      *, log_produtos(nome, sku, custo_base), log_clientes(nome_fantasia), crm_contratos(titulo)
+      *, log_produtos(nome, sku, custo_base, fabricante, familia, especificacoes), log_clientes(nome_fantasia), crm_contratos(titulo)
     `).order('sequencial', { ascending: false });
     if (data) setEquipamentos(data);
   };
@@ -116,6 +120,49 @@ export default function GestaoEquipamentos() {
     setContadoresSelecionados(prev => prev.includes(tipo) ? prev.filter(t => t !== tipo) : [...prev, tipo]);
   };
 
+  // --- CARREGAR DADOS PARA EDIÇÃO ---
+  const abrirEditarEquipamento = (eq: any) => {
+    setEditandoId(eq.id);
+    setForm({
+      produto_id: eq.produto_id || "",
+      proprietario: eq.proprietario || "TC Copiadoras",
+      cliente_id: eq.cliente_id || "nenhum",
+      contrato_id: eq.contrato_id || "nenhum",
+      data_instalacao: eq.data_instalacao || "",
+      numero_serie: eq.numero_serie || "",
+      patrimonio: eq.patrimonio || "",
+      status: eq.status || "Ativo",
+      endereco_instalacao: eq.endereco_instalacao || "",
+      contato_responsavel: eq.contato_responsavel || "",
+      tecnico_responsavel: eq.tecnico_responsavel || "",
+      vendido_por_tc: eq.vendido_por_tc ? "Sim" : "Não",
+      vendedor: eq.vendedor || "",
+      garantia_fornecedor_id: eq.garantia_fornecedor_id || "nenhum",
+      garantia_nf_compra: eq.garantia_nf_compra || "",
+      garantia_inicio: eq.garantia_inicio || "",
+      garantia_fim: eq.garantia_fim || ""
+    });
+
+    let parsedSpecs = { formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" };
+    if (eq.log_produtos) {
+      try {
+        parsedSpecs.fabricante = eq.log_produtos.fabricante || "";
+        parsedSpecs.familia = eq.log_produtos.familia || "";
+        if (eq.log_produtos.especificacoes) {
+           const sp = typeof eq.log_produtos.especificacoes === 'string' ? JSON.parse(eq.log_produtos.especificacoes) : eq.log_produtos.especificacoes;
+           parsedSpecs.formato = sp.formato || "A4";
+           parsedSpecs.ppm = sp.ppm || "";
+           parsedSpecs.ano = sp.ano || "";
+        }
+      } catch(e){}
+    }
+    setSpecs(parsedSpecs);
+    setContadoresSelecionados(eq.tipos_contadores || []);
+    
+    setEquipSelecionado(null); // Fecha o dossiê se estiver aberto
+    setAbaAtiva("novo");
+  };
+
   const salvarEquipamento = async () => {
     if (!form.produto_id || !form.numero_serie) return alert("Produto e Número de Série são obrigatórios.");
     setSalvando(true);
@@ -125,7 +172,7 @@ export default function GestaoEquipamentos() {
       const produtoSpecs = { formato: specs.formato, ppm: specs.ppm, ano: specs.ano };
       await supabase.from('log_produtos').update({ is_equipamento: true, fabricante: specs.fabricante, familia: specs.familia, especificacoes: produtoSpecs }).eq('id', form.produto_id);
 
-      // 2. Salva o Equipamento
+      // 2. Monta o Payload do Equipamento
       const payload = {
           ...form,
           cliente_id: form.cliente_id === "nenhum" ? null : form.cliente_id,
@@ -138,20 +185,36 @@ export default function GestaoEquipamentos() {
           tipos_contadores: contadoresSelecionados
       };
 
-      const { data: newEq, error } = await supabase.from('srv_equipamentos').insert([payload]).select().single();
-      if (error) throw error;
+      // 3. Verifica se é Edição ou Novo
+      if (editandoId) {
+          const { error } = await supabase.from('srv_equipamentos').update(payload).eq('id', editandoId);
+          if (error) throw error;
+          alert("Equipamento atualizado com sucesso!");
+      } else {
+          const { data: newEq, error } = await supabase.from('srv_equipamentos').insert([payload]).select().single();
+          if (error) throw error;
 
-      // 3. Se foi instalado em cliente, gera o histórico inicial de Movimentação
-      if (payload.cliente_id) {
-          await supabase.from('srv_equipamentos_movimentacao').insert([{
-              equipamento_id: newEq.id, tipo: 'Instalação', cliente_id: payload.cliente_id, 
-              contrato_id: payload.contrato_id, data_movimentacao: payload.data_instalacao || new Date().toISOString().split('T')[0],
-              observacoes: 'Instalação inicial (Cadastro)'
-          }]);
+          // Se foi instalado em cliente e é um equipamento novo, gera o histórico inicial de Movimentação
+          if (payload.cliente_id) {
+              await supabase.from('srv_equipamentos_movimentacao').insert([{
+                  equipamento_id: newEq.id, tipo: 'Instalação', cliente_id: payload.cliente_id, 
+                  contrato_id: payload.contrato_id, data_movimentacao: payload.data_instalacao || new Date().toISOString().split('T')[0],
+                  observacoes: 'Instalação inicial (Cadastro)'
+              }]);
+          }
+          alert("Equipamento cadastrado com sucesso!");
       }
 
-      alert("Equipamento cadastrado com sucesso!");
-      limparFormulario(); // <-- Limpa o rascunho e reseta os estados após salvar!
+      sessionStorage.removeItem("equipamentos_rascunho");
+      setEditandoId(null);
+      setForm({
+        produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
+        numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
+        vendido_por_tc: "Não", vendedor: "", garantia_fornecedor_id: "nenhum", garantia_nf_compra: "", garantia_inicio: "", garantia_fim: ""
+      });
+      setSpecs({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
+      setContadoresSelecionados([]);
+
       setAbaAtiva("lista"); 
       fetchEquipamentos();
     } catch (e: any) {
@@ -197,7 +260,8 @@ export default function GestaoEquipamentos() {
   const eqFiltrados = equipamentos.filter(e => 
     e.numero_serie.toLowerCase().includes(busca.toLowerCase()) || 
     (e.log_produtos?.nome?.toLowerCase() || "").includes(busca.toLowerCase()) ||
-    (e.log_clientes?.nome_fantasia?.toLowerCase() || "").includes(busca.toLowerCase())
+    (e.log_clientes?.nome_fantasia?.toLowerCase() || "").includes(busca.toLowerCase()) ||
+    (e.patrimonio?.toLowerCase() || "").includes(busca.toLowerCase())
   );
 
   return (
@@ -212,7 +276,7 @@ export default function GestaoEquipamentos() {
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button onClick={() => { setAbaAtiva("lista"); setEquipSelecionado(null); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "lista" ? "bg-white shadow-sm text-blue-700" : "text-slate-600"}`}>Parque Instalado</button>
-            <button onClick={() => setAbaAtiva("novo")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "novo" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Plus className="w-4 h-4"/> Cadastrar Máquina</button>
+            <button onClick={() => { setAbaAtiva("novo"); setEditandoId(null); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "novo" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Plus className="w-4 h-4"/> Cadastrar Máquina</button>
           </div>
         </div>
 
@@ -222,7 +286,7 @@ export default function GestaoEquipamentos() {
         {abaAtiva === "lista" && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50">
-              <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por S/N, Modelo ou Cliente..." className="pl-9 bg-white" /></div>
+              <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por S/N, Patrimônio, Modelo ou Cliente..." className="pl-9 bg-white" /></div>
             </div>
             <div className="overflow-x-auto min-h-[500px]">
               <table className="w-full text-left border-collapse">
@@ -233,7 +297,7 @@ export default function GestaoEquipamentos() {
                     <th className="p-4 font-semibold border-b">Alocação (Cliente)</th>
                     <th className="p-4 font-semibold border-b text-center">Propriedade</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
-                    <th className="p-4 font-semibold border-b text-center w-28">Prontuário</th>
+                    <th className="p-4 font-semibold border-b text-center w-36">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -243,7 +307,7 @@ export default function GestaoEquipamentos() {
                         <td className="p-4 text-center font-mono font-bold text-slate-400">#{String(eq.sequencial).padStart(4,'0')}</td>
                         <td className="p-4">
                             <p className="font-bold text-slate-800 text-sm">{eq.log_produtos?.nome || 'Modelo Desconhecido'}</p>
-                            <p className="text-[10px] text-blue-600 font-bold font-mono mt-0.5 flex items-center gap-1"><QrCode className="w-3 h-3"/> SN: {eq.numero_serie}</p>
+                            <p className="text-[10px] text-blue-600 font-bold font-mono mt-0.5 flex items-center gap-1"><QrCode className="w-3 h-3"/> SN: {eq.numero_serie} {eq.patrimonio && `| PAT: ${eq.patrimonio}`}</p>
                         </td>
                         <td className="p-4">
                             <p className="text-sm font-semibold text-slate-700">{eq.log_clientes?.nome_fantasia || <span className="text-slate-400 italic">Em Estoque / TC</span>}</p>
@@ -251,7 +315,12 @@ export default function GestaoEquipamentos() {
                         </td>
                         <td className="p-4 text-center"><span className={`text-[10px] font-bold px-2 py-1 rounded border ${eq.proprietario === 'TC Copiadoras' ? 'border-indigo-200 text-indigo-700 bg-indigo-50' : 'border-amber-200 text-amber-700 bg-amber-50'}`}>{eq.proprietario}</span></td>
                         <td className="p-4 text-center"><span className={`text-[10px] font-bold uppercase px-3 py-1 rounded-full shadow-sm border border-white ${eq.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : eq.status === 'Inativo' ? 'bg-slate-100 text-slate-700' : eq.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{eq.status}</span></td>
-                        <td className="p-4 text-center"><Button variant="outline" size="sm" className="text-blue-600 border-blue-200 group-hover:bg-blue-50 w-full gap-2"><Activity className="w-4 h-4"/> Abrir</Button></td>
+                        <td className="p-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                                <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 group-hover:bg-blue-50 flex-1 gap-2" onClick={(e) => { e.stopPropagation(); abrirDossie(eq); }}><Activity className="w-4 h-4"/> Prontuário</Button>
+                                <Button variant="outline" size="icon" className="h-8 w-8 text-slate-400 hover:text-emerald-600" onClick={(e) => { e.stopPropagation(); abrirEditarEquipamento(eq); }} title="Editar Cadastro"><Edit className="w-4 h-4"/></Button>
+                            </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -262,16 +331,16 @@ export default function GestaoEquipamentos() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: NOVO EQUIPAMENTO (FORMULÁRIO) */}
+        {/* ABA: NOVO / EDITAR EQUIPAMENTO (FORMULÁRIO) */}
         {/* ========================================================================= */}
         {abaAtiva === "novo" && (
           <div className="bg-white rounded-xl border shadow-sm p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-200">
             <div className="border-b pb-4 mb-4 flex justify-between items-center">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Printer className="w-5 h-5 text-blue-600"/> Cadastrar Novo Equipamento</h2>
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Printer className="w-5 h-5 text-blue-600"/> {editandoId ? "Editar Cadastro de Equipamento" : "Cadastrar Novo Equipamento"}</h2>
                     <p className="text-sm text-slate-500 mt-1">Insira os dados técnicos, de propriedade e alocação inicial.</p>
                 </div>
-                <Button variant="ghost" onClick={limparFormulario} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50">Limpar Rascunho</Button>
+                <Button variant="ghost" onClick={limparFormulario} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 gap-2"><Eraser className="w-4 h-4"/> Cancelar / Limpar</Button>
             </div>
 
             {/* SEÇÃO 1: IDENTIFICAÇÃO E MODELO */}
@@ -303,7 +372,7 @@ export default function GestaoEquipamentos() {
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-600 uppercase">Status Inicial</label>
+                        <label className="text-xs font-bold text-slate-600 uppercase">Status Inicial / Atual</label>
                         <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
                             <SelectContent><SelectItem value="Ativo">Ativo / Operacional</SelectItem><SelectItem value="Inativo">Inativo / Estoque</SelectItem><SelectItem value="Em Manutenção">Em Manutenção</SelectItem></SelectContent>
@@ -375,8 +444,8 @@ export default function GestaoEquipamentos() {
                 </div>
             </div>
 
-            <Button onClick={salvarEquipamento} disabled={salvando} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-md mt-6">
-                Cadastrar Equipamento
+            <Button onClick={salvarEquipamento} disabled={salvando} className={`w-full h-12 text-white font-bold text-lg shadow-md mt-6 ${editandoId ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                {editandoId ? "Salvar Alterações" : "Cadastrar Equipamento"}
             </Button>
           </div>
         )}
@@ -394,6 +463,7 @@ export default function GestaoEquipamentos() {
                         <Button variant="ghost" size="sm" onClick={() => setAbaAtiva("lista")} className="h-8 px-2 text-slate-400 hover:text-slate-700"><ArrowLeft className="w-4 h-4"/></Button>
                         <h2 className="text-2xl font-black text-slate-800 tracking-tight">{equipSelecionado.log_produtos?.nome || 'Equipamento'}</h2>
                         <span className={`text-[10px] font-bold uppercase px-3 py-1 rounded-full shadow-sm border border-white ${equipSelecionado.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : equipSelecionado.status === 'Inativo' ? 'bg-slate-100 text-slate-700' : equipSelecionado.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{equipSelecionado.status}</span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 text-slate-400 hover:text-emerald-600" onClick={() => abrirEditarEquipamento(equipSelecionado)} title="Editar Equipamento"><Edit className="w-4 h-4"/></Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 ml-12">
                         <span className="flex items-center gap-1 font-bold text-blue-700 font-mono bg-blue-50 px-2 py-0.5 rounded border border-blue-200"><QrCode className="w-4 h-4 text-blue-500"/> S/N: {equipSelecionado.numero_serie}</span>
