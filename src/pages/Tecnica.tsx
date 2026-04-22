@@ -4,12 +4,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
+import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, Wrench, Filter, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/AppLayout";
-import { X } from "lucide-react";
 
 const PAGE_SIZE = 15;
 const mapaStatus: Record<string, string> = { active: "ANDAMENTO", waiting: "AGUARDANDO", completed: "CONCLUÍDO"};
@@ -18,12 +17,11 @@ const formatarStatus = (status: string) => {
   return mapaStatus[status.toLowerCase()] || status.toUpperCase();
 };
 
-// multiselecao
+// Componente de Multiseleção Modernizado
 function MultiSelectDropdown({ title, options, selected, onChange }: { title: string, options: string[], selected: string[], onChange: (val: string[]) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Fecha o dropdown ao clicar fora dele
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (ref.current && !ref.current.contains(event.target as Node)) {
@@ -36,29 +34,29 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
 
   return (
     <div className="relative" ref={ref}>
-      <Button variant="outline" onClick={() => setOpen(!open)} className="w-full justify-between bg-white text-left font-normal h-10 px-3">
-        <span className="truncate">
-          {selected.length === 0 ? title : `${title} (${selected.length})`}
+      <Button variant="outline" onClick={() => setOpen(!open)} className="w-full justify-between bg-white text-left font-normal h-10 px-3 border-slate-200 hover:bg-slate-50 transition-colors">
+        <span className="truncate text-slate-600">
+          {selected.length === 0 ? title : <span className="font-bold text-indigo-600">{title} ({selected.length})</span>}
         </span>
         <ChevronDown className="h-4 w-4 opacity-50" />
       </Button>
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg p-2 max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
           {options.length === 0 ? (
-            <div className="p-2 text-sm text-gray-500 text-center">Nenhum dado...</div>
+            <div className="p-2 text-sm text-slate-400 text-center italic">Nenhum dado...</div>
           ) : (
             options.map(opt => (
-              <label key={opt} className="flex items-center space-x-2 p-1.5 hover:bg-gray-100 rounded cursor-pointer">
+              <label key={opt} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
                 <input 
                   type="checkbox" 
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                   checked={selected.includes(opt)} 
                   onChange={(e) => {
                     if (e.target.checked) onChange([...selected, opt]);
                     else onChange(selected.filter(x => x !== opt));
                   }} 
                 />
-                <span className="text-sm text-gray-700 truncate">{opt}</span>
+                <span className="text-sm text-slate-700 truncate font-medium">{opt}</span>
               </label>
             ))
           )}
@@ -190,7 +188,7 @@ export default function TabelaPage() {
 
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "—";
-    return new Date(dataStr).toLocaleDateString("pt-BR");
+    return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
@@ -223,20 +221,17 @@ export default function TabelaPage() {
       };
 
       const dadosOrdenados = [...filtered].sort((a, b) => {
-        // ordem alfab nome tec
         const tecA = a.tecnico || "Sem Técnico";
         const tecB = b.tecnico || "Sem Técnico";
         if (tecA < tecB) return -1;
         if (tecA > tecB) return 1;
         
-        // ordem Concluído > Andamento > Aguardando
         const stA = formatarStatus(a.status);
         const stB = formatarStatus(b.status);
-        const ordemA = pesoStatus[stA] || 99; // Se não tiver peso, joga pro fim
+        const ordemA = pesoStatus[stA] || 99; 
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
 
-        // ordem data entr crescente
         const dataA = new Date(a.data_entrada || 0).getTime();
         const dataB = new Date(b.data_entrada || 0).getTime();
         return dataA - dataB;
@@ -277,7 +272,7 @@ export default function TabelaPage() {
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         didParseCell: function (data) {
-          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && data.row.raw.length > 1) {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
@@ -314,7 +309,6 @@ export default function TabelaPage() {
     } catch (error) { console.error("Erro ao gerar Excel:", error); alert("Erro ao gerar Excel."); }
   };
 
-  // ordenacao
   const renderSortIcon = (key: string) => {
     if (sortConfig?.key === key) {
       return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;
@@ -324,21 +318,25 @@ export default function TabelaPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex items-center gap-4 mb-6">
-          <img src="/logo.png" alt="Logo da Empresa" className="h-12 object-contain" />
+      <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
+        
+        {/* CABEÇALHO */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Tabela de Produtividade</h1>
-            <p className="text-muted-foreground text-sm mt-1">Filtre, cruze, ordene e exporte dados de atendimentos</p>
+            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
+               <Wrench className="w-6 h-6 text-indigo-600" /> Programação Técnica
+            </h1>
+            <p className="text-slate-500">Acompanhamento, filtros e rastreabilidade de produtividade técnica.</p>
           </div>
         </div>
 
-        <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-foreground">Filtros Múltiplos e Períodos</span>
+        {/* ÁREA DE FILTROS */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4 text-indigo-500"/> Filtros Avançados</h3>
             {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                <X className="h-4 w-4 mr-1" /> Limpar Tudo
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2 text-xs">
+                <X className="h-3 w-3 mr-1" /> Limpar Tudo
               </Button>
             )}
           </div>
@@ -351,97 +349,97 @@ export default function TabelaPage() {
             <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
           </div>
 
-          {/* COMPONENTES DE FILTRO DE DATA */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4">
-            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Entrada</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Entrada</span>
               <div className="flex gap-2 items-center">
-                <Input type="date" className="text-xs h-8" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
-                <span className="text-xs text-gray-400">até</span>
-                <Input type="date" className="text-xs h-8" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
+                <Input type="date" className="text-xs h-8 bg-white" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-slate-400 font-medium">até</span>
+                <Input type="date" className="text-xs h-8 bg-white" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
               </div>
             </div>
-            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Previsão</span>
+            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Previsão</span>
               <div className="flex gap-2 items-center">
-                <Input type="date" className="text-xs h-8" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
-                <span className="text-xs text-gray-400">até</span>
-                <Input type="date" className="text-xs h-8" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
+                <Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-slate-400 font-medium">até</span>
+                <Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
               </div>
             </div>
-            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Conclusão</span>
+            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Conclusão</span>
               <div className="flex gap-2 items-center">
-                <Input type="date" className="text-xs h-8" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
-                <span className="text-xs text-gray-400">até</span>
-                <Input type="date" className="text-xs h-8" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
+                <Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-slate-400 font-medium">até</span>
+                <Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-          <span className="text-muted-foreground">
-            <strong className="text-foreground text-lg">{filtered.length}</strong> atendimentos processados
+        {/* ESTATISTICAS E EXPORTAÇÃO */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+            <strong className="text-slate-800 text-base">{filtered.length}</strong> atendimentos processados
           </span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-green-600 text-green-600 hover:bg-green-50">
-              <TableIcon className="h-4 w-4 mr-2" /> Exportar Excel
+            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+              <TableIcon className="h-4 w-4" /> Exportar Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-red-600 text-red-600 hover:bg-red-50">
-              <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+              <FileText className="h-4 w-4" /> Exportar PDF
             </Button>
           </div>
         </div>
 
-        <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+        {/* TABELA PRINCIPAL */}
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto min-h-[400px]">
             <Table>
-              <TableHeader className="bg-gray-50">
-                <TableRow>
-                  {/* Cabeçalhos Clicáveis para Ordenação */}
-                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Entrada {renderSortIcon('data_entrada')}</TableHead>
-                  <TableHead onClick={() => handleSort('data_previsao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Previsão {renderSortIcon('data_previsao')}</TableHead>
-                  <TableHead onClick={() => handleSort('cliente_os_modelo_numero')} className="cursor-pointer hover:bg-gray-100">Cliente/OS {renderSortIcon('cliente_os_modelo_numero')}</TableHead>
-                  <TableHead onClick={() => handleSort('tipo_atividade')} className="cursor-pointer hover:bg-gray-100">Atividade {renderSortIcon('tipo_atividade')}</TableHead>
-                  <TableHead onClick={() => handleSort('fabricante')} className="cursor-pointer hover:bg-gray-100">Fabricante {renderSortIcon('fabricante')}</TableHead>
-                  <TableHead onClick={() => handleSort('modelo')} className="cursor-pointer hover:bg-gray-100">Modelo {renderSortIcon('modelo')}</TableHead>
-                  <TableHead onClick={() => handleSort('tecnico')} className="cursor-pointer hover:bg-gray-100">Técnico {renderSortIcon('tecnico')}</TableHead>
-                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer hover:bg-gray-100">Status {renderSortIcon('status')}</TableHead>
-                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
-                  <TableHead>Resumo</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+              <TableHeader className="bg-slate-100">
+                <TableRow className="text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-100">
+                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Entrada {renderSortIcon('data_entrada')}</TableHead>
+                  <TableHead onClick={() => handleSort('data_previsao')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Previsão {renderSortIcon('data_previsao')}</TableHead>
+                  <TableHead onClick={() => handleSort('cliente_os_modelo_numero')} className="cursor-pointer font-semibold p-4">Cliente/OS {renderSortIcon('cliente_os_modelo_numero')}</TableHead>
+                  <TableHead onClick={() => handleSort('tipo_atividade')} className="cursor-pointer font-semibold p-4">Atividade {renderSortIcon('tipo_atividade')}</TableHead>
+                  <TableHead onClick={() => handleSort('fabricante')} className="cursor-pointer font-semibold p-4">Fabricante {renderSortIcon('fabricante')}</TableHead>
+                  <TableHead onClick={() => handleSort('modelo')} className="cursor-pointer font-semibold p-4">Modelo {renderSortIcon('modelo')}</TableHead>
+                  <TableHead onClick={() => handleSort('tecnico')} className="cursor-pointer font-semibold p-4">Técnico {renderSortIcon('tecnico')}</TableHead>
+                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer font-semibold text-center p-4">Status {renderSortIcon('status')}</TableHead>
+                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
+                  <TableHead className="font-semibold p-4">Resumo</TableHead>
+                  <TableHead className="font-semibold text-center p-4">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               
-              <TableBody>
+              <TableBody className="divide-y divide-slate-100">
                 {loading ? (
-                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Analisando banco de dados...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow>
                 ) : paginated.length === 0 ? (
-                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow>
                 ) : (
                   paginated.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="whitespace-nowrap">{formatarData(a.data_entrada)}</TableCell>
-                      <TableCell className="whitespace-nowrap">{formatarData(a.data_previsao)}</TableCell>
-                      <TableCell className="font-medium text-xs">{a.cliente_os_modelo_numero || "—"}</TableCell>
-                      <TableCell className="text-xs">{a.tipo_atividade || "—"}</TableCell>
-                      <TableCell className="text-xs">{a.fabricante || "—"}</TableCell>
-                      <TableCell className="text-xs">{a.modelo || "—"}</TableCell>
-                      <TableCell className="text-xs">{a.tecnico || "—"}</TableCell>
-                      <TableCell>
-                        <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
-                          a.status === 'completed' ? 'bg-green-100 text-green-700' :
-                          a.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
+                    <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.data_previsao)}</TableCell>
+                      <TableCell className="font-bold text-sm text-slate-800 p-4">{a.cliente_os_modelo_numero || "—"}</TableCell>
+                      <TableCell className="text-xs font-semibold text-slate-700 p-4">{a.tipo_atividade || "—"}</TableCell>
+                      <TableCell className="text-xs text-slate-500 font-medium p-4">{a.fabricante || "—"}</TableCell>
+                      <TableCell className="text-xs text-slate-500 font-medium p-4">{a.modelo || "—"}</TableCell>
+                      <TableCell className="text-xs font-bold text-indigo-700 p-4">{a.tecnico || "—"}</TableCell>
+                      <TableCell className="text-center p-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${
+                          a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                          a.status === 'waiting' ? 'bg-amber-100 text-amber-700' :
                           'bg-blue-100 text-blue-700'
                         }`}>
                           {formatarStatus(a.status)}
                         </span>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">{formatarData(a.data_conclusao)}</TableCell>
-                      <TableCell className="max-w-[150px] truncate text-xs text-gray-500" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => excluirAtendimento(a.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                      <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
+                      <TableCell className="text-center p-4">
+                        <Button variant="ghost" size="icon" onClick={() => excluirRegistro(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -453,12 +451,13 @@ export default function TabelaPage() {
           </div>
         </div>
 
+        {/* PAGINAÇÃO */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border">
-            <span className="text-muted-foreground font-medium pl-2">Página {page + 1} de {totalPages}</span>
+          <div className="flex items-center justify-between text-sm bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-slate-500 font-medium pl-2">Página <strong className="text-slate-800">{page + 1}</strong> de {totalPages}</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Próxima</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="font-semibold text-slate-600">Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="font-semibold text-slate-600">Próxima</Button>
             </div>
           </div>
         )}
