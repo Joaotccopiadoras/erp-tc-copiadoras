@@ -4,12 +4,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, LogOut } from "lucide-react";
+import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, CalendarRange, Filter, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/AppLayout";
-import { X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const PAGE_SIZE = 15;
@@ -19,7 +18,7 @@ const formatarStatus = (status: string) => {
   return mapaStatus[status.toLowerCase()] || status.toUpperCase();
 };
 
-// multiselecao
+// Componente de Multiseleção
 function MultiSelectDropdown({ title, options, selected, onChange }: { title: string, options: string[], selected: string[], onChange: (val: string[]) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -34,29 +33,29 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
 
   return (
     <div className="relative" ref={ref}>
-      <Button variant="outline" onClick={() => setOpen(!open)} className="w-full justify-between bg-white text-left font-normal h-10 px-3">
-        <span className="truncate">
-          {selected.length === 0 ? title : `${title} (${selected.length})`}
+      <Button variant="outline" onClick={() => setOpen(!open)} className="w-full justify-between bg-white text-left font-normal h-10 px-3 border-slate-200">
+        <span className="truncate text-slate-600">
+          {selected.length === 0 ? title : <span className="font-bold text-indigo-600">{title} ({selected.length})</span>}
         </span>
         <ChevronDown className="h-4 w-4 opacity-50" />
       </Button>
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg p-2 max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
           {options.length === 0 ? (
-            <div className="p-2 text-sm text-gray-500 text-center">Nenhum dado...</div>
+            <div className="p-2 text-sm text-slate-400 text-center italic">Nenhum dado...</div>
           ) : (
             options.map(opt => (
-              <label key={opt} className="flex items-center space-x-2 p-1.5 hover:bg-gray-100 rounded cursor-pointer">
+              <label key={opt} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
                 <input 
                   type="checkbox" 
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                   checked={selected.includes(opt)} 
                   onChange={(e) => {
                     if (e.target.checked) onChange([...selected, opt]);
                     else onChange(selected.filter(x => x !== opt));
                   }} 
                 />
-                <span className="text-sm text-gray-700 truncate">{opt}</span>
+                <span className="text-sm text-slate-700 truncate font-medium">{opt}</span>
               </label>
             ))
           )}
@@ -68,10 +67,7 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const HandleSair = async () => {
-    await supabase.auth.signOut();
-    navigate("/Login");
-  }
+  
   const [allData, setAllData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [usuarioAtual, setUsuarioAtual] = useState<any>(null);
@@ -101,26 +97,20 @@ export default function DashboardPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user || !user.email) return; 
         setUsuarioAtual(user);
-        console.log("🔍 1. Email do usuário logado:", user.email);
+        
         const { data, error } = await supabase
             .from('programacao_tc')
             .select('*')
             .order('data_entrada', { ascending: false });
         if (error) throw error;
         
-        //quantos cards Supa deixou sair do banco
-        console.log("📦 2. Cards que vieram do banco:", data?.length, data);
         if (data) {
            const dadosFiltrados = data.filter(item => {
                if (!item.lider_email) return false; 
                return item.lider_email.toLowerCase().trim() === user.email?.toLowerCase().trim();
            });
-           
-           //quantos cards sobreviveram ao filtro
-           console.log("🎯 3. Cards após o filtro:", dadosFiltrados.length, dadosFiltrados);
            setAllData(dadosFiltrados); 
         }
-
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
       } finally {
@@ -129,10 +119,6 @@ export default function DashboardPage() {
     }
     fetchData();
   }, []);
-
-  const handleVoltar = () => {
-    navigate("/interno")
-  }
 
   const excluirRegistro = async (id: number) => {
     const confirmar = window.confirm("Tem certeza que deseja excluir este registro definitivamente?");
@@ -207,7 +193,7 @@ export default function DashboardPage() {
   const uniqueSolicitantes = [...new Set(allData.map((a) => a.solicitante).filter(Boolean))].sort();
   const uniqueStatus = [...new Set(allData.map((a) => formatarStatus(a.status)).filter(s => s !== "—"))].sort();
 
-const formatarData = (dataStr: string) => {
+  const formatarData = (dataStr: string) => {
     if (!dataStr) return "—";
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
@@ -257,7 +243,6 @@ const formatarData = (dataStr: string) => {
         const liderItem = item.lider_card || "Sem Responsável";
         if (liderItem !== liderAtual) {
           tableRows.push([{
-            // ALTEARADO DE LÍDER PARA RESPONSÁVEL
             content: `Responsável: ${liderItem}`, colSpan: 9, 
             styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
           }]);
@@ -274,8 +259,8 @@ const formatarData = (dataStr: string) => {
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 35, // Margem no topo para não bater no cabeçalho
-        margin: { bottom: 35 }, // Margem no fundo para não bater no rodapé cinza
+        startY: 35, 
+        margin: { bottom: 35 }, 
         theme: 'grid', 
         styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
         columnStyles: {
@@ -297,34 +282,28 @@ const formatarData = (dataStr: string) => {
           doc.setTextColor(0, 0, 0);
           doc.text("Agenda TC Copiadoras", pageWidth / 2, 20, { align: "center" });
           
-          // Linha divisória do cabeçalho
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
           doc.line(14, 28, pageWidth - 14, 28);
 
-          // --- RODAPÉ (BLOCO CINZA) ---
-          doc.setFillColor(235, 235, 235); // Cor de fundo cinza clara
+          // --- RODAPÉ ---
+          doc.setFillColor(235, 235, 235);
           doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
           doc.setFont("helvetica", "normal");
           doc.setFontSize(6.5);
 
-          // Coluna 1: Endereço e Dados
           doc.setTextColor(100, 100, 100);
           const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";
           doc.text(col1Text, 14, pageHeight - 20);
 
-          // Coluna 2: Emails de Vendas/Licitação (Em Azul)
           doc.setTextColor(59, 130, 246);
           const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
           doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
 
-          // Coluna 3: Emails Diretoria/Técnico (Em Azul)
           const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
           doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
         },
-
-        // CORES DOS STATUS
         didParseCell: function (data) {
           if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
             const status = data.cell.raw as string;
@@ -334,7 +313,6 @@ const formatarData = (dataStr: string) => {
           }
         }
       });
-      // NOME DO ARQUIVO SALVO ATUALIZADO
       doc.save("Agenda_TC_Copiadoras.pdf");
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
@@ -371,126 +349,127 @@ const formatarData = (dataStr: string) => {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-8">
+      <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
-      {/* CABEÇALHO */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <img src="/logo.png" alt="Logo" className="h-12 object-contain" />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Gestão de Projetos e Processos</h1>
-              <p className="text-muted-foreground text-sm mt-1">Acompanhamento e rastreabilidade de atividades</p>
-            </div>
+        {/* CABEÇALHO */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
+               <CalendarRange className="w-6 h-6 text-indigo-600" /> Gestão de Projetos e Processos
+            </h1>
+            <p className="text-slate-500">Acompanhamento e rastreabilidade de atividades da Agenda (Ummense).</p>
           </div>
+        </div>
 
         {/* ÁREA DE FILTROS */}
-        <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-foreground">Filtros Avançados</span>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4 text-indigo-500"/> Filtros Avançados</h3>
             {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                <X className="h-4 w-4 mr-1" /> Limpar Tudo
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2 text-xs">
+                <X className="h-3 w-3 mr-1" /> Limpar Tudo
               </Button>
             )}
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MultiSelectDropdown title="Líder" options={uniqueLideres} selected={filterLideres} onChange={setFilterLideres} />
             <MultiSelectDropdown title="Departamento" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
             <MultiSelectDropdown title="Solicitante" options={uniqueSolicitantes} selected={filterSolicitantes} onChange={setFilterSolicitantes} />
             <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4">
-            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Entrada</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Entrada</span>
               <div className="flex gap-2 items-center">
-                <Input type="date" className="text-xs h-8" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
-                <span className="text-xs text-gray-400">até</span>
-                <Input type="date" className="text-xs h-8" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
+                <Input type="date" className="text-xs h-8 bg-white" value={dataEntradaInicio} onChange={(e) => { setDataEntradaInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-slate-400 font-medium">até</span>
+                <Input type="date" className="text-xs h-8 bg-white" value={dataEntradaFim} onChange={(e) => { setDataEntradaFim(e.target.value); setPage(0); }} />
               </div>
             </div>
-            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Previsão</span>
+            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Previsão</span>
               <div className="flex gap-2 items-center">
-                <Input type="date" className="text-xs h-8" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
-                <span className="text-xs text-gray-400">até</span>
-                <Input type="date" className="text-xs h-8" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
+                <Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoInicio} onChange={(e) => { setDataPrevisaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-slate-400 font-medium">até</span>
+                <Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoFim} onChange={(e) => { setDataPrevisaoFim(e.target.value); setPage(0); }} />
               </div>
             </div>
-            <div className="flex flex-col space-y-2 border rounded-md p-3 bg-gray-50/50">
-              <span className="text-xs font-semibold text-gray-700 uppercase">Período de Conclusão</span>
+            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Conclusão</span>
               <div className="flex gap-2 items-center">
-                <Input type="date" className="text-xs h-8" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
-                <span className="text-xs text-gray-400">até</span>
-                <Input type="date" className="text-xs h-8" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
+                <Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoInicio} onChange={(e) => { setDataConclusaoInicio(e.target.value); setPage(0); }} />
+                <span className="text-xs text-slate-400 font-medium">até</span>
+                <Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoFim} onChange={(e) => { setDataConclusaoFim(e.target.value); setPage(0); }} />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-          <span className="text-muted-foreground">
-            <strong className="text-foreground text-lg">{filtered.length}</strong> projetos listados
+        {/* ESTATISTICAS E EXPORTAÇÃO */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+            <strong className="text-slate-800 text-base">{filtered.length}</strong> projetos listados
           </span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-green-600 text-green-600 hover:bg-green-50">
-              <TableIcon className="h-4 w-4 mr-2" /> Exportar Excel
+            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+              <TableIcon className="h-4 w-4" /> Exportar Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-red-600 text-red-600 hover:bg-red-50">
-              <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+              <FileText className="h-4 w-4" /> Exportar PDF
             </Button>
           </div>
         </div>
 
         {/* TABELA PRINCIPAL */}
-        <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto min-h-[400px]">
             <Table>
-              <TableHeader className="bg-gray-50">
-                <TableRow>
-                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Entrada {renderSortIcon('data_entrada')}</TableHead>
-                  <TableHead onClick={() => handleSort('previsao_prazo')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Previsão {renderSortIcon('previsao_prazo')}</TableHead>
-                  <TableHead onClick={() => handleSort('solicitante')} className="cursor-pointer hover:bg-gray-100">Solicitante {renderSortIcon('solicitante')}</TableHead>
-                  <TableHead onClick={() => handleSort('processo_projeto')} className="cursor-pointer hover:bg-gray-100">Projeto {renderSortIcon('processo_projeto')}</TableHead>
-                  <TableHead onClick={() => handleSort('departamento')} className="cursor-pointer hover:bg-gray-100">Depto {renderSortIcon('departamento')}</TableHead>
-                  <TableHead onClick={() => handleSort('lider_card')} className="cursor-pointer hover:bg-gray-100">Líder {renderSortIcon('lider_card')}</TableHead>
-                  <TableHead onClick={() => handleSort('tarefa_atual')} className="cursor-pointer hover:bg-gray-100">Tarefa Atual {renderSortIcon('tarefa_atual')}</TableHead>
-                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer hover:bg-gray-100">Status {renderSortIcon('status')}</TableHead>
-                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer hover:bg-gray-100 whitespace-nowrap">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
-                  <TableHead>Resumo</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+              <TableHeader className="bg-slate-100">
+                <TableRow className="text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-100">
+                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Entrada {renderSortIcon('data_entrada')}</TableHead>
+                  <TableHead onClick={() => handleSort('previsao_prazo')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Previsão {renderSortIcon('previsao_prazo')}</TableHead>
+                  <TableHead onClick={() => handleSort('solicitante')} className="cursor-pointer font-semibold p-4">Solicitante {renderSortIcon('solicitante')}</TableHead>
+                  <TableHead onClick={() => handleSort('processo_projeto')} className="cursor-pointer font-semibold p-4">Projeto {renderSortIcon('processo_projeto')}</TableHead>
+                  <TableHead onClick={() => handleSort('departamento')} className="cursor-pointer font-semibold p-4">Depto {renderSortIcon('departamento')}</TableHead>
+                  <TableHead onClick={() => handleSort('lider_card')} className="cursor-pointer font-semibold p-4">Líder {renderSortIcon('lider_card')}</TableHead>
+                  <TableHead onClick={() => handleSort('tarefa_atual')} className="cursor-pointer font-semibold p-4">Tarefa Atual {renderSortIcon('tarefa_atual')}</TableHead>
+                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer font-semibold text-center p-4">Status {renderSortIcon('status')}</TableHead>
+                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
+                  <TableHead className="font-semibold p-4">Resumo</TableHead>
+                  <TableHead className="font-semibold text-center p-4">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               
-              <TableBody>
+              <TableBody className="divide-y divide-slate-100">
                 {loading ? (
-                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Analisando banco de dados...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow>
                 ) : paginated.length === 0 ? (
-                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow>
                 ) : (
                   paginated.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="whitespace-nowrap">{formatarData(a.data_entrada)}</TableCell>
-                      <TableCell className="whitespace-nowrap">{formatarData(a.previsao_prazo)}</TableCell>
-                      <TableCell className="text-xs">{a.solicitante || "—"}</TableCell>
-                      <TableCell className="font-medium text-xs">{a.processo_projeto || "—"}</TableCell>
-                      <TableCell className="text-xs">{a.departamento || "—"}</TableCell>
-                      <TableCell className="text-xs font-semibold">{a.lider_card || "—"}</TableCell>
-                      <TableCell className="text-xs text-blue-600 font-medium">{a.tarefa_atual || "—"}</TableCell>
-                      <TableCell>
-                        <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold tracking-wider ${
-                          a.status === 'completed' ? 'bg-green-100 text-green-700' :
-                          a.status === 'waiting' ? 'bg-yellow-100 text-yellow-700' :
+                    <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
+                      <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.previsao_prazo)}</TableCell>
+                      <TableCell className="text-xs font-semibold text-slate-700 p-4">{a.solicitante || "—"}</TableCell>
+                      <TableCell className="font-bold text-sm text-slate-800 p-4">{a.processo_projeto || "—"}</TableCell>
+                      <TableCell className="text-xs text-slate-500 font-medium p-4">{a.departamento || "—"}</TableCell>
+                      <TableCell className="text-xs font-bold text-indigo-700 p-4">{a.lider_card || "—"}</TableCell>
+                      <TableCell className="text-xs text-slate-600 font-medium p-4">{a.tarefa_atual || "—"}</TableCell>
+                      <TableCell className="text-center p-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${
+                          a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                          a.status === 'waiting' ? 'bg-amber-100 text-amber-700' :
                           'bg-blue-100 text-blue-700'
                         }`}>
                           {formatarStatus(a.status)}
                         </span>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">{formatarData(a.data_conclusao)}</TableCell>
-                      <TableCell className="max-w-[150px] truncate text-xs text-gray-500" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => excluirRegistro(a.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                      <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
+                      <TableCell className="text-center p-4">
+                        <Button variant="ghost" size="icon" onClick={() => excluirRegistro(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -502,17 +481,17 @@ const formatarData = (dataStr: string) => {
           </div>
         </div>
 
+        {/* PAGINAÇÃO */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm bg-white p-2 rounded-lg border shadow-sm">
-            <span className="text-muted-foreground font-medium pl-2">Página {page + 1} de {totalPages}</span>
+          <div className="flex items-center justify-between text-sm bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-slate-500 font-medium pl-2">Página <strong className="text-slate-800">{page + 1}</strong> de {totalPages}</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Próxima</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="font-semibold text-slate-600">Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="font-semibold text-slate-600">Próxima</Button>
             </div>
           </div>
         )}
       </div>
-    </div>
     </AppLayout>
   );
 }
