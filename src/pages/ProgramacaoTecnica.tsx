@@ -1,14 +1,17 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { supabase } from "../integrations/supabase/client"; 
+import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, Wrench, Filter, X } from "lucide-react";
+
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, Wrench, Filter, X } from "lucide-react";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/AppLayout";
+
+import { supabase } from "../integrations/supabase/client"; 
 
 const PAGE_SIZE = 15;
 const mapaStatus: Record<string, string> = { active: "ANDAMENTO", waiting: "AGUARDANDO", completed: "CONCLUÍDO"};
@@ -61,9 +64,7 @@ export default function TabelaPage() {
   const [allData, setAllData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ==========================================
-  // ESTADOS DOS FILTROS E ORDENAÇÃO
-  // ==========================================
+  // estados filtros e ordenac
   const [filterTecnicos, setFilterTecnicos] = useState<string[]>([]);
   const [filterFabricantes, setFilterFabricantes] = useState<string[]>([]);
   const [filterModelos, setFilterModelos] = useState<string[]>([]);
@@ -80,9 +81,7 @@ export default function TabelaPage() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [page, setPage] = useState(0);
 
-  // ==========================================
-  // AUTO-SAVE: RECUPERAÇÃO DE FILTROS
-  // ==========================================
+  // autosave
   useEffect(() => {
     const savedFilters = sessionStorage.getItem("programacao_tecnica_filtros");
     if (savedFilters) {
@@ -105,7 +104,6 @@ export default function TabelaPage() {
     }
   }, []);
 
-  // Salva no SessionStorage sempre que um filtro mudar
   useEffect(() => {
     const stateToSave = {
       filterTecnicos, filterFabricantes, filterModelos, filterTipos, filterStatus,
@@ -114,7 +112,6 @@ export default function TabelaPage() {
     };
     sessionStorage.setItem("programacao_tecnica_filtros", JSON.stringify(stateToSave));
   }, [filterTecnicos, filterFabricantes, filterModelos, filterTipos, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page]);
-  // ==========================================
 
   useEffect(() => {
     async function fetchAtendimentos() {
@@ -200,10 +197,9 @@ export default function TabelaPage() {
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
-  // PDF e Excel (Ocultos para brevidade, mas estão mantidos como na sua versão)
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => { const res = await fetch(imageUrl); const blob = await res.blob(); return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(blob); }); };
-  const exportarPDF = async () => { /* Logica de PDF Mantida */ };
-  const exportarExcel = async () => { /* Logica de Excel Mantida */ };
+  const exportarPDF = async () => { /* logica de pdf */ };
+  const exportarExcel = async () => { /* logica de xlsx */ };
 
   const renderSortIcon = (key: string) => {
     if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;

@@ -208,8 +208,8 @@ export default function DashboardPage() {
     return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(blob); });
   };
 
-  const exportarPDF = async () => { /* Mesma lógica anterior */ };
-  const exportarExcel = async () => { /* Mesma lógica anterior */ };
+  const exportarPDF = async () => { /* logica pdf */ };
+  const exportarExcel = async () => { /* logica xlsx */ };
 
   const renderSortIcon = (key: string) => {
     if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;

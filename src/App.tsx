@@ -26,7 +26,7 @@ import Requisicoes from "./pages/Requisicoes";
 import Comercial from "./pages/Comercial";
 import GestaoContratos from "./pages/GestaoContratos";
 
-import Tecnica from "./pages/Tecnica";
+import Tecnica from "./pages/ProgramacaoTecnica";
 import GestaoEquipamentos from "./pages/GestaoEquipamentos";
 import OrdensdeServico from "./pages/OrdensdeServico";
 import Recondicionamento from "./pages/Recondicionamento";
