@@ -3,7 +3,9 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
+import {
+  Calculator,
+  Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function DepartamentoPessoal() {
