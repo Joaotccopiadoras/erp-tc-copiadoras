@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
+import { 
   Calculator,
   Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,13 +35,15 @@ export default function DepartamentoPessoal() {
   // ==========================================
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
   const [mesReferencia, setMesReferencia] = useState(mesAtualStr);
+  const [quinzenaReferencia, setQuinzenaReferencia] = useState("1ª Quinzena"); // NOVO: Controle de Quinzena
+  
   const [folha, setFolha] = useState<any[]>([]);
   const [beneficios, setBeneficios] = useState<any[]>([]);
   const [categoriaDpId, setCategoriaDpId] = useState("");
   const [carregandoDados, setCarregandoDados] = useState(false);
   const [filtroVinculoBen, setFiltroVinculoBen] = useState<"todos" | "clt" | "pj">("todos");
 
-  // Controles Globais de Benefício
+  // Controles Globais de Benefício (Para aplicar a todos)
   const [globalDiasVT, setGlobalDiasVT] = useState("");
   const [globalValorDiarioVT, setGlobalValorDiarioVT] = useState("");
   const [globalDiasVA, setGlobalDiasVA] = useState("");
@@ -52,6 +54,8 @@ export default function DepartamentoPessoal() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
+  const periodoBeneficios = `${quinzenaReferencia} ${mesReferencia}`; // String composta para o BD (Ex: "1ª Quinzena 05/2026")
+
   useEffect(() => {
     fetchColaboradores();
     fetchCategoriaDP();
@@ -60,7 +64,7 @@ export default function DepartamentoPessoal() {
   useEffect(() => {
     if (abaAtiva === "folha") carregarFolhaDoMes();
     if (abaAtiva === "beneficios") carregarBeneficiosDoPeriodo();
-  }, [abaAtiva, mesReferencia]);
+  }, [abaAtiva, mesReferencia, quinzenaReferencia]); // Reage à mudança de quinzena também
 
   // Se houver recibos na fila de impressão, aciona o print automaticamente
   useEffect(() => {
@@ -92,11 +96,11 @@ export default function DepartamentoPessoal() {
     try {
       if (editandoId) {
         const { error } = await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
-        if (error) throw error; // <- Adicionada trava de segurança de Erros
+        if (error) throw error;
         alert("Ficha do colaborador atualizada!");
       } else {
         const { error } = await supabase.from('rh_colaboradores').insert([payload]);
-        if (error) throw error; // <- Adicionada trava de segurança de Erros
+        if (error) throw error;
         alert("Colaborador cadastrado com sucesso!");
       }
       limparFormColab(); fetchColaboradores();
@@ -127,17 +131,24 @@ export default function DepartamentoPessoal() {
     try {
       const { data: folhaGravada } = await supabase.from('rh_folha_pagamento' as any).select('*, rh_colaboradores(nome, cargo, setor, status, tipo_contrato)').eq('mes_referencia', mesReferencia);
       
-      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('colaborador_id, total_vt, total_va').eq('periodo', mesReferencia);
-      const mapaBeneficios = new Map(benGravados?.map((b: any) => [b.colaborador_id, b]));
+      // MÁGICA: Busca TODOS os benefícios (1ª e 2ª Quinzena) que contém o mês de referência
+      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('colaborador_id, total_vt, total_va').ilike('periodo', `%${mesReferencia}%`);
+      
+      // Agrupa e soma os benefícios das duas quinzenas por colaborador
+      const mapaBeneficios = new Map();
+      benGravados?.forEach((b: any) => {
+          const atual = mapaBeneficios.get(b.colaborador_id) || { vt: 0, va: 0 };
+          mapaBeneficios.set(b.colaborador_id, { vt: atual.vt + Number(b.total_vt), va: atual.va + Number(b.total_va) });
+      });
 
       if (folhaGravada && folhaGravada.length > 0) {
         setFolha(folhaGravada);
       } else {
         const ativos = colaboradores.filter(c => c.status === 'Ativo' || c.status === 'Férias');
         const previa = ativos.map(c => {
-          const ben = mapaBeneficios.get(c.id) as any;
-          const vt = ben ? Number(ben.total_vt) : 0;
-          const va = ben ? Number(ben.total_va) : 0;
+          const ben = mapaBeneficios.get(c.id);
+          const vt = ben ? ben.vt : 0;
+          const va = ben ? ben.va : 0;
           const liq = Number(c.salario_base) + vt + va;
           return {
             colaborador_id: c.id, mes_referencia: mesReferencia, tipo_contrato: c.tipo_contrato,
@@ -228,19 +239,20 @@ export default function DepartamentoPessoal() {
     } catch (e: any) { alert("Erro crítico: " + e.message); }
   };
 
-  // --- LÓGICA DE BENEFÍCIOS (VT / VA) ---
+  // --- LÓGICA DE BENEFÍCIOS (VT / VA) POR QUINZENA ---
   const carregarBeneficiosDoPeriodo = async () => {
     if (!mesReferencia || mesReferencia.length !== 7) return;
     setCarregandoDados(true);
     try {
-      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('*, rh_colaboradores(nome, cargo, tipo_contrato)').eq('periodo', mesReferencia);
+      // Busca pelo periodo composto, ex: "1ª Quinzena 05/2026"
+      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('*, rh_colaboradores(nome, cargo, tipo_contrato)').eq('periodo', periodoBeneficios);
       
       if (benGravados && benGravados.length > 0) {
         setBeneficios(benGravados);
       } else {
         const elegiveis = colaboradores.filter(c => (c.status === 'Ativo' || c.status === 'Férias') && (c.recebe_vt || c.recebe_va));
         const previa = elegiveis.map(c => ({
-          colaborador_id: c.id, periodo: mesReferencia, tipo_contrato: c.tipo_contrato,
+          colaborador_id: c.id, periodo: periodoBeneficios, tipo_contrato: c.tipo_contrato,
           dias_vt: 0, valor_diario_vt: 0, total_vt: 0,
           dias_va: 0, valor_diario_va: 0, total_va: 0,
           recibo_assinado: false, recibo_url: null,
@@ -294,7 +306,7 @@ export default function DepartamentoPessoal() {
           recibo_assinado: b.recibo_assinado, recibo_url: b.recibo_url
         };
         const { error } = await supabase.from('rh_beneficios' as any).upsert(payload, { onConflict: 'colaborador_id, periodo' });
-        if (error) throw error; // Trava de erro garantida
+        if (error) throw error; 
       }
       alert("Cálculo de benefícios salvo com sucesso!");
       carregarBeneficiosDoPeriodo();
@@ -317,14 +329,15 @@ export default function DepartamentoPessoal() {
     setUploadingId(colabId);
     try {
       const ext = file.name.split('.').pop();
-      const fileName = `recibo_${colabId}_${mesReferencia.replace('/','-')}.${ext}`;
+      const safePeriodo = periodoBeneficios.replace(/[^a-zA-Z0-9]/g, '_');
+      const fileName = `recibo_${colabId}_${safePeriodo}.${ext}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage.from('comprovantes_dp').upload(fileName, file, { upsert: true });
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from('comprovantes_dp').getPublicUrl(fileName);
 
-      const { error } = await supabase.from('rh_beneficios' as any).update({ recibo_assinado: true, recibo_url: publicUrl }).eq('colaborador_id', colabId).eq('periodo', mesReferencia);
+      const { error } = await supabase.from('rh_beneficios' as any).update({ recibo_assinado: true, recibo_url: publicUrl }).eq('colaborador_id', colabId).eq('periodo', periodoBeneficios);
       if (error) throw error;
       
       alert("Recibo anexado e marcado como assinado com sucesso!");
@@ -399,7 +412,7 @@ export default function DepartamentoPessoal() {
                 )}
                 {recibo.recebe_va && (
                   <tr>
-                    <td className="p-3 border border-slate-300">Vale Alimentação / Refeição</td>
+                    <td className="p-3 border border-slate-300">Vale Alimentação</td>
                     <td className="p-3 border border-slate-300 text-center">{recibo.dias_va}</td>
                     <td className="p-3 border border-slate-300 text-right">R$ {Number(recibo.valor_diario_va).toFixed(2).replace('.',',')}</td>
                     <td className="p-3 border border-slate-300 text-right font-bold">R$ {Number(recibo.total_va).toFixed(2).replace('.',',')}</td>
@@ -486,7 +499,7 @@ export default function DepartamentoPessoal() {
                           <Select value={recebeVT} onValueChange={setRecebeVT}><SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select>
                         </div>
                         
-                        <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Utensils className="w-3 h-3 text-amber-500"/> Recebe VA / VR?</label>
+                        <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Utensils className="w-3 h-3 text-amber-500"/> Recebe VA?</label>
                           <Select value={recebeVA} onValueChange={setRecebeVA}><SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select>
                         </div>
                         
@@ -563,18 +576,26 @@ export default function DepartamentoPessoal() {
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Bus className="w-5 h-5 text-indigo-600"/> Gestão de Vale Transporte e Alimentação</h2>
-                    <p className="text-sm text-slate-500">Cálculo quinzenal/mensal por dias efetivamente trabalhados.</p>
+                    <p className="text-sm text-slate-500">Cálculo quinzenal por dias efetivamente trabalhados.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <label className="text-sm font-bold text-slate-700">Período Referência:</label>
-                    <Input value={mesReferencia} onChange={e => { let val = e.target.value.replace(/\D/g, ''); if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 6); setMesReferencia(val); }} placeholder="MM/AAAA" className="w-32 text-center font-bold bg-slate-50" maxLength={7} />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    <label className="text-sm font-bold text-slate-700">Período:</label>
+                    <Select value={quinzenaReferencia} onValueChange={setQuinzenaReferencia}>
+                        <SelectTrigger className="w-36 bg-white border-none shadow-sm font-bold text-indigo-700"><SelectValue/></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="1ª Quinzena">1ª Quinzena</SelectItem>
+                            <SelectItem value="2ª Quinzena">2ª Quinzena</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <span className="text-slate-300 font-bold hidden sm:block">/</span>
+                    <Input value={mesReferencia} onChange={e => { let val = e.target.value.replace(/\D/g, ''); if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 6); setMesReferencia(val); }} placeholder="MM/AAAA" className="w-24 text-center font-bold bg-white border-none shadow-sm text-indigo-700 focus-visible:ring-0" maxLength={7} />
                 </div>
             </div>
 
             {/* Motor Global de Cálculo */}
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Calculator className="w-4 h-4"/> Calculadora Global do Período</h3>
+                    <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Calculator className="w-4 h-4"/> Calculadora Global ({quinzenaReferencia})</h3>
                     <p className="text-xs text-indigo-700">Insira a regra geral para preencher a tabela abaixo automaticamente.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
@@ -595,7 +616,7 @@ export default function DepartamentoPessoal() {
                         <button onClick={() => setFiltroVinculoBen("pj")} className={`px-3 py-1.5 text-xs font-bold rounded ${filtroVinculoBen === "pj" ? "bg-purple-100 text-purple-700 border border-purple-200" : "text-slate-500 hover:bg-slate-100"}`}>Por Fora (PJ/Estágio)</button>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => acionarImpressaoRecibos()} className="border-slate-300 text-slate-700 hover:bg-slate-100 gap-2"><Printer className="w-4 h-4"/> Imprimir Todos da Lista</Button>
+                        <Button variant="outline" onClick={() => acionarImpressaoRecibos()} className="border-slate-300 text-slate-700 hover:bg-slate-100 gap-2"><Printer className="w-4 h-4"/> Imprimir Recibos da Lista</Button>
                         <Button onClick={salvarRascunhoBeneficios} disabled={carregandoDados} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><Save className="w-4 h-4"/> Gravar Lançamentos</Button>
                     </div>
                 </div>
@@ -677,7 +698,7 @@ export default function DepartamentoPessoal() {
             
             <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-800 text-sm shadow-sm">
                 <FileWarning className="w-5 h-5 shrink-0 mt-0.5"/>
-                <p>Lembre-se de clicar em <strong>"Gravar Lançamentos"</strong> antes de fechar a Folha de Pagamento. Os totais de VT e VA gravados aqui serão espelhados automaticamente na aba de Folha de Pagamento para o cálculo do salário líquido final.</p>
+                <p>Lembre-se de clicar em <strong>"Gravar Lançamentos"</strong> antes de fechar a Folha de Pagamento. Os totais de VT e VA gravados aqui (soma de todas as quinzenas do mês) serão espelhados automaticamente na aba de Folha de Pagamento.</p>
             </div>
           </div>
         )}
@@ -690,12 +711,12 @@ export default function DepartamentoPessoal() {
             
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CalendarDays className="w-5 h-5 text-sky-600"/> Apuração Mensal</h2>
-                    <p className="text-sm text-slate-500">Lançamento de comissões, horas extras, descontos e fechamento do mês.</p>
+                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CalendarDays className="w-5 h-5 text-sky-600"/> Apuração Mensal Consolidada</h2>
+                    <p className="text-sm text-slate-500">Lançamento de comissões, horas extras, descontos e fechamento do mês inteiro.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
                     <label className="text-sm font-bold text-slate-700">Mês/Ano Referência:</label>
-                    <Input value={mesReferencia} onChange={e => { let val = e.target.value.replace(/\D/g, ''); if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 6); setMesReferencia(val); }} placeholder="MM/AAAA" className="w-32 text-center font-bold bg-slate-50" maxLength={7} />
+                    <Input value={mesReferencia} onChange={e => { let val = e.target.value.replace(/\D/g, ''); if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 6); setMesReferencia(val); }} placeholder="MM/AAAA" className="w-24 text-center font-bold bg-white border-none shadow-sm text-sky-700 focus-visible:ring-0" maxLength={7} />
                 </div>
             </div>
 
@@ -707,12 +728,12 @@ export default function DepartamentoPessoal() {
                                 <th className="p-3 font-semibold rounded-tl-lg min-w-[200px]">Colaborador / Vínculo</th>
                                 <th className="p-3 font-semibold text-right border-l border-slate-700">Salário Base</th>
                                 <th className="p-3 font-semibold text-center border-l border-slate-700 w-28">Comissões (+)</th>
-                                <th className="p-3 font-semibold text-center w-24" title="Vem da Aba VT e VA">VT (+)</th>
-                                <th className="p-3 font-semibold text-center w-24" title="Vem da Aba VT e VA">VA / VR (+)</th>
+                                <th className="p-3 font-semibold text-center w-24" title="Soma automática das Quinzenas">VT (+)</th>
+                                <th className="p-3 font-semibold text-center w-24" title="Soma automática das Quinzenas">VA (+)</th>
                                 <th className="p-3 font-semibold text-center border-l border-slate-700 w-28" title="Horas Extras, Bônus">Outros (+)</th>
                                 <th className="p-3 font-semibold text-center w-28" title="Faltas, Adiantamentos, INSS">Descontos (-)</th>
                                 <th className="p-3 font-semibold text-right border-l border-slate-700">Líquido a Pagar</th>
-                                <th className="p-3 font-semibold text-center rounded-tr-lg border-l border-slate-700 w-32">Recibo Assinado?</th>
+                                <th className="p-3 font-semibold text-center rounded-tr-lg border-l border-slate-700 w-32">Holerite Assinado?</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
