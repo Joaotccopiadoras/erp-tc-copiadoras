@@ -90,7 +90,7 @@ export default function App() {
           <Route path="/configuracoes" element={<RotaProtegida><Configuracoes /></RotaProtegida>} />
 
           {/* As Rotas dos Módulos*/}
-          <Route path="/agenda" element={<RotaProtegida><Agenda /></RotaProtegida>} />
+          <Route path="/agenda" element={<RotaProtegida><AgendaUmmense /></RotaProtegida>} />
           <Route path="/financeiro" element={<RotaProtegida><Financeiro /></RotaProtegida>} />
           <Route path="/logistica" element={<RotaProtegida><Logistica /></RotaProtegida>} />
           <Route path="/comercial" element={<RotaProtegida><Comercial /></RotaProtegida>} />
