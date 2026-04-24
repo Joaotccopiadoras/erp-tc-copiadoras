@@ -6,7 +6,7 @@ import PortalPage from "./pages/PortalPage";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
 
-import Agenda from "./pages/Agenda";
+import AgendaUmmense from "./pages/AgendaUmmense";
 import AgendaKanban from "./pages/AgendaKanban";
 import Fornecedores from "./pages/Fornecedores";
 import Crm from "./pages/Crm";
