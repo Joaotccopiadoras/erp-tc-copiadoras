@@ -1,17 +1,14 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, Wrench, Filter, X } from "lucide-react";
-
+import { supabase } from "../integrations/supabase/client"; 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-
+import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, Wrench, Filter, X, Loader2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/AppLayout";
-
-import { supabase } from "../integrations/supabase/client"; 
 
 const PAGE_SIZE = 15;
 const mapaStatus: Record<string, string> = { active: "ANDAMENTO", waiting: "AGUARDANDO", completed: "CONCLUÍDO"};
@@ -71,8 +68,9 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
 export default function TabelaPage() {
   const [allData, setAllData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportando, setExportando] = useState(false);
 
-  // estados filtros e ordenac
+  // Estados dos Filtros e Ordenação
   const [filterTecnicos, setFilterTecnicos] = useState<string[]>([]);
   const [filterFabricantes, setFilterFabricantes] = useState<string[]>([]);
   const [filterModelos, setFilterModelos] = useState<string[]>([]);
@@ -89,7 +87,7 @@ export default function TabelaPage() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [page, setPage] = useState(0);
 
-  // autosave
+  // Recuperação e Salvamento de Filtros (SessionStorage)
   useEffect(() => {
     const savedFilters = sessionStorage.getItem("programacao_tecnica_filtros");
     if (savedFilters) {
@@ -205,36 +203,53 @@ export default function TabelaPage() {
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
-  const exportarPDF = () => {
+  // Função Auxiliar para carregar a imagem de forma segura
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
+    try {
+      const res = await fetch(imageUrl);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // ==========================================
+  // EXPORTAÇÃO PDF (Com Logo Restaurada)
+  // ==========================================
+  const exportarPDF = async () => {
+    setExportando(true);
     try {
       const doc = new jsPDF("landscape"); 
+      const logoData = await getBase64ImageFromUrl("/logo.png");
 
+      if (logoData) {
+        doc.addImage(logoData, "PNG", 14, 10, 40, 15);
+      }
+      
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
-      doc.text("Programação/Produtividade Técnica", 14, 20); 
+      doc.text("Programação/Produtividade Técnica", logoData ? 60 : 14, 20); 
       doc.setFont("helvetica", "normal");
       
-      const pesoStatus: Record<string, number> = {
-        "CONCLUÍDO": 1,
-        "ANDAMENTO": 2,
-        "AGUARDANDO": 3
-      };
-
+      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
       const dadosOrdenados = [...filtered].sort((a, b) => {
         const tecA = a.tecnico || "Sem Técnico";
         const tecB = b.tecnico || "Sem Técnico";
         if (tecA < tecB) return -1;
         if (tecA > tecB) return 1;
-        
         const stA = formatarStatus(a.status);
         const stB = formatarStatus(b.status);
         const ordemA = pesoStatus[stA] || 99; 
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
-
-        const dataA = new Date(a.data_entrada || 0).getTime();
-        const dataB = new Date(b.data_entrada || 0).getTime();
-        return dataA - dataB;
+        return new Date(a.data_entrada || 0).getTime() - new Date(b.data_entrada || 0).getTime();
       });
 
       const tableColumn = ["Entrada", "Previsão", "Conclusão", "Cliente/OS", "Atividade", "Fabricante", "Modelo", "Status", "Resumo/Obs"];
@@ -250,7 +265,6 @@ export default function TabelaPage() {
           }]);
           tecnicoAtual = tecItem;
         }
-
         tableRows.push([
           formatarData(item.data_entrada), formatarData(item.data_previsao), formatarData(item.data_conclusao),
           item.cliente_os_modelo_numero || "-", item.tipo_atividade || "-", item.fabricante || "-",
@@ -261,14 +275,10 @@ export default function TabelaPage() {
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 25,
+        startY: 30,
         theme: 'grid', 
         styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: {
-          0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-          5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' },
-          8: { cellWidth: 50, halign: 'left' }
-        },
+        columnStyles: { 0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { cellWidth: 50, halign: 'left' } },
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         didParseCell: function (data) {
@@ -282,19 +292,27 @@ export default function TabelaPage() {
       });
       doc.save("Programacao_Produtividade_Tecnica.pdf");
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF.");
-    }
+    } finally { setExportando(false); }
   };
-  
+
+  // ==========================================
+  // EXPORTAÇÃO EXCEL (Com Logo Restaurada)
+  // ==========================================
   const exportarExcel = async () => {
+    setExportando(true);
     try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Atendimentos");
+      const logoData = await getBase64ImageFromUrl("/logo.png");
+
+      if (logoData) {
+        const imageId = workbook.addImage({ base64: logoData, extension: "png" });
+        worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });
+      }
       
-      // Linha 1 como cabeçalho em vez de 5, já que removemos a logo
-      worksheet.getRow(1).values = ["Data Entrada", "Data Previsão", "Data Conclusão", "Cliente/OS/Modelo", "Atividade", "Fabricante", "Modelo", "Técnico", "Status", "Resumo"];
-      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(5).values = ["Data Entrada", "Data Previsão", "Data Conclusão", "Cliente/OS/Modelo", "Atividade", "Fabricante", "Modelo", "Técnico", "Status", "Resumo"];
+      worksheet.getRow(5).font = { bold: true };
       
       filtered.forEach((item) => {
         worksheet.addRow([
@@ -307,9 +325,8 @@ export default function TabelaPage() {
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), "Programacao_Produtividade_Tecnica.xlsx");
     } catch (error) { 
-      console.error("Erro ao gerar Excel:", error); 
       alert("Erro ao gerar Excel."); 
-    }
+    } finally { setExportando(false); }
   };
 
   const renderSortIcon = (key: string) => {
@@ -360,11 +377,11 @@ export default function TabelaPage() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"><strong className="text-slate-800 text-base">{filtered.length}</strong> atendimentos processados</span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
-              <TableIcon className="h-4 w-4" /> Exportar Excel
+            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0 || exportando} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+              {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Exportar Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
-              <FileText className="h-4 w-4" /> Exportar PDF
+            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0 || exportando} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+              {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} Exportar PDF
             </Button>
           </div>
         </div>
