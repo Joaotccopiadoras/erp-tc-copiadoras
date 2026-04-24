@@ -5,16 +5,24 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Building2, Search, Plus, ArrowLeft, Save, Globe, Key, 
-  Clock, MapPin, Phone, Mail, Building, Eye, EyeOff, Loader2, Truck
+  Clock, MapPin, Phone, Mail, Building, Eye, EyeOff, Loader2, Truck, Activity, Receipt, Edit, Calculator
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Fornecedores() {
-  const [modo, setModo] = useState<"lista" | "formulario">("lista");
+  const [modo, setModo] = useState<"lista" | "formulario" | "dossie">("lista");
   const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
 
-  // Estados do Formulário
+  // ==========================================
+  // ESTADOS: DOSSIÊ DO FORNECEDOR
+  // ==========================================
+  const [fornecedorSelecionado, setFornecedorSelecionado] = useState<any | null>(null);
+  const [notasFiscais, setNotasFiscais] = useState<any[]>([]);
+
+  // ==========================================
+  // ESTADOS: FORMULÁRIO
+  // ==========================================
   const [id, setId] = useState<string | null>(null);
   const [razaoSocial, setRazaoSocial] = useState("");
   const [nomeFantasia, setNomeFantasia] = useState("");
@@ -30,8 +38,6 @@ export default function Fornecedores() {
   const [portalLogin, setPortalLogin] = useState("");
   const [portalSenha, setPortalSenha] = useState("");
   const [prazoMedio, setPrazoMedio] = useState("");
-  
-  // NOVO: Estado da Transportadora
   const [isTransportadora, setIsTransportadora] = useState(false);
 
   // Controles de UI
@@ -76,6 +82,8 @@ export default function Fornecedores() {
     }
   }, [modo, id, razaoSocial, nomeFantasia, cnpjCpf, inscricaoEstadual, tipo, segmento, email, telefone, contatoNome, endereco, portalLink, portalLogin, portalSenha, prazoMedio, isTransportadora]);
 
+  // ==========================================
+
   useEffect(() => {
     if (modo === "lista") fetchFornecedores();
   }, [modo]);
@@ -88,6 +96,21 @@ export default function Fornecedores() {
       
     if (data) setFornecedores(data);
     if (error) console.error("Erro ao buscar fornecedores:", error);
+  };
+
+  // --- AÇÕES DO DOSSIÊ ---
+  const abrirDossie = async (forn: any) => {
+    setFornecedorSelecionado(forn);
+    setModo("dossie");
+
+    // Busca o histórico de notas fiscais de entrada deste fornecedor
+    const { data } = await supabase
+        .from('log_documentos_entrada')
+        .select('*')
+        .eq('fornecedor_id', forn.id)
+        .order('data_emissao', { ascending: false });
+        
+    if (data) setNotasFiscais(data);
   };
 
   const novoFornecedor = () => {
@@ -169,7 +192,7 @@ export default function Fornecedores() {
       inscricao_estadual: inscricaoEstadual, tipo, segmento, email, telefone,
       contato_nome: contatoNome, endereco, portal_link: portalLink, portal_login: portalLogin,
       portal_senha: portalSenha, prazo_medio_entrega_dias: parseInt(prazoMedio) || null,
-      is_transportadora: isTransportadora // <-- Salvando a Flag!
+      is_transportadora: isTransportadora
     };
 
     let erro;
@@ -199,31 +222,32 @@ export default function Fornecedores() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6 max-w-6xl mx-auto mb-12">
         
         {/* CABEÇALHO */}
         <div className="flex justify-between items-center border-b pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
-              <Building2 className="w-6 h-6 text-indigo-600" /> 
-              Gestão de Fornecedores
+              <Building2 className="w-6 h-6 text-indigo-600" /> Gestão de Fornecedores
             </h1>
-            <p className="text-slate-500">Cadastros, portais B2B e relacionamento com parceiros (SRM).</p>
+            <p className="text-slate-500">Cadastros, portais B2B, histórico financeiro e de compras (SRM).</p>
           </div>
           {modo === "lista" ? (
             <Button onClick={novoFornecedor} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
               <Plus className="w-4 h-4" /> Novo Fornecedor
             </Button>
           ) : (
-            <Button variant="outline" onClick={() => setModo("lista")} className="gap-2">
+            <Button variant="outline" onClick={() => setModo("lista")} className="gap-2 text-slate-600">
               <ArrowLeft className="w-4 h-4"/> Voltar à Lista
             </Button>
           )}
         </div>
 
-        {/* MODO LISTA */}
+        {/* ========================================================================= */}
+        {/* MODO: LISTA DE FORNECEDORES */}
+        {/* ========================================================================= */}
         {modo === "lista" && (
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-200">
             <div className="p-4 border-b flex flex-wrap gap-4 bg-slate-50">
               <div className="relative flex-1 min-w-[200px] max-w-md">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -239,9 +263,9 @@ export default function Fornecedores() {
                 </div>
               ) : (
                 fornecedoresFiltrados.map(forn => (
-                  <div key={forn.id} onClick={() => editarFornecedor(forn)} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer group">
+                  <div key={forn.id} onClick={() => abrirDossie(forn)} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer group">
                     <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                      <div className="h-12 w-12 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                         {forn.is_transportadora ? <Truck className="w-6 h-6" /> : <Building2 className="w-6 h-6" />}
                       </div>
                       <div>
@@ -265,7 +289,10 @@ export default function Fornecedores() {
                           <p className={`text-sm font-bold ${forn.prazo_medio_entrega_dias <= 5 ? 'text-emerald-600' : forn.prazo_medio_entrega_dias <= 15 ? 'text-amber-600' : 'text-red-600'}`}>{forn.prazo_medio_entrega_dias} dias</p>
                         ) : (<p className="text-sm text-slate-400 font-medium">N/A</p>)}
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-white border flex items-center justify-center text-slate-400 group-hover:border-indigo-300 group-hover:text-indigo-600 transition-colors"><ArrowLeft className="w-4 h-4 rotate-180" /></div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="text-indigo-600 border-indigo-200 group-hover:bg-indigo-50 gap-2"><Activity className="w-4 h-4"/> Dossiê</Button>
+                        <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); editarFornecedor(forn); }} className="h-9 w-9 text-slate-400 hover:text-indigo-600" title="Editar"><Edit className="w-4 h-4"/></Button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -274,7 +301,114 @@ export default function Fornecedores() {
           </div>
         )}
 
-        {/* MODO FORMULÁRIO */}
+        {/* ========================================================================= */}
+        {/* MODO: DOSSIÊ DO FORNECEDOR (VISÃO 360) */}
+        {/* ========================================================================= */}
+        {modo === "dossie" && fornecedorSelecionado && (
+          <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
+            
+            {/* Cabeçalho do Fornecedor */}
+            <div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t-4 border-t-indigo-600">
+              <div>
+                  <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-2xl font-black text-slate-800 tracking-tight">{fornecedorSelecionado.nome_fantasia || fornecedorSelecionado.razao_social}</h2>
+                      {fornecedorSelecionado.is_transportadora && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded uppercase flex items-center gap-1"><Truck className="w-3 h-3"/> Transportadora</span>}
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => editarFornecedor(fornecedorSelecionado)} title="Editar Dados"><Edit className="w-3 h-3"/></Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                      <span className="flex items-center gap-1 font-mono font-semibold bg-slate-100 px-2 py-0.5 rounded"><Building2 className="w-4 h-4 text-slate-400"/> {fornecedorSelecionado.cnpj_cpf || 'S/ CNPJ'}</span>
+                      <span className="flex items-center gap-1"><Phone className="w-4 h-4 text-slate-400"/> {fornecedorSelecionado.telefone || 'S/ Tel'}</span>
+                      <span className="flex items-center gap-1"><Mail className="w-4 h-4 text-slate-400"/> {fornecedorSelecionado.email || 'S/ Email'}</span>
+                  </div>
+              </div>
+              <div className="text-right">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Comprado (Histórico)</p>
+                  <p className="text-3xl font-black text-emerald-600">R$ {notasFiscais.reduce((a, b) => a + (Number(b.valor_total) || 0), 0).toFixed(2).replace('.',',')}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Lado Esquerdo: Info de Contato e Portal B2B */}
+                <div className="space-y-6">
+                    <div className="bg-white p-5 rounded-xl border shadow-sm">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 border-b pb-2"><MapPin className="w-4 h-4 text-indigo-500"/> Localização e Contato</h3>
+                        <div className="space-y-3">
+                            <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Endereço Completo</p><p className="text-sm font-medium text-slate-800">{fornecedorSelecionado.endereco || 'Não informado'}</p></div>
+                            <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Contato Responsável (Vendedor)</p><p className="text-sm font-medium text-slate-800">{fornecedorSelecionado.contato_nome || 'Não informado'}</p></div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800 p-5 rounded-xl shadow-md text-white border border-slate-700">
+                        <h3 className="font-bold flex items-center gap-2 mb-4 border-b border-slate-600 pb-2"><Globe className="w-4 h-4 text-indigo-400"/> Credenciais do Portal B2B</h3>
+                        {fornecedorSelecionado.portal_link ? (
+                            <div className="space-y-3">
+                                <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Acesso Web</p><a href={fornecedorSelecionado.portal_link.startsWith('http') ? fornecedorSelecionado.portal_link : `https://${fornecedorSelecionado.portal_link}`} target="_blank" rel="noreferrer" className="text-sm font-medium text-indigo-300 hover:text-indigo-200 underline break-all">{fornecedorSelecionado.portal_link}</a></div>
+                                <div className="grid grid-cols-2 gap-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mt-2">
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Login</p><p className="text-sm font-mono bg-slate-900 px-2 py-1 rounded select-all">{fornecedorSelecionado.portal_login || 'N/A'}</p></div>
+                                    <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Senha</p><p className="text-sm font-mono bg-slate-900 px-2 py-1 rounded select-all">{fornecedorSelecionado.portal_senha || 'N/A'}</p></div>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-400 italic">Nenhum portal de compras configurado para este fornecedor.</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Lado Direito: Histórico de NFs de Entrada */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden h-full flex flex-col">
+                        <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2"><Receipt className="w-5 h-5 text-emerald-600"/> Histórico de Notas Fiscais (Entradas)</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">Todas as aquisições processadas no estoque referentes a este CNPJ.</p>
+                            </div>
+                            <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">{notasFiscais.length} Documentos</span>
+                        </div>
+                        <div className="overflow-x-auto flex-1">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-100 text-slate-500 text-[10px] uppercase tracking-wider">
+                                        <th className="p-3 font-semibold border-b text-center w-28">Nº da NF</th>
+                                        <th className="p-3 font-semibold border-b text-center">Emissão</th>
+                                        <th className="p-3 font-semibold border-b">Frete Atribuído</th>
+                                        <th className="p-3 font-semibold border-b text-right">Impostos</th>
+                                        <th className="p-3 font-semibold border-b text-right">Total da Nota</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {notasFiscais.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-12 text-center text-slate-400"><Receipt className="w-8 h-8 mx-auto mb-2 opacity-30"/> Nenhuma Nota Fiscal registrada para este fornecedor.</td></tr>
+                                    ) : (
+                                        notasFiscais.map(nf => (
+                                            <tr key={nf.id} className="hover:bg-slate-50 transition-colors">
+                                                <td className="p-3 text-center">
+                                                    <p className="font-bold text-slate-800 font-mono">{nf.documento}</p>
+                                                    <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded mt-1 inline-block">{nf.tipo_documento}</span>
+                                                </td>
+                                                <td className="p-3 text-center text-sm font-medium text-slate-600">{nf.data_emissao ? new Date(nf.data_emissao).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '—'}</td>
+                                                <td className="p-3">
+                                                    <p className="text-xs font-medium text-slate-700">{nf.modalidade_frete}</p>
+                                                    {Number(nf.valor_frete) > 0 && <p className="text-[10px] font-bold text-amber-600 mt-0.5">+ R$ {Number(nf.valor_frete).toFixed(2).replace('.',',')}</p>}
+                                                </td>
+                                                <td className="p-3 text-right text-xs font-medium text-slate-500">R$ {Number(nf.valor_impostos || 0).toFixed(2).replace('.',',')}</td>
+                                                <td className="p-3 text-right font-bold text-emerald-700">R$ {Number(nf.valor_total).toFixed(2).replace('.',',')}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODO: FORMULÁRIO (NOVO / EDITAR) */}
+        {/* ========================================================================= */}
         {modo === "formulario" && (
           <div className="bg-white rounded-xl border shadow-sm p-6 space-y-8 animate-in fade-in zoom-in-95 duration-200">
             
@@ -386,7 +520,7 @@ export default function Fornecedores() {
             </div>
 
             <div className="flex justify-end gap-3 pt-6 border-t">
-              <Button variant="outline" onClick={() => setModo("lista")}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { sessionStorage.removeItem("fornecedores_rascunho"); setModo("lista"); }}>Cancelar</Button>
               <Button onClick={salvarFornecedor} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-8">
                 {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Salvar Fornecedor
