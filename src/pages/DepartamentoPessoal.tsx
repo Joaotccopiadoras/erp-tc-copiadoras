@@ -3,9 +3,10 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
+import {
   Calculator,
-  Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
+  Users, 
+  FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function DepartamentoPessoal() {
@@ -35,7 +36,7 @@ export default function DepartamentoPessoal() {
   // ==========================================
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
   const [mesReferencia, setMesReferencia] = useState(mesAtualStr);
-  const [quinzenaReferencia, setQuinzenaReferencia] = useState("1ª Quinzena"); // NOVO: Controle de Quinzena
+  const [quinzenaReferencia, setQuinzenaReferencia] = useState("1ª Quinzena");
   
   const [folha, setFolha] = useState<any[]>([]);
   const [beneficios, setBeneficios] = useState<any[]>([]);
@@ -54,7 +55,7 @@ export default function DepartamentoPessoal() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
-  const periodoBeneficios = `${quinzenaReferencia} ${mesReferencia}`; // String composta para o BD (Ex: "1ª Quinzena 05/2026")
+  const periodoBeneficios = `${quinzenaReferencia} ${mesReferencia}`; 
 
   useEffect(() => {
     fetchColaboradores();
@@ -64,7 +65,7 @@ export default function DepartamentoPessoal() {
   useEffect(() => {
     if (abaAtiva === "folha") carregarFolhaDoMes();
     if (abaAtiva === "beneficios") carregarBeneficiosDoPeriodo();
-  }, [abaAtiva, mesReferencia, quinzenaReferencia]); // Reage à mudança de quinzena também
+  }, [abaAtiva, mesReferencia, quinzenaReferencia]);
 
   // Se houver recibos na fila de impressão, aciona o print automaticamente
   useEffect(() => {
@@ -131,10 +132,8 @@ export default function DepartamentoPessoal() {
     try {
       const { data: folhaGravada } = await supabase.from('rh_folha_pagamento' as any).select('*, rh_colaboradores(nome, cargo, setor, status, tipo_contrato)').eq('mes_referencia', mesReferencia);
       
-      // MÁGICA: Busca TODOS os benefícios (1ª e 2ª Quinzena) que contém o mês de referência
       const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('colaborador_id, total_vt, total_va').ilike('periodo', `%${mesReferencia}%`);
       
-      // Agrupa e soma os benefícios das duas quinzenas por colaborador
       const mapaBeneficios = new Map();
       benGravados?.forEach((b: any) => {
           const atual = mapaBeneficios.get(b.colaborador_id) || { vt: 0, va: 0 };
@@ -244,8 +243,7 @@ export default function DepartamentoPessoal() {
     if (!mesReferencia || mesReferencia.length !== 7) return;
     setCarregandoDados(true);
     try {
-      // Busca pelo periodo composto, ex: "1ª Quinzena 05/2026"
-      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('*, rh_colaboradores(nome, cargo, tipo_contrato)').eq('periodo', periodoBeneficios);
+      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('*, rh_colaboradores(nome, cargo, tipo_contrato, cpf)').eq('periodo', periodoBeneficios);
       
       if (benGravados && benGravados.length > 0) {
         setBeneficios(benGravados);
@@ -257,7 +255,7 @@ export default function DepartamentoPessoal() {
           dias_va: 0, valor_diario_va: 0, total_va: 0,
           recibo_assinado: false, recibo_url: null,
           recebe_vt: c.recebe_vt, recebe_va: c.recebe_va,
-          rh_colaboradores: { nome: c.nome, cargo: c.cargo, tipo_contrato: c.tipo_contrato }
+          rh_colaboradores: { nome: c.nome, cargo: c.cargo, tipo_contrato: c.tipo_contrato, cpf: c.cpf }
         }));
         setBeneficios(previa);
       }
@@ -380,16 +378,23 @@ export default function DepartamentoPessoal() {
         
         {reciboParaImprimir.map((recibo, index) => (
           <div key={recibo.colaborador_id} className={`p-8 max-w-3xl mx-auto ${index < reciboParaImprimir.length - 1 ? 'print-break' : ''}`}>
-            <div className="text-center border-b-2 border-slate-800 pb-4 mb-8">
+            
+            <div className="text-center border-b-2 border-slate-800 pb-4 mb-8 flex flex-col items-center relative">
+              <img src="/logo.png" alt="Logo" className="h-16 object-contain absolute left-0 top-0" />
               <h1 className="text-2xl font-black uppercase tracking-wider">Recibo de Benefícios</h1>
               <p className="text-lg font-bold mt-1">Período de Referência: {recibo.periodo}</p>
               <p className="text-sm text-slate-600 mt-2">TC Copiadoras • Departamento Pessoal</p>
             </div>
 
-            <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <p className="mb-2"><strong>Colaborador:</strong> {recibo.rh_colaboradores?.nome}</p>
-              <p className="mb-2"><strong>Função / Cargo:</strong> {recibo.rh_colaboradores?.cargo}</p>
-              <p><strong>Vínculo:</strong> {recibo.tipo_contrato}</p>
+            <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded-lg grid grid-cols-2 gap-4">
+              <div>
+                <p className="mb-2"><strong>Colaborador:</strong> {recibo.rh_colaboradores?.nome}</p>
+                <p className="mb-2"><strong>CPF:</strong> {recibo.rh_colaboradores?.cpf || 'Não informado'}</p>
+              </div>
+              <div>
+                <p className="mb-2"><strong>Função / Cargo:</strong> {recibo.rh_colaboradores?.cargo}</p>
+                <p><strong>Vínculo:</strong> {recibo.tipo_contrato}</p>
+              </div>
             </div>
 
             <table className="w-full text-left border-collapse mb-12">
@@ -616,7 +621,7 @@ export default function DepartamentoPessoal() {
                         <button onClick={() => setFiltroVinculoBen("pj")} className={`px-3 py-1.5 text-xs font-bold rounded ${filtroVinculoBen === "pj" ? "bg-purple-100 text-purple-700 border border-purple-200" : "text-slate-500 hover:bg-slate-100"}`}>Por Fora (PJ/Estágio)</button>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => acionarImpressaoRecibos()} className="border-slate-300 text-slate-700 hover:bg-slate-100 gap-2"><Printer className="w-4 h-4"/> Imprimir Recibos da Lista</Button>
+                        <Button variant="outline" onClick={() => acionarImpressaoRecibos()} className="border-slate-300 text-slate-700 hover:bg-slate-100 gap-2"><Printer className="w-4 h-4"/> Imprimir Todos da Lista</Button>
                         <Button onClick={salvarRascunhoBeneficios} disabled={carregandoDados} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><Save className="w-4 h-4"/> Gravar Lançamentos</Button>
                     </div>
                 </div>
