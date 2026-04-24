@@ -9,14 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 export default function DepartamentoPessoal() {
   const [abaAtiva, setAbaAtiva] = useState<"colaboradores" | "folha">("colaboradores");
 
-  // ==========================================
-  // ESTADOS: COLABORADORES
-  // ==========================================
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [buscaColab, setBuscaColab] = useState("");
   const [mostrarFormColab, setMostrarFormColab] = useState(false);
   
-  // Form Colaborador
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
@@ -26,14 +22,10 @@ export default function DepartamentoPessoal() {
   const [salarioBase, setSalarioBase] = useState("");
   const [statusColab, setStatusColab] = useState("Ativo");
   
-  // Novos Campos
   const [tipoContrato, setTipoContrato] = useState("CLT");
   const [valorVT, setValorVT] = useState("");
   const [valorVA, setValorVA] = useState("");
 
-  // ==========================================
-  // ESTADOS: FOLHA DE PAGAMENTO
-  // ==========================================
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
   const [mesReferencia, setMesReferencia] = useState(mesAtualStr);
   const [folha, setFolha] = useState<any[]>([]);
@@ -59,7 +51,6 @@ export default function DepartamentoPessoal() {
     if (data) setColaboradores(data);
   };
 
-  // --- GESTÃO DE COLABORADORES ---
   const salvarColaborador = async () => {
     if (!nome || !cargo || !setor || !salarioBase || !dataAdmissao) return alert("Preencha todos os campos obrigatórios com asterisco (*).");
     
@@ -105,7 +96,6 @@ export default function DepartamentoPessoal() {
     setMostrarFormColab(false);
   };
 
-  // --- GESTÃO DE FOLHA DE PAGAMENTO ---
   const carregarFolhaDoMes = async () => {
     if (!mesReferencia || mesReferencia.length !== 7) return;
     setCarregandoFolha(true);
@@ -119,7 +109,6 @@ export default function DepartamentoPessoal() {
       if (folhaGravada && folhaGravada.length > 0) {
         setFolha(folhaGravada);
       } else {
-        // Prévia: Puxa ativos e já injeta o VT e VA padrão do cadastro
         const ativos = colaboradores.filter(c => c.status === 'Ativo' || c.status === 'Férias');
         const previa = ativos.map(c => {
           const liq = Number(c.salario_base) + Number(c.valor_vt || 0) + Number(c.valor_va || 0);
@@ -148,7 +137,6 @@ export default function DepartamentoPessoal() {
     setFolha(prev => prev.map(f => {
       if (f.colaborador_id === colabId) {
         const n = { ...f, [campo]: valor };
-        // Nova fórmula: Base + Comissões + VT + VA + Adicionais - Descontos
         n.salario_liquido = Number(n.salario_base) + Number(n.comissoes) + Number(n.vale_transporte) + Number(n.ticket_alimentacao) + Number(n.adicionais) - Number(n.descontos);
         return n;
       }
@@ -159,10 +147,8 @@ export default function DepartamentoPessoal() {
   const alternarAssinaturaRecibo = async (colabId: string, assinadoAtual: boolean) => {
     const novoStatus = !assinadoAtual;
     
-    // Atualiza a tela instantaneamente
     setFolha(prev => prev.map(f => f.colaborador_id === colabId ? { ...f, recibo_assinado: novoStatus } : f));
 
-    // Salva no banco de dados, independentemente se a folha está fechada ou não
     try {
       const { data } = await supabase.from('rh_folha_pagamento').select('id').eq('colaborador_id', colabId).eq('mes_referencia', mesReferencia).single();
       if (data) {
@@ -238,7 +224,7 @@ export default function DepartamentoPessoal() {
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
-        {/* CABEÇALHO */}
+        {/* cabec */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Users className="w-6 h-6 text-sky-600" /> Departamento Pessoal (DP)</h1>
@@ -250,9 +236,7 @@ export default function DepartamentoPessoal() {
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* ABA: QUADRO DE COLABORADORES */}
-        {/* ========================================================================= */}
+        {/* quadro colaboradores */}
         {abaAtiva === "colaboradores" && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
@@ -355,9 +339,7 @@ export default function DepartamentoPessoal() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* ABA: FOLHA DE PAGAMENTO */}
-        {/* ========================================================================= */}
+        {/* folha */}
         {abaAtiva === "folha" && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
             
@@ -448,7 +430,7 @@ export default function DepartamentoPessoal() {
                     </table>
                 </div>
 
-                {/* RODAPÉ DO FECHAMENTO */}
+                {/* rodape */}
                 {folha.length > 0 && (
                     <div className="bg-slate-50 p-5 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div>
@@ -467,7 +449,7 @@ export default function DepartamentoPessoal() {
                 )}
             </div>
             
-            {/* ALERTAS INFORMATIVOS */}
+            {/* alertas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {isFolhaFechada && (
                     <div className="flex items-start gap-3 p-4 bg-sky-50 border border-sky-200 rounded-lg text-sky-800 text-sm shadow-sm">
