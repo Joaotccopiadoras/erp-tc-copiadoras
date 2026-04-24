@@ -3,10 +3,8 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Calculator,
-  Users, 
-  FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
+import { Calculator,
+  Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function DepartamentoPessoal() {
@@ -131,28 +129,21 @@ export default function DepartamentoPessoal() {
     setCarregandoDados(true);
     try {
       const { data: folhaGravada } = await supabase.from('rh_folha_pagamento' as any).select('*, rh_colaboradores(nome, cargo, setor, status, tipo_contrato)').eq('mes_referencia', mesReferencia);
-      
-      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('colaborador_id, total_vt, total_va').ilike('periodo', `%${mesReferencia}%`);
-      
-      const mapaBeneficios = new Map();
-      benGravados?.forEach((b: any) => {
-          const atual = mapaBeneficios.get(b.colaborador_id) || { vt: 0, va: 0 };
-          mapaBeneficios.set(b.colaborador_id, { vt: atual.vt + Number(b.total_vt), va: atual.va + Number(b.total_va) });
-      });
 
       if (folhaGravada && folhaGravada.length > 0) {
-        setFolha(folhaGravada);
+        // Recalcula o líquido caso o usuário abra uma folha já salva para garantir exatidão
+        const folhaAjustada = folhaGravada.map(f => {
+            f.salario_liquido = Number(f.salario_base) + Number(f.comissoes) + Number(f.adicionais) - Number(f.descontos);
+            return f;
+        });
+        setFolha(folhaAjustada);
       } else {
         const ativos = colaboradores.filter(c => c.status === 'Ativo' || c.status === 'Férias');
         const previa = ativos.map(c => {
-          const ben = mapaBeneficios.get(c.id);
-          const vt = ben ? ben.vt : 0;
-          const va = ben ? ben.va : 0;
-          const liq = Number(c.salario_base) + vt + va;
           return {
             colaborador_id: c.id, mes_referencia: mesReferencia, tipo_contrato: c.tipo_contrato,
-            salario_base: c.salario_base, comissoes: 0, vale_transporte: vt, ticket_alimentacao: va,
-            adicionais: 0, descontos: 0, salario_liquido: liq, recibo_assinado: false, status: 'Pendente',
+            salario_base: c.salario_base, comissoes: 0, vale_transporte: 0, ticket_alimentacao: 0, // Zeros por padrão, já que VT/VA é separado
+            adicionais: 0, descontos: 0, salario_liquido: Number(c.salario_base), recibo_assinado: false, status: 'Pendente',
             rh_colaboradores: { nome: c.nome, cargo: c.cargo, setor: c.setor, status: c.status, tipo_contrato: c.tipo_contrato }
           };
         });
@@ -165,7 +156,8 @@ export default function DepartamentoPessoal() {
     setFolha(prev => prev.map(f => {
       if (f.colaborador_id === colabId) {
         const n = { ...f, [campo]: valor };
-        n.salario_liquido = Number(n.salario_base) + Number(n.comissoes) + Number(n.vale_transporte) + Number(n.ticket_alimentacao) + Number(n.adicionais) - Number(n.descontos);
+        // O Salário Líquido não inclui mais VT nem VA
+        n.salario_liquido = Number(n.salario_base) + Number(n.comissoes) + Number(n.adicionais) - Number(n.descontos);
         return n;
       }
       return f;
@@ -192,9 +184,9 @@ export default function DepartamentoPessoal() {
       for (const item of folha) {
         const payload = {
           colaborador_id: item.colaborador_id, mes_referencia: item.mes_referencia, tipo_contrato: item.tipo_contrato,
-          salario_base: item.salario_base, comissoes: item.comissoes, vale_transporte: item.vale_transporte,
-          ticket_alimentacao: item.ticket_alimentacao, adicionais: item.adicionais, descontos: item.descontos,
-          salario_liquido: item.salario_liquido, recibo_assinado: item.recibo_assinado, status: item.status
+          salario_base: item.salario_base, comissoes: item.comissoes, vale_transporte: 0, ticket_alimentacao: 0,
+          adicionais: item.adicionais, descontos: item.descontos, salario_liquido: item.salario_liquido, 
+          recibo_assinado: item.recibo_assinado, status: item.status
         };
         const { error } = await supabase.from('rh_folha_pagamento' as any).upsert(payload, { onConflict: 'colaborador_id, mes_referencia' });
         if (error) throw error;
@@ -223,7 +215,7 @@ export default function DepartamentoPessoal() {
         centro_custo: f.rh_colaboradores?.setor || 'Geral',
         forma_pagamento: 'Transferência',
         documento_origem: `FOLHA-${mesReferencia.replace('/','')}`,
-        observacoes: `Base: R$ ${f.salario_base} | Comissões: R$ ${f.comissoes} | Benefícios: R$ ${Number(f.vale_transporte) + Number(f.ticket_alimentacao)} | Outros/Desc: R$ ${f.adicionais} / R$ ${f.descontos}`
+        observacoes: `Base: R$ ${f.salario_base} | Comissões: R$ ${f.comissoes} | Outros/Desc: R$ ${f.adicionais} / R$ ${f.descontos}`
       }));
 
       const { error: finErr } = await supabase.from('fin_lancamentos').insert(lancamentosFinanceiros);
@@ -621,7 +613,7 @@ export default function DepartamentoPessoal() {
                         <button onClick={() => setFiltroVinculoBen("pj")} className={`px-3 py-1.5 text-xs font-bold rounded ${filtroVinculoBen === "pj" ? "bg-purple-100 text-purple-700 border border-purple-200" : "text-slate-500 hover:bg-slate-100"}`}>Por Fora (PJ/Estágio)</button>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => acionarImpressaoRecibos()} className="border-slate-300 text-slate-700 hover:bg-slate-100 gap-2"><Printer className="w-4 h-4"/> Imprimir Todos da Lista</Button>
+                        <Button variant="outline" onClick={() => acionarImpressaoRecibos()} className="border-slate-300 text-slate-700 hover:bg-slate-100 gap-2"><Printer className="w-4 h-4"/> Imprimir Recibos da Lista</Button>
                         <Button onClick={salvarRascunhoBeneficios} disabled={carregandoDados} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><Save className="w-4 h-4"/> Gravar Lançamentos</Button>
                     </div>
                 </div>
@@ -703,7 +695,7 @@ export default function DepartamentoPessoal() {
             
             <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-800 text-sm shadow-sm">
                 <FileWarning className="w-5 h-5 shrink-0 mt-0.5"/>
-                <p>Lembre-se de clicar em <strong>"Gravar Lançamentos"</strong> antes de fechar a Folha de Pagamento. Os totais de VT e VA gravados aqui (soma de todas as quinzenas do mês) serão espelhados automaticamente na aba de Folha de Pagamento.</p>
+                <p>Lembre-se de clicar em <strong>"Gravar Lançamentos"</strong> para salvar os dados. O Vale Transporte e Vale Alimentação são controlados e pagos de forma independente da Folha de Pagamento.</p>
             </div>
           </div>
         )}
@@ -717,7 +709,7 @@ export default function DepartamentoPessoal() {
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><CalendarDays className="w-5 h-5 text-sky-600"/> Apuração Mensal Consolidada</h2>
-                    <p className="text-sm text-slate-500">Lançamento de comissões, horas extras, descontos e fechamento do mês inteiro.</p>
+                    <p className="text-sm text-slate-500">Lançamento de comissões, adicionais, descontos e fechamento da Folha.</p>
                 </div>
                 <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
                     <label className="text-sm font-bold text-slate-700">Mês/Ano Referência:</label>
@@ -727,14 +719,12 @@ export default function DepartamentoPessoal() {
 
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                 <div className="overflow-x-auto pb-4">
-                    <table className="w-full text-left border-collapse text-sm min-w-[1200px]">
+                    <table className="w-full text-left border-collapse text-sm min-w-[1000px]">
                         <thead>
                             <tr className="bg-slate-800 text-white text-[10px] uppercase tracking-wider">
                                 <th className="p-3 font-semibold rounded-tl-lg min-w-[200px]">Colaborador / Vínculo</th>
                                 <th className="p-3 font-semibold text-right border-l border-slate-700">Salário Base</th>
                                 <th className="p-3 font-semibold text-center border-l border-slate-700 w-28">Comissões (+)</th>
-                                <th className="p-3 font-semibold text-center w-24" title="Soma automática das Quinzenas">VT (+)</th>
-                                <th className="p-3 font-semibold text-center w-24" title="Soma automática das Quinzenas">VA (+)</th>
                                 <th className="p-3 font-semibold text-center border-l border-slate-700 w-28" title="Horas Extras, Bônus">Outros (+)</th>
                                 <th className="p-3 font-semibold text-center w-28" title="Faltas, Adiantamentos, INSS">Descontos (-)</th>
                                 <th className="p-3 font-semibold text-right border-l border-slate-700">Líquido a Pagar</th>
@@ -743,9 +733,9 @@ export default function DepartamentoPessoal() {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                             {carregandoDados ? (
-                                <tr><td colSpan={9} className="p-8 text-center text-slate-400">Carregando dados da folha...</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-slate-400">Carregando dados da folha...</td></tr>
                             ) : folha.length === 0 ? (
-                                <tr><td colSpan={9} className="p-8 text-center text-slate-400">Nenhum colaborador elegível para este mês.</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-slate-400">Nenhum colaborador elegível para este mês.</td></tr>
                             ) : (
                                 folha.map((item) => (
                                     <tr key={item.colaborador_id} className={`hover:bg-slate-50 ${item.status === 'Fechada' ? 'bg-slate-50' : ''}`}>
@@ -763,12 +753,7 @@ export default function DepartamentoPessoal() {
                                         <td className="p-2 border-l border-slate-100">
                                             <Input type="number" step="0.01" min="0" disabled={isFolhaFechada} value={item.comissoes || ''} onChange={e => atualizarValoresFolha(item.colaborador_id, 'comissoes', parseFloat(e.target.value)||0)} className="h-8 text-center text-emerald-600 font-semibold bg-white border-slate-200" placeholder="0,00" />
                                         </td>
-                                        <td className="p-3 text-center text-sky-600 font-bold bg-sky-50/20" title="Integrado da Aba de Benefícios">
-                                            {Number(item.vale_transporte).toFixed(2)}
-                                        </td>
-                                        <td className="p-3 text-center text-amber-600 font-bold bg-amber-50/20" title="Integrado da Aba de Benefícios">
-                                            {Number(item.ticket_alimentacao).toFixed(2)}
-                                        </td>
+                                        
                                         <td className="p-2 border-l border-slate-100">
                                             <Input type="number" step="0.01" min="0" disabled={isFolhaFechada} value={item.adicionais || ''} onChange={e => atualizarValoresFolha(item.colaborador_id, 'adicionais', parseFloat(e.target.value)||0)} className="h-8 text-center text-emerald-600 font-semibold bg-white border-slate-200" placeholder="0,00" />
                                         </td>
