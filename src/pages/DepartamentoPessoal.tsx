@@ -3,17 +3,15 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Calculator,
-  FileSpreadsheet,
-  Plus,
-  Users,
-  Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
+import { Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function DepartamentoPessoal() {
   const [abaAtiva, setAbaAtiva] = useState<"colaboradores" | "folha" | "beneficios">("colaboradores");
 
+  // ==========================================
+  // ESTADOS: COLABORADORES
+  // ==========================================
   const [colaboradores, setColaboradores] = useState<any[]>([]);
   const [buscaColab, setBuscaColab] = useState("");
   const [mostrarFormColab, setMostrarFormColab] = useState(false);
@@ -30,6 +28,9 @@ export default function DepartamentoPessoal() {
   const [recebeVT, setRecebeVT] = useState("Não");
   const [recebeVA, setRecebeVA] = useState("Não");
 
+  // ==========================================
+  // ESTADOS: FOLHA & BENEFÍCIOS
+  // ==========================================
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
   const [mesReferencia, setMesReferencia] = useState(mesAtualStr);
   const [folha, setFolha] = useState<any[]>([]);
@@ -44,7 +45,7 @@ export default function DepartamentoPessoal() {
   const [globalDiasVA, setGlobalDiasVA] = useState("");
   const [globalValorDiarioVA, setGlobalValorDiarioVA] = useState("");
 
-  // Estado para impressão
+  // Estado para impressão e uploads
   const [reciboParaImprimir, setReciboParaImprimir] = useState<any[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -117,11 +118,11 @@ export default function DepartamentoPessoal() {
     if (!mesReferencia || mesReferencia.length !== 7) return;
     setCarregandoDados(true);
     try {
-      const { data: folhaGravada } = await supabase.from('rh_folha_pagamento').select('*, rh_colaboradores(nome, cargo, setor, status, tipo_contrato)').eq('mes_referencia', mesReferencia);
+      const { data: folhaGravada } = await supabase.from('rh_folha_pagamento' as any).select('*, rh_colaboradores(nome, cargo, setor, status, tipo_contrato)').eq('mes_referencia', mesReferencia);
       
       // Puxa os benefícios do mesmo período para injetar os valores na folha automaticamente
-      const { data: benGravados } = await supabase.from('rh_beneficios').select('colaborador_id, total_vt, total_va').eq('periodo', mesReferencia);
-      const mapaBeneficios = new Map(benGravados?.map(b => [b.colaborador_id, b]));
+      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('colaborador_id, total_vt, total_va').eq('periodo', mesReferencia);
+      const mapaBeneficios = new Map(benGravados?.map((b: any) => [b.colaborador_id, b]));
 
       if (folhaGravada && folhaGravada.length > 0) {
         setFolha(folhaGravada);
@@ -155,6 +156,20 @@ export default function DepartamentoPessoal() {
     }));
   };
 
+  const alternarAssinaturaRecibo = async (colabId: string, assinadoAtual: boolean) => {
+    const novoStatus = !assinadoAtual;
+    setFolha(prev => prev.map(f => f.colaborador_id === colabId ? { ...f, recibo_assinado: novoStatus } : f));
+    try {
+      const { data } = await supabase.from('rh_folha_pagamento' as any).select('id').eq('colaborador_id', colabId).eq('mes_referencia', mesReferencia).single();
+      if (data) {
+          await supabase.from('rh_folha_pagamento' as any).update({ recibo_assinado: novoStatus }).eq('id', data.id);
+      } else {
+          await salvarRascunhoFolha();
+          await supabase.from('rh_folha_pagamento' as any).update({ recibo_assinado: novoStatus }).eq('colaborador_id', colabId).eq('mes_referencia', mesReferencia);
+      }
+    } catch (e) { console.error(e); }
+  };
+
   const salvarRascunhoFolha = async () => {
     try {
       for (const item of folha) {
@@ -164,11 +179,45 @@ export default function DepartamentoPessoal() {
           ticket_alimentacao: item.ticket_alimentacao, adicionais: item.adicionais, descontos: item.descontos,
           salario_liquido: item.salario_liquido, recibo_assinado: item.recibo_assinado, status: item.status
         };
-        await supabase.from('rh_folha_pagamento').upsert(payload, { onConflict: 'colaborador_id, mes_referencia' });
+        await supabase.from('rh_folha_pagamento' as any).upsert(payload, { onConflict: 'colaborador_id, mes_referencia' });
       }
       alert("Rascunho da folha salvo com sucesso!");
       carregarFolhaDoMes();
     } catch (e: any) { alert("Erro ao salvar: " + e.message); }
+  };
+
+  const fecharFolhaEGerarFinanceiro = async () => {
+    if (!confirm(`Deseja FECHAR a folha de ${mesReferencia}?\nSerão geradas Contas a Pagar individuais no Financeiro para cada colaborador e os valores serão travados.`)) return;
+
+    try {
+      await salvarRascunhoFolha();
+      const vencimentoFolha = new Date();
+      vencimentoFolha.setDate(5);
+      if (vencimentoFolha < new Date()) vencimentoFolha.setMonth(vencimentoFolha.getMonth() + 1);
+
+      const lancamentosFinanceiros = folha.map(f => ({
+        tipo: 'Despesa',
+        descricao: `Folha ${mesReferencia} - ${f.rh_colaboradores?.nome} (${f.tipo_contrato})`,
+        valor: f.salario_liquido,
+        data_vencimento: vencimentoFolha.toISOString().split('T')[0],
+        status: 'Pendente',
+        categoria_id: categoriaDpId || null,
+        centro_custo: f.rh_colaboradores?.setor || 'Geral',
+        forma_pagamento: 'Transferência',
+        documento_origem: `FOLHA-${mesReferencia.replace('/','')}`,
+        observacoes: `Base: R$ ${f.salario_base} | Comissões: R$ ${f.comissoes} | Benefícios: R$ ${Number(f.vale_transporte) + Number(f.ticket_alimentacao)} | Outros/Desc: R$ ${f.adicionais} / R$ ${f.descontos}`
+      }));
+
+      const { error: finErr } = await supabase.from('fin_lancamentos').insert(lancamentosFinanceiros);
+      if (finErr) throw new Error("Falha ao integrar com o Financeiro: " + finErr.message);
+
+      for (const item of folha) {
+        await supabase.from('rh_folha_pagamento' as any).update({ status: 'Fechada' }).eq('colaborador_id', item.colaborador_id).eq('mes_referencia', mesReferencia);
+      }
+
+      alert("Folha Fechada e Contas a Pagar geradas com sucesso no Módulo Financeiro!");
+      carregarFolhaDoMes();
+    } catch (e: any) { alert("Erro crítico: " + e.message); }
   };
 
   // --- LÓGICA DE BENEFÍCIOS (VT / VA) ---
@@ -176,7 +225,7 @@ export default function DepartamentoPessoal() {
     if (!mesReferencia || mesReferencia.length !== 7) return;
     setCarregandoDados(true);
     try {
-      const { data: benGravados } = await supabase.from('rh_beneficios').select('*, rh_colaboradores(nome, cargo, tipo_contrato)').eq('periodo', mesReferencia);
+      const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('*, rh_colaboradores(nome, cargo, tipo_contrato)').eq('periodo', mesReferencia);
       
       if (benGravados && benGravados.length > 0) {
         setBeneficios(benGravados);
@@ -237,7 +286,7 @@ export default function DepartamentoPessoal() {
           dias_va: b.dias_va, valor_diario_va: b.valor_diario_va, total_va: b.total_va,
           recibo_assinado: b.recibo_assinado, recibo_url: b.recibo_url
         };
-        await supabase.from('rh_beneficios').upsert(payload, { onConflict: 'colaborador_id, periodo' });
+        await supabase.from('rh_beneficios' as any).upsert(payload, { onConflict: 'colaborador_id, periodo' });
       }
       alert("Cálculo de benefícios salvo com sucesso!");
       carregarBeneficiosDoPeriodo();
@@ -263,14 +312,12 @@ export default function DepartamentoPessoal() {
       const ext = file.name.split('.').pop();
       const fileName = `recibo_${colabId}_${mesReferencia.replace('/','-')}.${ext}`;
       
-      // Salva no Storage (O bucket 'comprovantes_dp' precisa existir no Supabase)
       const { data: uploadData, error: uploadError } = await supabase.storage.from('comprovantes_dp').upload(fileName, file, { upsert: true });
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from('comprovantes_dp').getPublicUrl(fileName);
 
-      // Marca como assinado e grava URL
-      await supabase.from('rh_beneficios').update({ recibo_assinado: true, recibo_url: publicUrl }).eq('colaborador_id', colabId).eq('periodo', mesReferencia);
+      await supabase.from('rh_beneficios' as any).update({ recibo_assinado: true, recibo_url: publicUrl }).eq('colaborador_id', colabId).eq('periodo', mesReferencia);
       
       alert("Recibo anexado e marcado como assinado com sucesso!");
       carregarBeneficiosDoPeriodo();
@@ -281,7 +328,7 @@ export default function DepartamentoPessoal() {
     }
   };
 
-  // --- FILTROS ---
+  // --- FILTROS E VARIÁVEIS DERIVADAS ---
   const colaboradoresFiltrados = colaboradores.filter(c => c.nome.toLowerCase().includes(buscaColab.toLowerCase()) || c.cargo.toLowerCase().includes(buscaColab.toLowerCase()));
   
   const beneficiosFiltrados = beneficios.filter(b => {
@@ -289,6 +336,9 @@ export default function DepartamentoPessoal() {
     if (filtroVinculoBen === "pj" && b.tipo_contrato === "CLT") return false;
     return true;
   });
+
+  const totalFolha = folha.reduce((acc, f) => acc + Number(f.salario_liquido), 0);
+  const isFolhaFechada = folha.length > 0 && folha.every(f => f.status === 'Fechada');
 
   // ==========================================
   // VIEW DE IMPRESSÃO (Fica oculta até clicar em Imprimir)
