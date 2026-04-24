@@ -91,7 +91,7 @@ export default function AgendaKanban() {
   const salvarCard = async () => {
     if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna são obrigatórios.");
     
-    // Descobre a qual workflow essa coluna pertence
+    //vincula coluna a wf
     const colSelecionada = colunas.find(c => c.id === cardForm.coluna_id);
     const wfId = colSelecionada?.workflow_id || workflowAtivo;
 
