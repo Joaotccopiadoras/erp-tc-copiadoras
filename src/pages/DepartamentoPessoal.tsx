@@ -39,7 +39,7 @@ export default function DepartamentoPessoal() {
   const [carregandoDados, setCarregandoDados] = useState(false);
   const [filtroVinculoBen, setFiltroVinculoBen] = useState<"todos" | "clt" | "pj">("todos");
 
-  // Controles Globais de Benefício (Para aplicar a todos)
+  // Controles Globais de Benefício
   const [globalDiasVT, setGlobalDiasVT] = useState("");
   const [globalValorDiarioVT, setGlobalValorDiarioVT] = useState("");
   const [globalDiasVA, setGlobalDiasVA] = useState("");
@@ -89,14 +89,19 @@ export default function DepartamentoPessoal() {
 
     try {
       if (editandoId) {
-        await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
+        const { error } = await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
+        if (error) throw error; // <- Adicionada trava de segurança de Erros
         alert("Ficha do colaborador atualizada!");
       } else {
-        await supabase.from('rh_colaboradores').insert([payload]);
+        const { error } = await supabase.from('rh_colaboradores').insert([payload]);
+        if (error) throw error; // <- Adicionada trava de segurança de Erros
         alert("Colaborador cadastrado com sucesso!");
       }
       limparFormColab(); fetchColaboradores();
-    } catch (e: any) { alert("Erro: " + e.message); }
+    } catch (e: any) { 
+        console.error(e);
+        alert("Erro ao salvar: " + e.message); 
+    }
   };
 
   const editarColaborador = (c: any) => {
@@ -120,7 +125,6 @@ export default function DepartamentoPessoal() {
     try {
       const { data: folhaGravada } = await supabase.from('rh_folha_pagamento' as any).select('*, rh_colaboradores(nome, cargo, setor, status, tipo_contrato)').eq('mes_referencia', mesReferencia);
       
-      // Puxa os benefícios do mesmo período para injetar os valores na folha automaticamente
       const { data: benGravados } = await supabase.from('rh_beneficios' as any).select('colaborador_id, total_vt, total_va').eq('periodo', mesReferencia);
       const mapaBeneficios = new Map(benGravados?.map((b: any) => [b.colaborador_id, b]));
 
@@ -162,12 +166,13 @@ export default function DepartamentoPessoal() {
     try {
       const { data } = await supabase.from('rh_folha_pagamento' as any).select('id').eq('colaborador_id', colabId).eq('mes_referencia', mesReferencia).single();
       if (data) {
-          await supabase.from('rh_folha_pagamento' as any).update({ recibo_assinado: novoStatus }).eq('id', data.id);
+          const { error } = await supabase.from('rh_folha_pagamento' as any).update({ recibo_assinado: novoStatus }).eq('id', data.id);
+          if (error) throw error;
       } else {
           await salvarRascunhoFolha();
           await supabase.from('rh_folha_pagamento' as any).update({ recibo_assinado: novoStatus }).eq('colaborador_id', colabId).eq('mes_referencia', mesReferencia);
       }
-    } catch (e) { console.error(e); }
+    } catch (e: any) { alert("Erro: " + e.message); }
   };
 
   const salvarRascunhoFolha = async () => {
@@ -179,11 +184,12 @@ export default function DepartamentoPessoal() {
           ticket_alimentacao: item.ticket_alimentacao, adicionais: item.adicionais, descontos: item.descontos,
           salario_liquido: item.salario_liquido, recibo_assinado: item.recibo_assinado, status: item.status
         };
-        await supabase.from('rh_folha_pagamento' as any).upsert(payload, { onConflict: 'colaborador_id, mes_referencia' });
+        const { error } = await supabase.from('rh_folha_pagamento' as any).upsert(payload, { onConflict: 'colaborador_id, mes_referencia' });
+        if (error) throw error;
       }
       alert("Rascunho da folha salvo com sucesso!");
       carregarFolhaDoMes();
-    } catch (e: any) { alert("Erro ao salvar: " + e.message); }
+    } catch (e: any) { alert("Erro ao salvar rascunho: " + e.message); }
   };
 
   const fecharFolhaEGerarFinanceiro = async () => {
@@ -230,7 +236,6 @@ export default function DepartamentoPessoal() {
       if (benGravados && benGravados.length > 0) {
         setBeneficios(benGravados);
       } else {
-        // Gera a prévia para quem tem a flag de VT ou VA ativada no cadastro
         const elegiveis = colaboradores.filter(c => (c.status === 'Ativo' || c.status === 'Férias') && (c.recebe_vt || c.recebe_va));
         const previa = elegiveis.map(c => ({
           colaborador_id: c.id, periodo: mesReferencia, tipo_contrato: c.tipo_contrato,
@@ -286,11 +291,12 @@ export default function DepartamentoPessoal() {
           dias_va: b.dias_va, valor_diario_va: b.valor_diario_va, total_va: b.total_va,
           recibo_assinado: b.recibo_assinado, recibo_url: b.recibo_url
         };
-        await supabase.from('rh_beneficios' as any).upsert(payload, { onConflict: 'colaborador_id, periodo' });
+        const { error } = await supabase.from('rh_beneficios' as any).upsert(payload, { onConflict: 'colaborador_id, periodo' });
+        if (error) throw error; // Trava de erro garantida
       }
       alert("Cálculo de benefícios salvo com sucesso!");
       carregarBeneficiosDoPeriodo();
-    } catch(e:any) { alert("Erro ao salvar: "+e.message); } finally { setCarregandoDados(false); }
+    } catch(e:any) { alert("Erro ao salvar benefícios: "+e.message); } finally { setCarregandoDados(false); }
   };
 
   const acionarImpressaoRecibos = (apenasEste?: any) => {
@@ -302,7 +308,6 @@ export default function DepartamentoPessoal() {
     setReciboParaImprimir(null);
   };
 
-  // Upload de Recibo Assinado
   const uploadReciboAssinado = async (event: React.ChangeEvent<HTMLInputElement>, colabId: string) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -317,20 +322,19 @@ export default function DepartamentoPessoal() {
 
       const { data: { publicUrl } } = supabase.storage.from('comprovantes_dp').getPublicUrl(fileName);
 
-      await supabase.from('rh_beneficios' as any).update({ recibo_assinado: true, recibo_url: publicUrl }).eq('colaborador_id', colabId).eq('periodo', mesReferencia);
+      const { error } = await supabase.from('rh_beneficios' as any).update({ recibo_assinado: true, recibo_url: publicUrl }).eq('colaborador_id', colabId).eq('periodo', mesReferencia);
+      if (error) throw error;
       
       alert("Recibo anexado e marcado como assinado com sucesso!");
       carregarBeneficiosDoPeriodo();
     } catch (e:any) {
-      alert("Erro ao anexar recibo (Verifique se o Bucket 'comprovantes_dp' existe no Supabase): " + e.message);
+      alert("Erro ao anexar recibo (Verifique se o Bucket 'comprovantes_dp' existe e está configurado como Public): " + e.message);
     } finally {
       setUploadingId(null);
     }
   };
 
-  // --- FILTROS E VARIÁVEIS DERIVADAS ---
   const colaboradoresFiltrados = colaboradores.filter(c => c.nome.toLowerCase().includes(buscaColab.toLowerCase()) || c.cargo.toLowerCase().includes(buscaColab.toLowerCase()));
-  
   const beneficiosFiltrados = beneficios.filter(b => {
     if (filtroVinculoBen === "clt" && b.tipo_contrato !== "CLT") return false;
     if (filtroVinculoBen === "pj" && b.tipo_contrato === "CLT") return false;
@@ -341,7 +345,7 @@ export default function DepartamentoPessoal() {
   const isFolhaFechada = folha.length > 0 && folha.every(f => f.status === 'Fechada');
 
   // ==========================================
-  // VIEW DE IMPRESSÃO (Fica oculta até clicar em Imprimir)
+  // VIEW DE IMPRESSÃO
   // ==========================================
   if (reciboParaImprimir) {
     return (
