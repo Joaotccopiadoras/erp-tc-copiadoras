@@ -49,7 +49,15 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
           ) : (
             options.map(opt => (
               <label key={opt} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
-                <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={selected.includes(opt)} onChange={(e) => { if (e.target.checked) onChange([...selected, opt]); else onChange(selected.filter(x => x !== opt)); }} />
+                <input 
+                  type="checkbox" 
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                  checked={selected.includes(opt)} 
+                  onChange={(e) => {
+                    if (e.target.checked) onChange([...selected, opt]);
+                    else onChange(selected.filter(x => x !== opt));
+                  }} 
+                />
                 <span className="text-sm text-slate-700 truncate font-medium">{opt}</span>
               </label>
             ))
@@ -197,9 +205,112 @@ export default function TabelaPage() {
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
-  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => { const res = await fetch(imageUrl); const blob = await res.blob(); return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(blob); }); };
-  const exportarPDF = async () => { /* logica de pdf */ };
-  const exportarExcel = async () => { /* logica de xlsx */ };
+  const exportarPDF = () => {
+    try {
+      const doc = new jsPDF("landscape"); 
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Programação/Produtividade Técnica", 14, 20); 
+      doc.setFont("helvetica", "normal");
+      
+      const pesoStatus: Record<string, number> = {
+        "CONCLUÍDO": 1,
+        "ANDAMENTO": 2,
+        "AGUARDANDO": 3
+      };
+
+      const dadosOrdenados = [...filtered].sort((a, b) => {
+        const tecA = a.tecnico || "Sem Técnico";
+        const tecB = b.tecnico || "Sem Técnico";
+        if (tecA < tecB) return -1;
+        if (tecA > tecB) return 1;
+        
+        const stA = formatarStatus(a.status);
+        const stB = formatarStatus(b.status);
+        const ordemA = pesoStatus[stA] || 99; 
+        const ordemB = pesoStatus[stB] || 99;
+        if (ordemA !== ordemB) return ordemA - ordemB;
+
+        const dataA = new Date(a.data_entrada || 0).getTime();
+        const dataB = new Date(b.data_entrada || 0).getTime();
+        return dataA - dataB;
+      });
+
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Cliente/OS", "Atividade", "Fabricante", "Modelo", "Status", "Resumo/Obs"];
+      const tableRows: any[] = [];
+      let tecnicoAtual = null;
+
+      dadosOrdenados.forEach(item => {
+        const tecItem = item.tecnico || "Sem Técnico";
+        if (tecItem !== tecnicoAtual) {
+          tableRows.push([{
+            content: `Técnico: ${tecItem}`, colSpan: 9, 
+            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
+          }]);
+          tecnicoAtual = tecItem;
+        }
+
+        tableRows.push([
+          formatarData(item.data_entrada), formatarData(item.data_previsao), formatarData(item.data_conclusao),
+          item.cliente_os_modelo_numero || "-", item.tipo_atividade || "-", item.fabricante || "-",
+          item.modelo || "-", formatarStatus(item.status), item.resumo_obs || "-"
+        ]);
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 25,
+        theme: 'grid', 
+        styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: {
+          0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
+          5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' },
+          8: { cellWidth: 50, halign: 'left' }
+        },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        didParseCell: function (data) {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
+            const status = data.cell.raw as string;
+            if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
+            else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
+            else if (status === 'ANDAMENTO') { data.cell.styles.textColor = [29, 78, 216]; data.cell.styles.fontStyle = 'bold'; }
+          }
+        }
+      });
+      doc.save("Programacao_Produtividade_Tecnica.pdf");
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF.");
+    }
+  };
+  
+  const exportarExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Atendimentos");
+      
+      // Linha 1 como cabeçalho em vez de 5, já que removemos a logo
+      worksheet.getRow(1).values = ["Data Entrada", "Data Previsão", "Data Conclusão", "Cliente/OS/Modelo", "Atividade", "Fabricante", "Modelo", "Técnico", "Status", "Resumo"];
+      worksheet.getRow(1).font = { bold: true };
+      
+      filtered.forEach((item) => {
+        worksheet.addRow([
+          formatarData(item.data_entrada), formatarData(item.data_previsao), formatarData(item.data_conclusao),
+          item.cliente_os_modelo_numero || "-", item.tipo_atividade || "-", item.fabricante || "-",
+          item.modelo || "-", item.tecnico || "-", formatarStatus(item.status), item.resumo_obs || "-"
+        ]);
+      });
+      worksheet.columns.forEach(column => { column.width = 18; });
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), "Programacao_Produtividade_Tecnica.xlsx");
+    } catch (error) { 
+      console.error("Erro ao gerar Excel:", error); 
+      alert("Erro ao gerar Excel."); 
+    }
+  };
 
   const renderSortIcon = (key: string) => {
     if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;
@@ -248,7 +359,14 @@ export default function TabelaPage() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"><strong className="text-slate-800 text-base">{filtered.length}</strong> atendimentos processados</span>
-          <div className="flex gap-2"><Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm"><TableIcon className="h-4 w-4" /> Exportar Excel</Button><Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm"><FileText className="h-4 w-4" /> Exportar PDF</Button></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+              <TableIcon className="h-4 w-4" /> Exportar Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+              <FileText className="h-4 w-4" /> Exportar PDF
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
