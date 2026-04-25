@@ -394,7 +394,12 @@ export default function GestaoPatrimonio() {
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Facilities</h1>
             <p className="text-slate-500">Controle de bens físicos (ativos), infraestrutura e serviços da empresa.</p>
           </div>
-          {!ativoSelecionado && (
+          
+          {ativoSelecionado ? (
+            <Button variant="outline" onClick={() => setAtivoSelecionado(null)} className="gap-2 text-slate-600 font-bold shadow-sm border-slate-300">
+                <ArrowLeft className="w-4 h-4"/> Voltar à Lista de Ativos
+            </Button>
+          ) : (
             <div className="flex bg-slate-100 p-1 rounded-lg">
                 <button onClick={() => setAbaAtiva("ativos")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "ativos" ? "bg-white shadow-sm text-indigo-700" : "text-slate-600"}`}><Laptop className="w-4 h-4"/> Ativos Físicos</button>
                 <button onClick={() => setAbaAtiva("servicos")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "servicos" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Wifi className="w-4 h-4"/> Serviços e Contratos</button>
@@ -411,7 +416,6 @@ export default function GestaoPatrimonio() {
                     <div className="absolute -right-10 -top-10 text-slate-700/30 opacity-20"><Wrench className="w-64 h-64"/></div>
                     <div className="relative z-10 flex flex-col md:flex-row justify-between gap-4 items-start md:items-center">
                         <div>
-                            <Button variant="ghost" onClick={() => setAtivoSelecionado(null)} className="text-slate-300 hover:text-white p-0 mb-2 h-auto gap-2"><ArrowLeft className="w-4 h-4"/> Voltar à Lista</Button>
                             <h2 className="text-3xl font-black">{ativoSelecionado.descricao}</h2>
                             <div className="flex gap-4 mt-2 text-sm font-medium text-slate-300">
                                 <span className="flex items-center gap-1"><Tag className="w-4 h-4"/> Pat: #{String(ativoSelecionado.codigo_patrimonio).padStart(4,'0')}</span>
@@ -435,7 +439,7 @@ export default function GestaoPatrimonio() {
                         </div>
 
                         {mostrarFormPeca && (
-                            <div className="p-5 bg-indigo-50/50 border-b border-indigo-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-5 bg-indigo-50 border-b border-indigo-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Componente / Peça *</label><Input value={formPeca.nome} onChange={e=>setFormPeca({...formPeca, nome:e.target.value})} placeholder="Ex: Pneu Dianteiro Esquerdo" className="bg-white" /></div>
                                 <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Última Troca</label><Input type="date" value={formPeca.ultima_troca} onChange={e=>setFormPeca({...formPeca, ultima_troca:e.target.value})} className="bg-white" /></div>
                                 <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Última Revisão</label><Input type="date" value={formPeca.ultima_revisao} onChange={e=>setFormPeca({...formPeca, ultima_revisao:e.target.value})} className="bg-white" /></div>
@@ -445,7 +449,7 @@ export default function GestaoPatrimonio() {
                                     <label className="text-xs font-bold text-slate-500 uppercase">Estado Atual</label>
                                     <Select value={formPeca.estado_atual} onValueChange={v => setFormPeca({...formPeca, estado_atual: v})}>
                                         <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent className="bg-white z-50">
+                                        <SelectContent className="z-50 bg-white">
                                             <SelectItem value="Excelente">Excelente / Novo</SelectItem><SelectItem value="Bom">Bom</SelectItem><SelectItem value="Atenção">Atenção (Desgaste)</SelectItem><SelectItem value="Crítico">Crítico (Trocar)</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -498,7 +502,7 @@ export default function GestaoPatrimonio() {
                         </div>
 
                         {mostrarFormManutencao && (
-                            <div className="p-5 bg-emerald-50/50 border-b border-emerald-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-5 bg-emerald-50 border-b border-emerald-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data da Manutenção *</label><Input type="date" value={formManutencao.data_manutencao} onChange={e=>setFormManutencao({...formManutencao, data_manutencao:e.target.value})} className="bg-white border-emerald-200" /></div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase">Tipo</label>
@@ -690,7 +694,6 @@ export default function GestaoPatrimonio() {
                                             <td className="p-4 text-right">
                                                 <p className="text-xs text-slate-400 line-through">R$ {Number(a.valor_aquisicao).toFixed(2).replace('.',',')}</p>
                                                 <p className="text-sm font-black text-rose-600">R$ {valorResidual.toFixed(2).replace('.',',')}</p>
-                                                <p className="text-[9px] text-slate-400 uppercase mt-0.5">Depreciação {a.taxa_depreciacao_anual}% a.a.</p>
                                             </td>
                                             <td className="p-4 text-center">
                                                 <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -710,7 +713,7 @@ export default function GestaoPatrimonio() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: SERVIÇOS E CONTRATOS */}
+        {/* ABA: SERVIÇOS E CONTRATOS (Não mexemos, mantém igual) */}
         {/* ========================================================================= */}
         {!ativoSelecionado && abaAtiva === "servicos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
