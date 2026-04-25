@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 
+const defaultFormAtivo = {
+    categoria: "TI / Informática", descricao: "", marca_modelo: "", identificacao_extra: "",
+    data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: ""
+};
+
+const defaultFormServico = {
+    categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", 
+    valor_custo: "", data_vencimento: "", dia_vencimento: "10", status: "Ativo"
+};
+
 export default function GestaoPatrimonio() {
   const [abaAtiva, setAbaAtiva] = useState<"ativos" | "servicos">("ativos");
 
@@ -19,10 +29,7 @@ export default function GestaoPatrimonio() {
   const [ativos, setAtivos] = useState<any[]>([]);
   const [buscaAtivos, setBuscaAtivos] = useState("");
   const [mostrarFormAtivo, setMostrarFormAtivo] = useState(false);
-  const [formAtivo, setFormAtivo] = useState({
-    categoria: "TI / Informática", descricao: "", marca_modelo: "", identificacao_extra: "",
-    data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: ""
-  });
+  const [formAtivo, setFormAtivo] = useState(defaultFormAtivo);
 
   // ==========================================
   // ESTADOS: SERVIÇOS E CONTRATOS
@@ -33,16 +40,42 @@ export default function GestaoPatrimonio() {
   const [buscaServicos, setBuscaServicos] = useState("");
   
   const [mostrarFormServico, setMostrarFormServico] = useState(false);
-  const [formServico, setFormServico] = useState({
-    categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", 
-    valor_custo: "", data_vencimento: "", dia_vencimento: "10", status: "Ativo"
-  });
+  const [formServico, setFormServico] = useState(defaultFormServico);
 
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
   const [mostrarMotor, setMostrarMotor] = useState(false);
   const [mesLancamento, setMesLancamento] = useState(mesAtualStr);
   const [processando, setProcessando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+
+  // ==========================================
+  // AUTO-SAVE: RECUPERAÇÃO DE RASCUNHO
+  // ==========================================
+  useEffect(() => {
+    const saved = sessionStorage.getItem("patrimonio_rascunho");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.abaAtiva) setAbaAtiva(parsed.abaAtiva);
+        if (parsed.mostrarFormAtivo !== undefined) setMostrarFormAtivo(parsed.mostrarFormAtivo);
+        if (parsed.formAtivo) setFormAtivo(parsed.formAtivo);
+        if (parsed.mostrarFormServico !== undefined) setMostrarFormServico(parsed.mostrarFormServico);
+        if (parsed.formServico) setFormServico(parsed.formServico);
+        if (parsed.buscaAtivos) setBuscaAtivos(parsed.buscaAtivos);
+        if (parsed.buscaServicos) setBuscaServicos(parsed.buscaServicos);
+      } catch (e) {}
+    }
+  }, []);
+
+  // Salva no SessionStorage sempre que um estado relevante mudar
+  useEffect(() => {
+    const stateToSave = { 
+        abaAtiva, mostrarFormAtivo, formAtivo, mostrarFormServico, formServico, buscaAtivos, buscaServicos 
+    };
+    sessionStorage.setItem("patrimonio_rascunho", JSON.stringify(stateToSave));
+  }, [abaAtiva, mostrarFormAtivo, formAtivo, mostrarFormServico, formServico, buscaAtivos, buscaServicos]);
+  // ==========================================
+
 
   useEffect(() => {
     fetchDados();
@@ -72,7 +105,7 @@ export default function GestaoPatrimonio() {
         await supabase.from('adm_ativos_fisicos').insert([payload]);
         alert("Ativo cadastrado com sucesso!");
         setMostrarFormAtivo(false);
-        setFormAtivo({ categoria: "TI / Informática", descricao: "", marca_modelo: "", identificacao_extra: "", data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: "" });
+        setFormAtivo(defaultFormAtivo);
         fetchDados();
     } catch(e:any) { alert(e.message); } finally { setSalvando(false); }
   };
@@ -105,7 +138,7 @@ export default function GestaoPatrimonio() {
         await supabase.from('adm_servicos_estruturais').insert([payload]);
         alert("Serviço/Contrato registrado!");
         setMostrarFormServico(false);
-        setFormServico({ categoria: "Internet/Telefonia", descricao: "", fornecedor_nome: "", periodicidade: "Mensal", valor_custo: "", data_vencimento: "", dia_vencimento: "10", status: "Ativo" });
+        setFormServico(defaultFormServico);
         fetchDados();
     } catch(e:any) { alert(e.message); } finally { setSalvando(false); }
   };
@@ -208,10 +241,9 @@ export default function GestaoPatrimonio() {
                             <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2"><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</h3>
                             
                             {/* BLOCO 1: IDENTIFICAÇÃO DO BEM */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 relative z-20">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Tag className="w-4 h-4 text-indigo-500"/> 1. Identificação Geral</h4>
                                 
-                                {/* Removido bg-slate-50/50 e relative para evitar conflito de z-index */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
@@ -245,7 +277,7 @@ export default function GestaoPatrimonio() {
                             </div>
 
                             {/* BLOCO 2: FINANCEIRO E ALOCAÇÃO */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 relative z-10">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500"/> 2. Financeiro e Alocação</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
@@ -273,7 +305,7 @@ export default function GestaoPatrimonio() {
                                         <label className="text-xs font-bold text-slate-500 uppercase">Status Físico</label>
                                         <Select value={formAtivo.status} onValueChange={v => setFormAtivo({...formAtivo, status: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent className="bg-white z-50">
+                                            <SelectContent className="z-[9999]">
                                                 <SelectItem value="Ativo">Ativo (Em uso)</SelectItem>
                                                 <SelectItem value="Em Manutenção">Em Manutenção</SelectItem>
                                                 <SelectItem value="Descartado">Descartado/Sucata</SelectItem>
@@ -285,7 +317,7 @@ export default function GestaoPatrimonio() {
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4">
-                                <Button variant="outline" onClick={() => setMostrarFormAtivo(false)}>Cancelar</Button>
+                                <Button variant="outline" onClick={() => { setMostrarFormAtivo(false); setFormAtivo(defaultFormAtivo); }}>Cancelar</Button>
                                 <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md">Salvar Ativo</Button>
                             </div>
                         </div>
@@ -410,10 +442,10 @@ export default function GestaoPatrimonio() {
                     {/* FORMULÁRIO NOVO SERVIÇO */}
                     {mostrarFormServico && (
                         <div className="p-6 bg-white border-b border-slate-100 space-y-6">
-                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Plus className="w-5 h-5"/> Novo Contrato de Serviço</h3>
+                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
                             
                             {/* BLOCO 1: IDENTIFICAÇÃO SERVIÇO */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 relative z-20">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Wifi className="w-4 h-4 text-emerald-500"/> 1. Identificação do Serviço</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
@@ -443,7 +475,7 @@ export default function GestaoPatrimonio() {
                             </div>
                             
                             {/* BLOCO 2: CONDIÇÕES DE PAGAMENTO */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 relative z-10">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Landmark className="w-4 h-4 text-emerald-500"/> 2. Condições de Pagamento e Vencimento</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
@@ -473,7 +505,7 @@ export default function GestaoPatrimonio() {
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4 border-t border-emerald-100">
-                                <Button variant="outline" onClick={() => setMostrarFormServico(false)}>Cancelar</Button>
+                                <Button variant="outline" onClick={() => { setMostrarFormServico(false); setFormServico(defaultFormServico); }}>Cancelar</Button>
                                 <Button onClick={salvarServico} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md">Salvar Serviço</Button>
                             </div>
                         </div>
