@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { 
     AlertTriangle, Building, Calculator, Car, CheckCircle2, FileBadge, 
     Landmark, Laptop, MapPin, Plus, Search, Server, Shield, Sofa, 
-    Tag, Trash2, Wifi, Wrench 
+    Tag, Trash2, Wifi, Wrench, Edit
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export default function GestaoPatrimonio() {
   const [ativos, setAtivos] = useState<any[]>([]);
   const [buscaAtivos, setBuscaAtivos] = useState("");
   const [mostrarFormAtivo, setMostrarFormAtivo] = useState(false);
+  const [editandoAtivoId, setEditandoAtivoId] = useState<string | null>(null);
   const [formAtivo, setFormAtivo] = useState(defaultFormAtivo);
 
   // ==========================================
@@ -40,6 +41,7 @@ export default function GestaoPatrimonio() {
   const [buscaServicos, setBuscaServicos] = useState("");
   
   const [mostrarFormServico, setMostrarFormServico] = useState(false);
+  const [editandoServicoId, setEditandoServicoId] = useState<string | null>(null);
   const [formServico, setFormServico] = useState(defaultFormServico);
 
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
@@ -57,25 +59,30 @@ export default function GestaoPatrimonio() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.abaAtiva) setAbaAtiva(parsed.abaAtiva);
+        
         if (parsed.mostrarFormAtivo !== undefined) setMostrarFormAtivo(parsed.mostrarFormAtivo);
+        if (parsed.editandoAtivoId !== undefined) setEditandoAtivoId(parsed.editandoAtivoId);
         if (parsed.formAtivo) setFormAtivo(parsed.formAtivo);
+        
         if (parsed.mostrarFormServico !== undefined) setMostrarFormServico(parsed.mostrarFormServico);
+        if (parsed.editandoServicoId !== undefined) setEditandoServicoId(parsed.editandoServicoId);
         if (parsed.formServico) setFormServico(parsed.formServico);
+        
         if (parsed.buscaAtivos) setBuscaAtivos(parsed.buscaAtivos);
         if (parsed.buscaServicos) setBuscaServicos(parsed.buscaServicos);
       } catch (e) {}
     }
   }, []);
 
-  // Salva no SessionStorage sempre que um estado relevante mudar
   useEffect(() => {
     const stateToSave = { 
-        abaAtiva, mostrarFormAtivo, formAtivo, mostrarFormServico, formServico, buscaAtivos, buscaServicos 
+        abaAtiva, mostrarFormAtivo, editandoAtivoId, formAtivo, 
+        mostrarFormServico, editandoServicoId, formServico, 
+        buscaAtivos, buscaServicos 
     };
     sessionStorage.setItem("patrimonio_rascunho", JSON.stringify(stateToSave));
-  }, [abaAtiva, mostrarFormAtivo, formAtivo, mostrarFormServico, formServico, buscaAtivos, buscaServicos]);
+  }, [abaAtiva, mostrarFormAtivo, editandoAtivoId, formAtivo, mostrarFormServico, editandoServicoId, formServico, buscaAtivos, buscaServicos]);
   // ==========================================
-
 
   useEffect(() => {
     fetchDados();
@@ -97,30 +104,61 @@ export default function GestaoPatrimonio() {
   };
 
   // --- LÓGICA ATIVOS ---
+  const abrirNovoAtivo = () => {
+    setEditandoAtivoId(null);
+    setFormAtivo(defaultFormAtivo);
+    setMostrarFormAtivo(true);
+  };
+
+  const abrirEditarAtivo = (ativo: any) => {
+    setEditandoAtivoId(ativo.id);
+    setFormAtivo({
+        categoria: ativo.categoria || "TI / Informática",
+        descricao: ativo.descricao || "",
+        marca_modelo: ativo.marca_modelo || "",
+        identificacao_extra: ativo.identificacao_extra || "",
+        data_aquisicao: ativo.data_aquisicao || "",
+        valor_aquisicao: ativo.valor_aquisicao?.toString() || "",
+        taxa_depreciacao_anual: ativo.taxa_depreciacao_anual?.toString() || "20",
+        status: ativo.status || "Ativo",
+        setor_alocado: ativo.setor_alocado || "",
+        responsavel: ativo.responsavel || ""
+    });
+    setMostrarFormAtivo(true);
+  };
+
   const salvarAtivo = async () => {
     if (!formAtivo.descricao || !formAtivo.valor_aquisicao || !formAtivo.data_aquisicao) return alert("Descrição, Data e Valor são obrigatórios.");
     setSalvando(true);
     try {
-        const payload = { ...formAtivo, valor_aquisicao: parseFloat(formAtivo.valor_aquisicao), taxa_depreciacao_anual: parseFloat(formAtivo.taxa_depreciacao_anual) || 0 };
-        const { error } = await supabase.from('adm_ativos_fisicos').insert([payload]);
+        const payload = { 
+            ...formAtivo, 
+            valor_aquisicao: parseFloat(formAtivo.valor_aquisicao), 
+            taxa_depreciacao_anual: parseFloat(formAtivo.taxa_depreciacao_anual) || 0 
+        };
         
-        if (error) throw error; // Trava de erro inserida
+        if (editandoAtivoId) {
+            const { error } = await supabase.from('adm_ativos_fisicos').update(payload).eq('id', editandoAtivoId);
+            if (error) throw error;
+            alert("Ativo atualizado com sucesso!");
+        } else {
+            const { error } = await supabase.from('adm_ativos_fisicos').insert([payload]);
+            if (error) throw error;
+            alert("Ativo cadastrado com sucesso!");
+        }
         
-        alert("Ativo cadastrado com sucesso!");
         setMostrarFormAtivo(false);
+        setEditandoAtivoId(null);
         setFormAtivo(defaultFormAtivo);
         fetchDados();
-    } catch(e:any) { alert("Erro ao salvar ativo: " + e.message); } finally { setSalvando(false); }
+    } catch(e:any) { alert("Erro ao salvar: " + e.message); } finally { setSalvando(false); }
   };
 
   const deletarAtivo = async (id: string) => {
       if(!confirm("Tem certeza que deseja excluir este ativo?")) return;
       const { error } = await supabase.from('adm_ativos_fisicos').delete().eq('id', id);
-      if (error) {
-          alert("Erro ao excluir ativo: " + error.message);
-      } else {
-          fetchDados();
-      }
+      if (error) alert("Erro ao excluir: " + error.message);
+      else fetchDados();
   };
 
   const calcularValorResidual = (ativo: any) => {
@@ -132,6 +170,27 @@ export default function GestaoPatrimonio() {
   };
 
   // --- LÓGICA SERVIÇOS ---
+  const abrirNovoServico = () => {
+    setEditandoServicoId(null);
+    setFormServico(defaultFormServico);
+    setMostrarFormServico(true);
+  };
+
+  const abrirEditarServico = (servico: any) => {
+    setEditandoServicoId(servico.id);
+    setFormServico({
+        categoria: servico.categoria || "Internet/Telefonia",
+        descricao: servico.descricao || "",
+        fornecedor_nome: servico.fornecedor_nome || "",
+        periodicidade: servico.periodicidade || "Mensal",
+        valor_custo: servico.valor_custo?.toString() || "",
+        data_vencimento: servico.data_vencimento || "",
+        dia_vencimento: servico.dia_vencimento?.toString() || "10",
+        status: servico.status || "Ativo"
+    });
+    setMostrarFormServico(true);
+  };
+
   const salvarServico = async () => {
     if (!formServico.descricao) return alert("A descrição é obrigatória.");
     setSalvando(true);
@@ -142,25 +201,29 @@ export default function GestaoPatrimonio() {
             dia_vencimento: parseInt(formServico.dia_vencimento) || 10,
             data_vencimento: formServico.data_vencimento || null 
         };
-        const { error } = await supabase.from('adm_servicos_estruturais').insert([payload]);
-        
-        if (error) throw error; // Trava de erro inserida
 
-        alert("Serviço/Contrato registrado!");
+        if (editandoServicoId) {
+            const { error } = await supabase.from('adm_servicos_estruturais').update(payload).eq('id', editandoServicoId);
+            if (error) throw error;
+            alert("Serviço atualizado com sucesso!");
+        } else {
+            const { error } = await supabase.from('adm_servicos_estruturais').insert([payload]);
+            if (error) throw error;
+            alert("Serviço registrado com sucesso!");
+        }
+
         setMostrarFormServico(false);
+        setEditandoServicoId(null);
         setFormServico(defaultFormServico);
         fetchDados();
-    } catch(e:any) { alert("Erro ao salvar serviço: " + e.message); } finally { setSalvando(false); }
+    } catch(e:any) { alert("Erro ao salvar: " + e.message); } finally { setSalvando(false); }
   };
 
   const deletarServico = async (id: string) => {
       if(!confirm("Tem certeza que deseja excluir este serviço?")) return;
       const { error } = await supabase.from('adm_servicos_estruturais').delete().eq('id', id);
-      if (error) {
-          alert("Erro ao excluir serviço: " + error.message);
-      } else {
-          fetchDados();
-      }
+      if (error) alert("Erro ao excluir: " + error.message);
+      else fetchDados();
   };
 
   // --- INTEGRAÇÃO FINANCEIRO (FACILITIES) ---
@@ -193,7 +256,7 @@ export default function GestaoPatrimonio() {
           });
 
           const { error } = await supabase.from('fin_lancamentos').insert(lancamentosFinanceiros);
-          if (error) throw error; // Trava de erro inserida
+          if (error) throw error;
 
           alert("Lote de Contas a Pagar gerado com sucesso no Módulo Financeiro!");
           setMostrarMotor(false);
@@ -247,14 +310,15 @@ export default function GestaoPatrimonio() {
                 <div className="bg-white rounded-xl border shadow-sm">
                     <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50 rounded-t-xl">
                         <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaAtivos} onChange={e => setBuscaAtivos(e.target.value)} placeholder="Buscar ativo por descrição, placa ou S/N..." className="pl-9 bg-white" /></div>
-                        <Button onClick={() => setMostrarFormAtivo(!mostrarFormAtivo)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"><Plus className="w-4 h-4"/> Novo Ativo Físico</Button>
+                        <Button onClick={abrirNovoAtivo} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"><Plus className="w-4 h-4"/> Novo Ativo Físico</Button>
                     </div>
 
                     {mostrarFormAtivo && (
                         <div className="p-6 bg-white border-b border-slate-100 space-y-6">
-                            <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2"><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</h3>
+                            <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2">
+                                {editandoAtivoId ? <><Edit className="w-5 h-5"/> Editar Bem Físico</> : <><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</>}
+                            </h3>
                             
-                            {/* BLOCO 1: IDENTIFICAÇÃO DO BEM */}
                             <div className="space-y-4 relative z-20">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Tag className="w-4 h-4 text-indigo-500"/> 1. Identificação Geral</h4>
                                 
@@ -290,7 +354,6 @@ export default function GestaoPatrimonio() {
                                 </div>
                             </div>
 
-                            {/* BLOCO 2: FINANCEIRO E ALOCAÇÃO */}
                             <div className="space-y-4 relative z-10">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500"/> 2. Financeiro e Alocação</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
@@ -331,8 +394,10 @@ export default function GestaoPatrimonio() {
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4">
-                                <Button variant="outline" onClick={() => { setMostrarFormAtivo(false); setFormAtivo(defaultFormAtivo); }}>Cancelar</Button>
-                                <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md">Salvar Ativo</Button>
+                                <Button variant="outline" onClick={() => { setMostrarFormAtivo(false); setEditandoAtivoId(null); setFormAtivo(defaultFormAtivo); }}>Cancelar</Button>
+                                <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md">
+                                    {editandoAtivoId ? "Atualizar Ativo" : "Salvar Ativo"}
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -346,7 +411,7 @@ export default function GestaoPatrimonio() {
                                     <th className="p-4 font-semibold border-b">Alocação</th>
                                     <th className="p-4 font-semibold border-b text-center">Status</th>
                                     <th className="p-4 font-semibold border-b text-right">Depreciação e Valor</th>
-                                    <th className="p-4 font-semibold border-b w-12 text-center">Ações</th>
+                                    <th className="p-4 font-semibold border-b w-24 text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -378,7 +443,10 @@ export default function GestaoPatrimonio() {
                                                 <p className="text-[9px] text-slate-400 uppercase mt-0.5">Depreciação {a.taxa_depreciacao_anual}% a.a.</p>
                                             </td>
                                             <td className="p-4 text-center">
-                                                <button onClick={() => deletarAtivo(a.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                                <div className="flex justify-center gap-2">
+                                                    <button onClick={() => abrirEditarAtivo(a)} className="text-slate-400 hover:text-indigo-600 transition-colors" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                    <button onClick={() => deletarAtivo(a.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Excluir"><Trash2 className="w-4 h-4"/></button>
+                                                </div>
                                             </td>
                                         </tr>
                                     )})
@@ -423,7 +491,7 @@ export default function GestaoPatrimonio() {
                         <div className="relative w-full max-w-sm"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaServicos} onChange={e => setBuscaServicos(e.target.value)} placeholder="Buscar serviço ou fornecedor..." className="pl-9 bg-white" /></div>
                         <div className="flex gap-2">
                             <Button onClick={() => setMostrarMotor(!mostrarMotor)} variant="outline" className="text-indigo-700 border-indigo-200 hover:bg-indigo-50 gap-2"><Landmark className="w-4 h-4"/> Gerar Contas a Pagar (Mês)</Button>
-                            <Button onClick={() => setMostrarFormServico(!mostrarFormServico)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"><Plus className="w-4 h-4"/> Registrar Serviço</Button>
+                            <Button onClick={abrirNovoServico} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"><Plus className="w-4 h-4"/> Registrar Serviço</Button>
                         </div>
                     </div>
 
@@ -456,7 +524,9 @@ export default function GestaoPatrimonio() {
                     {/* FORMULÁRIO NOVO SERVIÇO */}
                     {mostrarFormServico && (
                         <div className="p-6 bg-white border-b border-slate-100 space-y-6">
-                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Plus className="w-5 h-5"/> Novo Contrato de Serviço</h3>
+                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2">
+                                {editandoServicoId ? <><Edit className="w-5 h-5"/> Editar Contrato de Serviço</> : <><Plus className="w-5 h-5"/> Novo Contrato de Serviço</>}
+                            </h3>
                             
                             {/* BLOCO 1: IDENTIFICAÇÃO SERVIÇO */}
                             <div className="space-y-4 relative z-20">
@@ -519,8 +589,10 @@ export default function GestaoPatrimonio() {
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4 border-t border-emerald-100">
-                                <Button variant="outline" onClick={() => { setMostrarFormServico(false); setFormServico(defaultFormServico); }}>Cancelar</Button>
-                                <Button onClick={salvarServico} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md">Salvar Serviço</Button>
+                                <Button variant="outline" onClick={() => { setMostrarFormServico(false); setEditandoServicoId(null); setFormServico(defaultFormServico); }}>Cancelar</Button>
+                                <Button onClick={salvarServico} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md">
+                                    {editandoServicoId ? "Atualizar Serviço" : "Salvar Serviço"}
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -534,7 +606,7 @@ export default function GestaoPatrimonio() {
                                     <th className="p-4 font-semibold border-b text-center">Frequência</th>
                                     <th className="p-4 font-semibold border-b text-center">Dia Vencimento</th>
                                     <th className="p-4 font-semibold border-b text-right">Custo Declarado</th>
-                                    <th className="p-4 font-semibold border-b w-12 text-center">Ações</th>
+                                    <th className="p-4 font-semibold border-b w-24 text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -560,7 +632,10 @@ export default function GestaoPatrimonio() {
                                             </td>
                                             <td className="p-4 text-right font-black text-emerald-700">R$ {Number(s.valor_custo).toFixed(2).replace('.',',')}</td>
                                             <td className="p-4 text-center">
-                                                <button onClick={() => deletarServico(s.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                                <div className="flex justify-center gap-2">
+                                                    <button onClick={() => abrirEditarServico(s)} className="text-slate-400 hover:text-emerald-600 transition-colors" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                    <button onClick={() => deletarServico(s.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Excluir"><Trash2 className="w-4 h-4"/></button>
+                                                </div>
                                             </td>
                                         </tr>
                                     )})
