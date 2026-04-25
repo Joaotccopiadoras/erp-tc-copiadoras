@@ -9,11 +9,13 @@ import {
     FileBadge,
     Landmark,
     Laptop,
+    MapPin,
     Plus,
     Search,
     Server,
     Shield,
     Sofa,
+    Tag,
     Trash2,
     Wifi,
     Wrench } from "lucide-react";
@@ -34,7 +36,7 @@ export default function GestaoPatrimonio() {
   const [buscaAtivos, setBuscaAtivos] = useState("");
   const [mostrarFormAtivo, setMostrarFormAtivo] = useState(false);
   const [formAtivo, setFormAtivo] = useState({
-    categoria: "TI / Computadores", descricao: "", marca_modelo: "", identificacao_extra: "",
+    categoria: "TI / Informática", descricao: "", marca_modelo: "", identificacao_extra: "",
     data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: ""
   });
 
@@ -141,7 +143,7 @@ export default function GestaoPatrimonio() {
           const [mes, ano] = mesLancamento.split('/');
           
           const lancamentosFinanceiros = servicosAtivos.map(s => {
-              // Monta a data de vencimento baseada no dia configurado + mês/ano selecionado
+              // montagem data vencimento
               const dataVenc = new Date(Number(ano), Number(mes) - 1, s.dia_vencimento || 10);
               
               return {
@@ -184,7 +186,7 @@ export default function GestaoPatrimonio() {
         {/* cabecalho */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Facilities</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Serviços de Terceiros</h1>
             <p className="text-slate-500">Controle de bens físicos (ativos), infraestrutura e serviços da empresa.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
@@ -219,38 +221,50 @@ export default function GestaoPatrimonio() {
                         <Button onClick={() => setMostrarFormAtivo(!mostrarFormAtivo)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"><Plus className="w-4 h-4"/> Novo Ativo Físico</Button>
                     </div>
 
-                    {mostrarFormAtivo && (
-                        <div className="p-6 bg-indigo-50/50 border-b border-indigo-100 space-y-4">
-                            <h3 className="font-bold text-indigo-800 flex items-center gap-2 mb-4"><Plus className="w-5 h-5"/> Registrar Novo Bem</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
-                                    <Select value={formAtivo.categoria} onValueChange={v => setFormAtivo({...formAtivo, categoria: v})}>
-                                        <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent><SelectItem value="Veículos">Veículos (Frota)</SelectItem><SelectItem value="TI / Computadores">TI / Computadores</SelectItem><SelectItem value="Ar-Condicionado">Ar-Condicionado</SelectItem><SelectItem value="Móveis">Móveis e Estofados</SelectItem><SelectItem value="Eletrodomésticos">Eletrodomésticos</SelectItem><SelectItem value="Ferramentas">Ferramentas</SelectItem><SelectItem value="Miscelânea">Outros (Miscelânea)</SelectItem></SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição / Nome do Ativo *</label><Input value={formAtivo.descricao} onChange={e => setFormAtivo({...formAtivo, descricao: e.target.value})} placeholder="Ex: Notebook Dell Inspiron, Ford Ka..." className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Marca / Modelo</label><Input value={formAtivo.marca_modelo} onChange={e => setFormAtivo({...formAtivo, marca_modelo: e.target.value})} className="bg-white" /></div>
-                                
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Identificação (S/N, Placa, MAC)</label><Input value={formAtivo.identificacao_extra} onChange={e => setFormAtivo({...formAtivo, identificacao_extra: e.target.value})} className="bg-white font-mono uppercase" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Aquisição *</label><Input type="date" value={formAtivo.data_aquisicao} onChange={e => setFormAtivo({...formAtivo, data_aquisicao: e.target.value})} className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor de Aquisição (R$) *</label><Input type="number" step="0.01" value={formAtivo.valor_aquisicao} onChange={e => setFormAtivo({...formAtivo, valor_aquisicao: e.target.value})} className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">% Depreciação (Ao Ano)</label><Input type="number" value={formAtivo.taxa_depreciacao_anual} onChange={e => setFormAtivo({...formAtivo, taxa_depreciacao_anual: e.target.value})} className="bg-white" /></div>
-
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Setor Alocado</label><Input value={formAtivo.setor_alocado} onChange={e => setFormAtivo({...formAtivo, setor_alocado: e.target.value})} placeholder="Ex: Recepção, Frota" className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Responsável (Em posse de)</label><Input value={formAtivo.responsavel} onChange={e => setFormAtivo({...formAtivo, responsavel: e.target.value})} placeholder="Ex: João Gaia" className="bg-white" /></div>
-                                <div className="space-y-2 md:col-span-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Status Físico</label>
-                                    <Select value={formAtivo.status} onValueChange={v => setFormAtivo({...formAtivo, status: v})}>
-                                        <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent><SelectItem value="Ativo">Ativo (Em uso)</SelectItem><SelectItem value="Em Manutenção">Em Manutenção</SelectItem><SelectItem value="Descartado">Descartado/Sucata</SelectItem><SelectItem value="Vendido">Vendido</SelectItem></SelectContent>
-                                    </Select>
+                   {mostrarFormAtivo && (
+                        <div className="p-6 bg-indigo-50/50 border-b border-indigo-100 space-y-6">
+                            <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2"><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</h3>
+                            
+                            {/* identificacao do objeto */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Tag className="w-4 h-4 text-indigo-500"/> 1. Identificação Geral</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border shadow-sm">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
+                                        <Select value={formAtivo.categoria} onValueChange={v => setFormAtivo({...formAtivo, categoria: v})}>
+                                            <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
+                                            <SelectContent><SelectItem value="Veículos">Veículos (Frota)</SelectItem><SelectItem value="TI / Informática">TI / Informática</SelectItem><SelectItem value="Ar-Condicionado">Ar-Condicionado</SelectItem><SelectItem value="Móveis">Móveis e Estofados</SelectItem><SelectItem value="Eletrodomésticos">Eletrodomésticos</SelectItem><SelectItem value="Ferramentas">Ferramentas</SelectItem><SelectItem value="Miscelânea">Outros (Miscelânea)</SelectItem></SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição / Nome do Ativo *</label><Input value={formAtivo.descricao} onChange={e => setFormAtivo({...formAtivo, descricao: e.target.value})} placeholder="Ex: Notebook Dell Inspiron, Ford Ka..." className="bg-white" /></div>
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Marca / Modelo</label><Input value={formAtivo.marca_modelo} onChange={e => setFormAtivo({...formAtivo, marca_modelo: e.target.value})} className="bg-white" /></div>
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">S/N, Placa, MAC (Identif.)</label><Input value={formAtivo.identificacao_extra} onChange={e => setFormAtivo({...formAtivo, identificacao_extra: e.target.value})} className="bg-white font-mono uppercase text-indigo-700" placeholder="Opcional" /></div>
                                 </div>
                             </div>
-                            <div className="flex justify-end gap-2 pt-4">
+
+                            {/* financeiro */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500"/> 2. Financeiro e Alocação</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-white p-4 rounded-lg border shadow-sm">
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Aquisição *</label><Input type="date" value={formAtivo.data_aquisicao} onChange={e => setFormAtivo({...formAtivo, data_aquisicao: e.target.value})} className="bg-white" /></div>
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor de Aquisição (R$) *</label><Input type="number" step="0.01" value={formAtivo.valor_aquisicao} onChange={e => setFormAtivo({...formAtivo, valor_aquisicao: e.target.value})} className="bg-white" /></div>
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">% Depreciação (Ao Ano)</label><Input type="number" value={formAtivo.taxa_depreciacao_anual} onChange={e => setFormAtivo({...formAtivo, taxa_depreciacao_anual: e.target.value})} className="bg-white" /></div>
+
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Setor Alocado</label><Input value={formAtivo.setor_alocado} onChange={e => setFormAtivo({...formAtivo, setor_alocado: e.target.value})} placeholder="Ex: Recepção, Comercial..." className="bg-white" /></div>
+                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Responsável (Em posse de)</label><Input value={formAtivo.responsavel} onChange={e => setFormAtivo({...formAtivo, responsavel: e.target.value})} placeholder="Nome do funcionário..." className="bg-white" /></div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Status Físico</label>
+                                        <Select value={formAtivo.status} onValueChange={v => setFormAtivo({...formAtivo, status: v})}>
+                                            <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
+                                            <SelectContent><SelectItem value="Ativo">Ativo (Em uso)</SelectItem><SelectItem value="Em Manutenção">Em Manutenção</SelectItem><SelectItem value="Descartado">Descartado/Sucata</SelectItem><SelectItem value="Vendido">Vendido</SelectItem></SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-4 border-t border-indigo-100">
                                 <Button variant="outline" onClick={() => setMostrarFormAtivo(false)}>Cancelar</Button>
-                                <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white">Salvar Ativo</Button>
+                                <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md">Salvar Ativo</Button>
                             </div>
                         </div>
                     )}
@@ -308,11 +322,10 @@ export default function GestaoPatrimonio() {
             </div>
         )}
 
-        {/* aba servicos */}
+        {/* aba servicos de terceiros */}
         {abaAtiva === "servicos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
                 
-                {/* dashboard servicos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 border-l-4 border-l-emerald-500">
                         <div className="bg-emerald-100 p-3 rounded-full text-emerald-600"><Server className="w-6 h-6"/></div>
@@ -344,7 +357,7 @@ export default function GestaoPatrimonio() {
                         </div>
                     </div>
 
-                    {/* pagamento financeiro em lote */}
+                    {/* pagamento em lote */}
                     {mostrarMotor && (
                         <div className="p-6 bg-indigo-50 border-b border-indigo-200 space-y-4 animate-in slide-in-from-top-4">
                             <div className="flex justify-between items-center">
@@ -364,7 +377,7 @@ export default function GestaoPatrimonio() {
                                     <p className="text-sm text-slate-600">Serão gerados <strong className="text-indigo-700">{servicos.filter(s => s.status === 'Ativo' && Number(s.valor_custo) > 0).length} lançamentos</strong> no valor total de <strong className="text-rose-600">R$ {custoMensalServicos.toFixed(2).replace('.',',')}</strong> no Módulo Financeiro.</p>
                                 </div>
                                 <Button onClick={processarLancamentosDoMes} disabled={processando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 shadow-md gap-2">
-                                    {processando ? "Processando..." : <><CheckCircle2 className="w-4 h-4"/> Confirmar e Lançar no Financeiro</>}
+                                    {processando ? "Processando..." : <><CheckCircle2 className="w-4 h-4"/> Confirmar e Lançar</>}
                                 </Button>
                             </div>
                         </div>
@@ -372,9 +385,10 @@ export default function GestaoPatrimonio() {
 
                     {/* formulario novo servico */}
                     {mostrarFormServico && (
-                        <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 space-y-4">
-                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 mb-4"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 space-y-6">
+                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border shadow-sm">
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
                                     <Select value={formServico.categoria} onValueChange={v => setFormServico({...formServico, categoria: v})}>
@@ -382,11 +396,13 @@ export default function GestaoPatrimonio() {
                                         <SelectContent><SelectItem value="Internet/Telefonia">Internet/Telefonia</SelectItem><SelectItem value="Software/Hospedagem">Software/Hospedagem</SelectItem><SelectItem value="Certificado Digital/Registro">Certificados e Registros</SelectItem><SelectItem value="Segurança/Alarmes">Segurança/Alarmes</SelectItem><SelectItem value="Elétrica/Hidráulica">Manutenção Predial</SelectItem><SelectItem value="Outros">Outros</SelectItem></SelectContent>
                                     </Select>
                                 </div>
-                                <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Serviço Contratado *</label><Input value={formServico.descricao} onChange={e => setFormServico({...formServico, descricao: e.target.value})} placeholder="Ex: Link Dedicado 1Gbps, Hospedagem Locaweb..." className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fornecedor</label><Input list="lista-forns-pat" value={formServico.fornecedor_nome} onChange={e => setFormServico({...formServico, fornecedor_nome: e.target.value})} className="bg-white" />
+                                <div className="space-y-2 lg:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Serviço Contratado *</label><Input value={formServico.descricao} onChange={e => setFormServico({...formServico, descricao: e.target.value})} placeholder="Ex: Link Dedicado 1Gbps, Hospedagem Locaweb..." className="bg-white" /></div>
+                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fornecedor</label><Input list="lista-forns-pat" value={formServico.fornecedor_nome} onChange={e => setFormServico({...formServico, fornecedor_nome: e.target.value})} className="bg-white" placeholder="Opcional" />
                                     <datalist id="lista-forns-pat">{fornecedores.map(f => <option key={f.id} value={f.nome_fantasia}/>)}</datalist>
                                 </div>
-                                
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border shadow-sm">
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase">Periodicidade *</label>
                                     <Select value={formServico.periodicidade} onValueChange={v => setFormServico({...formServico, periodicidade: v})}>
@@ -394,20 +410,14 @@ export default function GestaoPatrimonio() {
                                         <SelectContent><SelectItem value="Mensal">Mensal</SelectItem><SelectItem value="Anual">Anual</SelectItem><SelectItem value="Sob Demanda">Sob Demanda (Avulso)</SelectItem></SelectContent>
                                     </Select>
                                 </div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Custo/Mensalidade (R$)</label><Input type="number" step="0.01" value={formServico.valor_custo} onChange={e => setFormServico({...formServico, valor_custo: e.target.value})} className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-emerald-600 uppercase">Dia do Vencimento (Mês)</label><Input type="number" min="1" max="31" value={formServico.dia_vencimento} onChange={e => setFormServico({...formServico, dia_vencimento: e.target.value})} className="bg-white border-emerald-300 font-bold" placeholder="Ex: 10" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Renovação do Contrato</label><Input type="date" value={formServico.data_vencimento} onChange={e => setFormServico({...formServico, data_vencimento: e.target.value})} className="bg-white" /></div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Status do Contrato</label>
-                                    <Select value={formServico.status} onValueChange={v => setFormServico({...formServico, status: v})}>
-                                        <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent><SelectItem value="Ativo">Ativo (Vigente)</SelectItem><SelectItem value="Suspenso">Suspenso</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
-                                    </Select>
-                                </div>
+                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Custo (R$)</label><Input type="number" step="0.01" value={formServico.valor_custo} onChange={e => setFormServico({...formServico, valor_custo: e.target.value})} className="bg-white" /></div>
+                                <div className="space-y-2"><label className="text-xs font-bold text-emerald-600 uppercase">Dia Vencimento (Mês)</label><Input type="number" min="1" max="31" value={formServico.dia_vencimento} onChange={e => setFormServico({...formServico, dia_vencimento: e.target.value})} className="bg-white border-emerald-300 font-bold" placeholder="Ex: 10" /></div>
+                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Fim Contrato</label><Input type="date" value={formServico.data_vencimento} onChange={e => setFormServico({...formServico, data_vencimento: e.target.value})} className="bg-white" /></div>
                             </div>
-                            <div className="flex justify-end gap-2 pt-4">
+
+                            <div className="flex justify-end gap-2 pt-4 border-t border-emerald-100">
                                 <Button variant="outline" onClick={() => setMostrarFormServico(false)}>Cancelar</Button>
-                                <Button onClick={salvarServico} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700 text-white">Salvar Serviço</Button>
+                                <Button onClick={salvarServico} disabled={salvando} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md">Salvar Serviço</Button>
                             </div>
                         </div>
                     )}
