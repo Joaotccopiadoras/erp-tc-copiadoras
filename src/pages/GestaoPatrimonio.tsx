@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { 
     AlertTriangle, Building, Calculator, Car, CheckCircle2, FileBadge, 
     Landmark, Laptop, MapPin, Plus, Search, Server, Shield, Sofa, 
-    Tag, Trash2, Wifi, Wrench, Edit, Activity, ArrowLeft, PenTool, UploadCloud, Link as LinkIcon, Loader2
+    Tag, Trash2, Wifi, Wrench, Edit, Activity, ArrowLeft, PenTool, 
+    UploadCloud, Link as LinkIcon, Loader2 
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ export default function GestaoPatrimonio() {
   const [abaAtiva, setAbaAtiva] = useState<"ativos" | "servicos">("ativos");
 
   // ==========================================
-  // ESTADOS: ATIVOS FÍSICOS E DOSSIÊ
+  // ESTADOS: ATIVOS FÍSICOS
   // ==========================================
   const [ativos, setAtivos] = useState<any[]>([]);
   const [buscaAtivos, setBuscaAtivos] = useState("");
@@ -35,7 +36,9 @@ export default function GestaoPatrimonio() {
   const [editandoAtivoId, setEditandoAtivoId] = useState<string | null>(null);
   const [formAtivo, setFormAtivo] = useState(defaultFormAtivo);
 
-  // Estados do Dossiê do Ativo
+  // ==========================================
+  // ESTADOS: DOSSIÊ E MANUTENÇÕES
+  // ==========================================
   const [ativoSelecionado, setAtivoSelecionado] = useState<any | null>(null);
   const [pecas, setPecas] = useState<any[]>([]);
   const [manutencoes, setManutencoes] = useState<any[]>([]);
@@ -47,6 +50,7 @@ export default function GestaoPatrimonio() {
   const [mostrarFormManutencao, setMostrarFormManutencao] = useState(false);
   const [formManutencao, setFormManutencao] = useState(defaultFormManutencao);
   const [comprovanteUpload, setComprovanteUpload] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ==========================================
   // ESTADOS: SERVIÇOS E CONTRATOS
@@ -66,26 +70,32 @@ export default function GestaoPatrimonio() {
   const [processando, setProcessando] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
-  // Referência para o Input File de comprovante
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // ==========================================
-  // AUTO-SAVE: RECUPERAÇÃO DE RASCUNHO
+  // AUTO-SAVE BLINDADO (RECUPERAÇÃO DE RASCUNHO)
   // ==========================================
   useEffect(() => {
-    const saved = sessionStorage.getItem("patrimonio_rascunho");
+    const saved = sessionStorage.getItem("patrimonio_rascunho_v3");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.abaAtiva) setAbaAtiva(parsed.abaAtiva);
+        
         if (parsed.mostrarFormAtivo !== undefined) setMostrarFormAtivo(parsed.mostrarFormAtivo);
         if (parsed.editandoAtivoId !== undefined) setEditandoAtivoId(parsed.editandoAtivoId);
         if (parsed.formAtivo) setFormAtivo(parsed.formAtivo);
+        
         if (parsed.mostrarFormServico !== undefined) setMostrarFormServico(parsed.mostrarFormServico);
         if (parsed.editandoServicoId !== undefined) setEditandoServicoId(parsed.editandoServicoId);
         if (parsed.formServico) setFormServico(parsed.formServico);
-        if (parsed.buscaAtivos) setBuscaAtivos(parsed.buscaAtivos);
-        if (parsed.buscaServicos) setBuscaServicos(parsed.buscaServicos);
+        
+        if (parsed.buscaAtivos !== undefined) setBuscaAtivos(parsed.buscaAtivos);
+        if (parsed.buscaServicos !== undefined) setBuscaServicos(parsed.buscaServicos);
+
+        if (parsed.ativoSelecionado !== undefined) setAtivoSelecionado(parsed.ativoSelecionado);
+        if (parsed.mostrarFormPeca !== undefined) setMostrarFormPeca(parsed.mostrarFormPeca);
+        if (parsed.formPeca) setFormPeca(parsed.formPeca);
+        if (parsed.mostrarFormManutencao !== undefined) setMostrarFormManutencao(parsed.mostrarFormManutencao);
+        if (parsed.formManutencao) setFormManutencao(parsed.formManutencao);
       } catch (e) {}
     }
   }, []);
@@ -94,10 +104,11 @@ export default function GestaoPatrimonio() {
     const stateToSave = { 
         abaAtiva, mostrarFormAtivo, editandoAtivoId, formAtivo, 
         mostrarFormServico, editandoServicoId, formServico, 
-        buscaAtivos, buscaServicos 
+        buscaAtivos, buscaServicos,
+        ativoSelecionado, mostrarFormPeca, formPeca, mostrarFormManutencao, formManutencao
     };
-    sessionStorage.setItem("patrimonio_rascunho", JSON.stringify(stateToSave));
-  }, [abaAtiva, mostrarFormAtivo, editandoAtivoId, formAtivo, mostrarFormServico, editandoServicoId, formServico, buscaAtivos, buscaServicos]);
+    sessionStorage.setItem("patrimonio_rascunho_v3", JSON.stringify(stateToSave));
+  }, [abaAtiva, mostrarFormAtivo, editandoAtivoId, formAtivo, mostrarFormServico, editandoServicoId, formServico, buscaAtivos, buscaServicos, ativoSelecionado, mostrarFormPeca, formPeca, mostrarFormManutencao, formManutencao]);
   // ==========================================
 
   useEffect(() => {
@@ -237,7 +248,6 @@ export default function GestaoPatrimonio() {
       try {
           let comprovanteUrl = null;
 
-          // Upload do comprovante se existir
           if (comprovanteUpload) {
               const ext = comprovanteUpload.name.split('.').pop();
               const fileName = `manut_${ativoSelecionado.id}_${Date.now()}.${ext}`;
@@ -252,8 +262,8 @@ export default function GestaoPatrimonio() {
               data_manutencao: formManutencao.data_manutencao,
               tipo: formManutencao.tipo,
               descricao: formManutencao.descricao,
-              odometro: formManutencao.odometro ? parseInt(formManutencao.odometro) : null,
-              valor: formManutencao.valor ? parseFloat(formManutencao.valor) : 0,
+              odometro: formManutencao.odometro ? parseInt(formManutencao.odometro.toString()) : null,
+              valor: formManutencao.valor ? parseFloat(formManutencao.valor.toString()) : 0,
               comprovante_url: comprovanteUrl
           };
 
@@ -272,7 +282,6 @@ export default function GestaoPatrimonio() {
       await supabase.from('adm_ativo_manutencoes').delete().eq('id', id);
       carregarDossie(ativoSelecionado.id);
   };
-
 
   // --- LÓGICA SERVIÇOS ---
   const abrirNovoServico = () => {
@@ -411,7 +420,7 @@ export default function GestaoPatrimonio() {
                             </div>
                         </div>
                         <div className="text-right">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Custo Total Acumulado (Manutenções)</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Custo Acumulado (Manutenções)</p>
                             <p className="text-2xl font-bold text-rose-400">R$ {manutencoes.reduce((acc, m) => acc + Number(m.valor), 0).toFixed(2).replace('.',',')}</p>
                         </div>
                     </div>
@@ -436,7 +445,7 @@ export default function GestaoPatrimonio() {
                                     <label className="text-xs font-bold text-slate-500 uppercase">Estado Atual</label>
                                     <Select value={formPeca.estado_atual} onValueChange={v => setFormPeca({...formPeca, estado_atual: v})}>
                                         <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className="bg-white z-50">
                                             <SelectItem value="Excelente">Excelente / Novo</SelectItem><SelectItem value="Bom">Bom</SelectItem><SelectItem value="Atenção">Atenção (Desgaste)</SelectItem><SelectItem value="Crítico">Crítico (Trocar)</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -495,7 +504,7 @@ export default function GestaoPatrimonio() {
                                     <label className="text-xs font-bold text-slate-500 uppercase">Tipo</label>
                                     <Select value={formManutencao.tipo} onValueChange={v => setFormManutencao({...formManutencao, tipo: v})}>
                                         <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent><SelectItem value="Preventiva">Preventiva</SelectItem><SelectItem value="Corretiva">Corretiva (Quebra)</SelectItem><SelectItem value="Melhoria">Melhoria / Upgrade</SelectItem></SelectContent>
+                                        <SelectContent className="bg-white z-50"><SelectItem value="Preventiva">Preventiva</SelectItem><SelectItem value="Corretiva">Corretiva (Quebra)</SelectItem><SelectItem value="Melhoria">Melhoria / Upgrade</SelectItem></SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição do que foi feito *</label><Input value={formManutencao.descricao} onChange={e=>setFormManutencao({...formManutencao, descricao:e.target.value})} placeholder="Ex: Troca de Óleo, Substituição bateria..." className="bg-white" /></div>
@@ -634,7 +643,7 @@ export default function GestaoPatrimonio() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex justify-end gap-2 pt-4">
+                            <div className="flex justify-end gap-2 pt-4 border-t border-indigo-100">
                                 <Button variant="outline" onClick={() => { setMostrarFormAtivo(false); setEditandoAtivoId(null); setFormAtivo(defaultFormAtivo); }}>Cancelar</Button>
                                 <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md">
                                     {editandoAtivoId ? "Atualizar Ativo" : "Salvar Ativo"}
@@ -681,6 +690,7 @@ export default function GestaoPatrimonio() {
                                             <td className="p-4 text-right">
                                                 <p className="text-xs text-slate-400 line-through">R$ {Number(a.valor_aquisicao).toFixed(2).replace('.',',')}</p>
                                                 <p className="text-sm font-black text-rose-600">R$ {valorResidual.toFixed(2).replace('.',',')}</p>
+                                                <p className="text-[9px] text-slate-400 uppercase mt-0.5">Depreciação {a.taxa_depreciacao_anual}% a.a.</p>
                                             </td>
                                             <td className="p-4 text-center">
                                                 <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -700,7 +710,7 @@ export default function GestaoPatrimonio() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: SERVIÇOS E CONTRATOS (Não mexemos, mantém igual) */}
+        {/* ABA: SERVIÇOS E CONTRATOS */}
         {/* ========================================================================= */}
         {!ativoSelecionado && abaAtiva === "servicos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
