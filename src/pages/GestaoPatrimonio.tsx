@@ -102,18 +102,25 @@ export default function GestaoPatrimonio() {
     setSalvando(true);
     try {
         const payload = { ...formAtivo, valor_aquisicao: parseFloat(formAtivo.valor_aquisicao), taxa_depreciacao_anual: parseFloat(formAtivo.taxa_depreciacao_anual) || 0 };
-        await supabase.from('adm_ativos_fisicos').insert([payload]);
+        const { error } = await supabase.from('adm_ativos_fisicos').insert([payload]);
+        
+        if (error) throw error; // Trava de erro inserida
+        
         alert("Ativo cadastrado com sucesso!");
         setMostrarFormAtivo(false);
         setFormAtivo(defaultFormAtivo);
         fetchDados();
-    } catch(e:any) { alert(e.message); } finally { setSalvando(false); }
+    } catch(e:any) { alert("Erro ao salvar ativo: " + e.message); } finally { setSalvando(false); }
   };
 
   const deletarAtivo = async (id: string) => {
       if(!confirm("Tem certeza que deseja excluir este ativo?")) return;
-      await supabase.from('adm_ativos_fisicos').delete().eq('id', id);
-      fetchDados();
+      const { error } = await supabase.from('adm_ativos_fisicos').delete().eq('id', id);
+      if (error) {
+          alert("Erro ao excluir ativo: " + error.message);
+      } else {
+          fetchDados();
+      }
   };
 
   const calcularValorResidual = (ativo: any) => {
@@ -135,18 +142,25 @@ export default function GestaoPatrimonio() {
             dia_vencimento: parseInt(formServico.dia_vencimento) || 10,
             data_vencimento: formServico.data_vencimento || null 
         };
-        await supabase.from('adm_servicos_estruturais').insert([payload]);
+        const { error } = await supabase.from('adm_servicos_estruturais').insert([payload]);
+        
+        if (error) throw error; // Trava de erro inserida
+
         alert("Serviço/Contrato registrado!");
         setMostrarFormServico(false);
         setFormServico(defaultFormServico);
         fetchDados();
-    } catch(e:any) { alert(e.message); } finally { setSalvando(false); }
+    } catch(e:any) { alert("Erro ao salvar serviço: " + e.message); } finally { setSalvando(false); }
   };
 
   const deletarServico = async (id: string) => {
       if(!confirm("Tem certeza que deseja excluir este serviço?")) return;
-      await supabase.from('adm_servicos_estruturais').delete().eq('id', id);
-      fetchDados();
+      const { error } = await supabase.from('adm_servicos_estruturais').delete().eq('id', id);
+      if (error) {
+          alert("Erro ao excluir serviço: " + error.message);
+      } else {
+          fetchDados();
+      }
   };
 
   // --- INTEGRAÇÃO FINANCEIRO (FACILITIES) ---
@@ -179,7 +193,7 @@ export default function GestaoPatrimonio() {
           });
 
           const { error } = await supabase.from('fin_lancamentos').insert(lancamentosFinanceiros);
-          if (error) throw error;
+          if (error) throw error; // Trava de erro inserida
 
           alert("Lote de Contas a Pagar gerado com sucesso no Módulo Financeiro!");
           setMostrarMotor(false);
@@ -305,7 +319,7 @@ export default function GestaoPatrimonio() {
                                         <label className="text-xs font-bold text-slate-500 uppercase">Status Físico</label>
                                         <Select value={formAtivo.status} onValueChange={v => setFormAtivo({...formAtivo, status: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent className="z-[9999]">
+                                            <SelectContent className="bg-white z-50">
                                                 <SelectItem value="Ativo">Ativo (Em uso)</SelectItem>
                                                 <SelectItem value="Em Manutenção">Em Manutenção</SelectItem>
                                                 <SelectItem value="Descartado">Descartado/Sucata</SelectItem>
@@ -442,7 +456,7 @@ export default function GestaoPatrimonio() {
                     {/* FORMULÁRIO NOVO SERVIÇO */}
                     {mostrarFormServico && (
                         <div className="p-6 bg-white border-b border-slate-100 space-y-6">
-                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
+                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Plus className="w-5 h-5"/> Novo Contrato de Serviço</h3>
                             
                             {/* BLOCO 1: IDENTIFICAÇÃO SERVIÇO */}
                             <div className="space-y-4 relative z-20">
