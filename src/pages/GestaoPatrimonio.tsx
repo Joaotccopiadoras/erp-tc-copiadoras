@@ -197,7 +197,6 @@ export default function GestaoPatrimonio() {
                     </div>
                 </div>
 
-                {/* REMOVIDO o overflow-hidden do wrapper principal para que o SelectContent possa sobrepor livremente */}
                 <div className="bg-white rounded-xl border shadow-sm">
                     <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50 rounded-t-xl">
                         <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaAtivos} onChange={e => setBuscaAtivos(e.target.value)} placeholder="Buscar ativo por descrição, placa ou S/N..." className="pl-9 bg-white" /></div>
@@ -209,17 +208,16 @@ export default function GestaoPatrimonio() {
                             <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2"><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</h3>
                             
                             {/* BLOCO 1: IDENTIFICAÇÃO DO BEM */}
-                            {/* z-20 garante que o Select aberto neste bloco sobreponha o bloco 2 */}
-                            <div className="space-y-4 relative z-20">
+                            <div className="space-y-4">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Tag className="w-4 h-4 text-indigo-500"/> 1. Identificação Geral</h4>
                                 
-                                {/* Mudança para gap-6 e max 3 colunas para dar respiro aos textos */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                {/* Removido bg-slate-50/50 e relative para evitar conflito de z-index */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
                                         <Select value={formAtivo.categoria} onValueChange={v => setFormAtivo({...formAtivo, categoria: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent className="z-[9999]">
+                                            <SelectContent className="bg-white z-50">
                                                 <SelectItem value="Veículos">Veículos (Frota)</SelectItem>
                                                 <SelectItem value="TI / Informática">TI / Informática</SelectItem>
                                                 <SelectItem value="Ar-Condicionado">Ar-Condicionado</SelectItem>
@@ -247,9 +245,9 @@ export default function GestaoPatrimonio() {
                             </div>
 
                             {/* BLOCO 2: FINANCEIRO E ALOCAÇÃO */}
-                            <div className="space-y-4 relative z-10">
+                            <div className="space-y-4">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500"/> 2. Financeiro e Alocação</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Data Aquisição *</label>
                                         <Input type="date" value={formAtivo.data_aquisicao} onChange={e => setFormAtivo({...formAtivo, data_aquisicao: e.target.value})} className="bg-white" />
@@ -275,7 +273,7 @@ export default function GestaoPatrimonio() {
                                         <label className="text-xs font-bold text-slate-500 uppercase">Status Físico</label>
                                         <Select value={formAtivo.status} onValueChange={v => setFormAtivo({...formAtivo, status: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent className="z-[9999]">
+                                            <SelectContent className="bg-white z-50">
                                                 <SelectItem value="Ativo">Ativo (Em uso)</SelectItem>
                                                 <SelectItem value="Em Manutenção">Em Manutenção</SelectItem>
                                                 <SelectItem value="Descartado">Descartado/Sucata</SelectItem>
@@ -293,7 +291,6 @@ export default function GestaoPatrimonio() {
                         </div>
                     )}
 
-                    {/* A tabela sim deve ter overflow-x-auto, sem travar o form de cima */}
                     <div className="overflow-x-auto min-h-[400px]">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -416,14 +413,14 @@ export default function GestaoPatrimonio() {
                             <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Plus className="w-5 h-5"/> Novo Contrato de Serviço</h3>
                             
                             {/* BLOCO 1: IDENTIFICAÇÃO SERVIÇO */}
-                            <div className="space-y-4 relative z-20">
+                            <div className="space-y-4">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Wifi className="w-4 h-4 text-emerald-500"/> 1. Identificação do Serviço</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
                                         <Select value={formServico.categoria} onValueChange={v => setFormServico({...formServico, categoria: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent className="z-[9999]">
+                                            <SelectContent className="bg-white z-50">
                                                 <SelectItem value="Internet/Telefonia">Internet/Telefonia</SelectItem>
                                                 <SelectItem value="Software/Hospedagem">Software/Hospedagem</SelectItem>
                                                 <SelectItem value="Certificado Digital/Registro">Certificados e Registros</SelectItem>
@@ -446,14 +443,14 @@ export default function GestaoPatrimonio() {
                             </div>
                             
                             {/* BLOCO 2: CONDIÇÕES DE PAGAMENTO */}
-                            <div className="space-y-4 relative z-10">
+                            <div className="space-y-4">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Landmark className="w-4 h-4 text-emerald-500"/> 2. Condições de Pagamento e Vencimento</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Periodicidade *</label>
                                         <Select value={formServico.periodicidade} onValueChange={v => setFormServico({...formServico, periodicidade: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent className="z-[9999]">
+                                            <SelectContent className="bg-white z-50">
                                                 <SelectItem value="Mensal">Mensal</SelectItem>
                                                 <SelectItem value="Anual">Anual</SelectItem>
                                                 <SelectItem value="Sob Demanda">Sob Demanda (Avulso)</SelectItem>
