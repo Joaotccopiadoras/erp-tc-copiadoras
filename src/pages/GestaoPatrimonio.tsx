@@ -179,14 +179,14 @@ export default function GestaoPatrimonio() {
   const totalPatrimonioResidual = ativos.reduce((acc, a) => acc + calcularValorResidual(a), 0);
   const custoMensalServicos = servicos.filter(s => s.status === 'Ativo' && s.periodicidade === 'Mensal').reduce((acc, s) => acc + Number(s.valor_custo), 0);
 
-  return (
+return (
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
         {/* cabecalho */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Serviços de Terceiros</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Facilities</h1>
             <p className="text-slate-500">Controle de bens físicos (ativos), infraestrutura e serviços da empresa.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
@@ -195,11 +195,10 @@ export default function GestaoPatrimonio() {
           </div>
         </div>
 
-        {/* aba ativos fisicos */}
+        {/* aba ativos */}
         {abaAtiva === "ativos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
                 
-                {/* dashboard dos ativos */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
                         <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Laptop className="w-6 h-6"/></div>
@@ -215,54 +214,92 @@ export default function GestaoPatrimonio() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50">
+                <div className="bg-white rounded-xl border shadow-sm">
+                    <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50 rounded-t-xl">
                         <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaAtivos} onChange={e => setBuscaAtivos(e.target.value)} placeholder="Buscar ativo por descrição, placa ou S/N..." className="pl-9 bg-white" /></div>
                         <Button onClick={() => setMostrarFormAtivo(!mostrarFormAtivo)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"><Plus className="w-4 h-4"/> Novo Ativo Físico</Button>
                     </div>
 
-                   {mostrarFormAtivo && (
-                        <div className="p-6 bg-indigo-50/50 border-b border-indigo-100 space-y-6">
+                    {mostrarFormAtivo && (
+                        <div className="p-6 bg-white border-b border-slate-100 space-y-6">
                             <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2"><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</h3>
                             
-                            {/* identificacao do objeto */}
-                            <div className="space-y-4">
+                            {/* identificaca do objeto */}
+                            <div className="space-y-4 relative z-20">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Tag className="w-4 h-4 text-indigo-500"/> 1. Identificação Geral</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border shadow-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
                                         <Select value={formAtivo.categoria} onValueChange={v => setFormAtivo({...formAtivo, categoria: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent><SelectItem value="Veículos">Veículos (Frota)</SelectItem><SelectItem value="TI / Informática">TI / Informática</SelectItem><SelectItem value="Ar-Condicionado">Ar-Condicionado</SelectItem><SelectItem value="Móveis">Móveis e Estofados</SelectItem><SelectItem value="Eletrodomésticos">Eletrodomésticos</SelectItem><SelectItem value="Ferramentas">Ferramentas</SelectItem><SelectItem value="Miscelânea">Outros (Miscelânea)</SelectItem></SelectContent>
+                                            <SelectContent className="z-[9999]">
+                                                <SelectItem value="Veículos">Veículos (Frota)</SelectItem>
+                                                <SelectItem value="TI / Informática">TI / Informática</SelectItem>
+                                                <SelectItem value="Ar-Condicionado">Ar-Condicionado</SelectItem>
+                                                <SelectItem value="Móveis">Móveis e Estofados</SelectItem>
+                                                <SelectItem value="Eletrodomésticos">Eletrodomésticos</SelectItem>
+                                                <SelectItem value="Ferramentas">Ferramentas</SelectItem>
+                                                <SelectItem value="Miscelânea">Outros (Miscelânea)</SelectItem>
+                                            </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="space-y-2 lg:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição / Nome do Ativo *</label><Input value={formAtivo.descricao} onChange={e => setFormAtivo({...formAtivo, descricao: e.target.value})} placeholder="Ex: Notebook Dell Inspiron, Ford Ka..." className="bg-white" /></div>
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Marca / Modelo</label><Input value={formAtivo.marca_modelo} onChange={e => setFormAtivo({...formAtivo, marca_modelo: e.target.value})} className="bg-white" /></div>
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">S/N, Placa, MAC (Identif.)</label><Input value={formAtivo.identificacao_extra} onChange={e => setFormAtivo({...formAtivo, identificacao_extra: e.target.value})} className="bg-white font-mono uppercase text-indigo-700" placeholder="Opcional" /></div>
+                                    <div className="space-y-2 lg:col-span-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Descrição / Nome do Ativo *</label>
+                                        <Input value={formAtivo.descricao} onChange={e => setFormAtivo({...formAtivo, descricao: e.target.value})} placeholder="Ex: Notebook Dell Inspiron, Ford Ka..." className="bg-white" />
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Marca / Modelo</label>
+                                        <Input value={formAtivo.marca_modelo} onChange={e => setFormAtivo({...formAtivo, marca_modelo: e.target.value})} className="bg-white" />
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Identificação (S/N, Placa, MAC)</label>
+                                        <Input value={formAtivo.identificacao_extra} onChange={e => setFormAtivo({...formAtivo, identificacao_extra: e.target.value})} className="bg-white font-mono uppercase text-indigo-700" placeholder="Opcional" />
+                                    </div>
                                 </div>
                             </div>
 
                             {/* financeiro */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 relative z-10">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500"/> 2. Financeiro e Alocação</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-white p-4 rounded-lg border shadow-sm">
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Aquisição *</label><Input type="date" value={formAtivo.data_aquisicao} onChange={e => setFormAtivo({...formAtivo, data_aquisicao: e.target.value})} className="bg-white" /></div>
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor de Aquisição (R$) *</label><Input type="number" step="0.01" value={formAtivo.valor_aquisicao} onChange={e => setFormAtivo({...formAtivo, valor_aquisicao: e.target.value})} className="bg-white" /></div>
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">% Depreciação (Ao Ano)</label><Input type="number" value={formAtivo.taxa_depreciacao_anual} onChange={e => setFormAtivo({...formAtivo, taxa_depreciacao_anual: e.target.value})} className="bg-white" /></div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Data Aquisição *</label>
+                                        <Input type="date" value={formAtivo.data_aquisicao} onChange={e => setFormAtivo({...formAtivo, data_aquisicao: e.target.value})} className="bg-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Valor Aquisição (R$) *</label>
+                                        <Input type="number" step="0.01" value={formAtivo.valor_aquisicao} onChange={e => setFormAtivo({...formAtivo, valor_aquisicao: e.target.value})} className="bg-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">% Depreciação (Ao Ano)</label>
+                                        <Input type="number" value={formAtivo.taxa_depreciacao_anual} onChange={e => setFormAtivo({...formAtivo, taxa_depreciacao_anual: e.target.value})} className="bg-white" />
+                                    </div>
 
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Setor Alocado</label><Input value={formAtivo.setor_alocado} onChange={e => setFormAtivo({...formAtivo, setor_alocado: e.target.value})} placeholder="Ex: Recepção, Comercial..." className="bg-white" /></div>
-                                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Responsável (Em posse de)</label><Input value={formAtivo.responsavel} onChange={e => setFormAtivo({...formAtivo, responsavel: e.target.value})} placeholder="Nome do funcionário..." className="bg-white" /></div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Setor Alocado</label>
+                                        <Input value={formAtivo.setor_alocado} onChange={e => setFormAtivo({...formAtivo, setor_alocado: e.target.value})} placeholder="Ex: Recepção" className="bg-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Responsável (Em posse)</label>
+                                        <Input value={formAtivo.responsavel} onChange={e => setFormAtivo({...formAtivo, responsavel: e.target.value})} placeholder="Nome do funcionário..." className="bg-white" />
+                                    </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Status Físico</label>
                                         <Select value={formAtivo.status} onValueChange={v => setFormAtivo({...formAtivo, status: v})}>
                                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                            <SelectContent><SelectItem value="Ativo">Ativo (Em uso)</SelectItem><SelectItem value="Em Manutenção">Em Manutenção</SelectItem><SelectItem value="Descartado">Descartado/Sucata</SelectItem><SelectItem value="Vendido">Vendido</SelectItem></SelectContent>
+                                            <SelectContent className="z-[9999]">
+                                                <SelectItem value="Ativo">Ativo (Em uso)</SelectItem>
+                                                <SelectItem value="Em Manutenção">Em Manutenção</SelectItem>
+                                                <SelectItem value="Descartado">Descartado/Sucata</SelectItem>
+                                                <SelectItem value="Vendido">Vendido</SelectItem>
+                                            </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-2 pt-4 border-t border-indigo-100">
+                            <div className="flex justify-end gap-2 pt-4">
                                 <Button variant="outline" onClick={() => setMostrarFormAtivo(false)}>Cancelar</Button>
                                 <Button onClick={salvarAtivo} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md">Salvar Ativo</Button>
                             </div>
@@ -272,7 +309,7 @@ export default function GestaoPatrimonio() {
                     <div className="overflow-x-auto min-h-[400px]">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                                <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider border-t border-slate-200">
                                     <th className="p-4 font-semibold border-b text-center w-20">Pat.</th>
                                     <th className="p-4 font-semibold border-b">Descrição / Identificação</th>
                                     <th className="p-4 font-semibold border-b">Alocação</th>
@@ -285,7 +322,7 @@ export default function GestaoPatrimonio() {
                                 {ativosFiltrados.length === 0 ? <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum ativo cadastrado.</td></tr> : (
                                     ativosFiltrados.map(a => {
                                         const valorResidual = calcularValorResidual(a);
-                                        const iconeCat = a.categoria === 'Veículos' ? <Car className="w-4 h-4"/> : a.categoria === 'TI / Computadores' ? <Laptop className="w-4 h-4"/> : a.categoria === 'Móveis' ? <Sofa className="w-4 h-4"/> : <Building className="w-4 h-4"/>;
+                                        const iconeCat = a.categoria === 'Veículos' ? <Car className="w-4 h-4"/> : a.categoria === 'TI / Informática' ? <Laptop className="w-4 h-4"/> : a.categoria === 'Móveis' ? <Sofa className="w-4 h-4"/> : <Building className="w-4 h-4"/>;
 
                                         return (
                                         <tr key={a.id} className="hover:bg-slate-50 transition-colors">
@@ -348,8 +385,8 @@ export default function GestaoPatrimonio() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50">
+                <div className="bg-white rounded-xl border shadow-sm">
+                    <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50 rounded-t-xl">
                         <div className="relative w-full max-w-sm"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaServicos} onChange={e => setBuscaServicos(e.target.value)} placeholder="Buscar serviço ou fornecedor..." className="pl-9 bg-white" /></div>
                         <div className="flex gap-2">
                             <Button onClick={() => setMostrarMotor(!mostrarMotor)} variant="outline" className="text-indigo-700 border-indigo-200 hover:bg-indigo-50 gap-2"><Landmark className="w-4 h-4"/> Gerar Contas a Pagar (Mês)</Button>
@@ -385,34 +422,67 @@ export default function GestaoPatrimonio() {
 
                     {/* formulario novo servico */}
                     {mostrarFormServico && (
-                        <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 space-y-6">
-                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
+                        <div className="p-6 bg-white border-b border-slate-100 space-y-6">
+                            <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Plus className="w-5 h-5"/> Novo Contrato de Serviço</h3>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border shadow-sm">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
-                                    <Select value={formServico.categoria} onValueChange={v => setFormServico({...formServico, categoria: v})}>
-                                        <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent><SelectItem value="Internet/Telefonia">Internet/Telefonia</SelectItem><SelectItem value="Software/Hospedagem">Software/Hospedagem</SelectItem><SelectItem value="Certificado Digital/Registro">Certificados e Registros</SelectItem><SelectItem value="Segurança/Alarmes">Segurança/Alarmes</SelectItem><SelectItem value="Elétrica/Hidráulica">Manutenção Predial</SelectItem><SelectItem value="Outros">Outros</SelectItem></SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2 lg:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Serviço Contratado *</label><Input value={formServico.descricao} onChange={e => setFormServico({...formServico, descricao: e.target.value})} placeholder="Ex: Link Dedicado 1Gbps, Hospedagem Locaweb..." className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fornecedor</label><Input list="lista-forns-pat" value={formServico.fornecedor_nome} onChange={e => setFormServico({...formServico, fornecedor_nome: e.target.value})} className="bg-white" placeholder="Opcional" />
-                                    <datalist id="lista-forns-pat">{fornecedores.map(f => <option key={f.id} value={f.nome_fantasia}/>)}</datalist>
+                            {/* identificacao servico */}
+                            <div className="space-y-4 relative z-20">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Wifi className="w-4 h-4 text-emerald-500"/> 1. Identificação do Serviço</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
+                                        <Select value={formServico.categoria} onValueChange={v => setFormServico({...formServico, categoria: v})}>
+                                            <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
+                                            <SelectContent className="z-[9999]">
+                                                <SelectItem value="Internet/Telefonia">Internet/Telefonia</SelectItem>
+                                                <SelectItem value="Software/Hospedagem">Software/Hospedagem</SelectItem>
+                                                <SelectItem value="Certificado Digital/Registro">Certificados e Registros</SelectItem>
+                                                <SelectItem value="Segurança/Alarmes">Segurança/Alarmes</SelectItem>
+                                                <SelectItem value="Elétrica/Hidráulica">Manutenção Predial</SelectItem>
+                                                <SelectItem value="Outros">Outros</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Serviço Contratado *</label>
+                                        <Input value={formServico.descricao} onChange={e => setFormServico({...formServico, descricao: e.target.value})} placeholder="Ex: Link Dedicado 1Gbps, Hospedagem Locaweb..." className="bg-white" />
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-3">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Fornecedor</label>
+                                        <Input list="lista-forns-pat" value={formServico.fornecedor_nome} onChange={e => setFormServico({...formServico, fornecedor_nome: e.target.value})} className="bg-white" placeholder="Opcional" />
+                                        <datalist id="lista-forns-pat">{fornecedores.map(f => <option key={f.id} value={f.nome_fantasia}/>)}</datalist>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-white p-4 rounded-lg border shadow-sm">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase">Periodicidade *</label>
-                                    <Select value={formServico.periodicidade} onValueChange={v => setFormServico({...formServico, periodicidade: v})}>
-                                        <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                        <SelectContent><SelectItem value="Mensal">Mensal</SelectItem><SelectItem value="Anual">Anual</SelectItem><SelectItem value="Sob Demanda">Sob Demanda (Avulso)</SelectItem></SelectContent>
-                                    </Select>
+                            {/* condicoes de pagamento */}
+                            <div className="space-y-4 relative z-10">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Landmark className="w-4 h-4 text-emerald-500"/> 2. Condições de Pagamento e Vencimento</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Periodicidade *</label>
+                                        <Select value={formServico.periodicidade} onValueChange={v => setFormServico({...formServico, periodicidade: v})}>
+                                            <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
+                                            <SelectContent className="z-[9999]">
+                                                <SelectItem value="Mensal">Mensal</SelectItem>
+                                                <SelectItem value="Anual">Anual</SelectItem>
+                                                <SelectItem value="Sob Demanda">Sob Demanda (Avulso)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Custo (R$)</label>
+                                        <Input type="number" step="0.01" value={formServico.valor_custo} onChange={e => setFormServico({...formServico, valor_custo: e.target.value})} className="bg-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-emerald-600 uppercase">Dia Vencimento (Mês)</label>
+                                        <Input type="number" min="1" max="31" value={formServico.dia_vencimento} onChange={e => setFormServico({...formServico, dia_vencimento: e.target.value})} className="bg-white border-emerald-300 font-bold" placeholder="Ex: 10" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">Data Fim Contrato</label>
+                                        <Input type="date" value={formServico.data_vencimento} onChange={e => setFormServico({...formServico, data_vencimento: e.target.value})} className="bg-white" />
+                                    </div>
                                 </div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Custo (R$)</label><Input type="number" step="0.01" value={formServico.valor_custo} onChange={e => setFormServico({...formServico, valor_custo: e.target.value})} className="bg-white" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-emerald-600 uppercase">Dia Vencimento (Mês)</label><Input type="number" min="1" max="31" value={formServico.dia_vencimento} onChange={e => setFormServico({...formServico, dia_vencimento: e.target.value})} className="bg-white border-emerald-300 font-bold" placeholder="Ex: 10" /></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Fim Contrato</label><Input type="date" value={formServico.data_vencimento} onChange={e => setFormServico({...formServico, data_vencimento: e.target.value})} className="bg-white" /></div>
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4 border-t border-emerald-100">
@@ -425,7 +495,7 @@ export default function GestaoPatrimonio() {
                     <div className="overflow-x-auto min-h-[400px]">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                                <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider border-t border-slate-200">
                                     <th className="p-4 font-semibold border-b">Serviço / Estrutura</th>
                                     <th className="p-4 font-semibold border-b text-center">Status</th>
                                     <th className="p-4 font-semibold border-b text-center">Frequência</th>
