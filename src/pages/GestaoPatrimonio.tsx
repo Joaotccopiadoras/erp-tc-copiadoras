@@ -1,17 +1,35 @@
+//imports react
 import { useState, useEffect } from "react";
+import { 
+    AlertTriangle,
+    Building,
+    Calculator,
+    Car,
+    CheckCircle2,
+    FileBadge,
+    Landmark,
+    Laptop,
+    Plus,
+    Search,
+    Server,
+    Shield,
+    Sofa,
+    Trash2,
+    Wifi,
+    Wrench } from "lucide-react";
+//imports componentes
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building, Laptop, Car, Shield, Wifi, FileBadge, Wrench, Search, Plus, Calculator, AlertTriangle, Server, Sofa, Trash2, Landmark, CheckCircle2 } from "lucide-react";
+//imports integracoes
 import { supabase } from "@/integrations/supabase/client";
 
+//exportacao da funcao
 export default function GestaoPatrimonio() {
   const [abaAtiva, setAbaAtiva] = useState<"ativos" | "servicos">("ativos");
 
-  // ==========================================
-  // ESTADOS: ATIVOS FÍSICOS
-  // ==========================================
+//estados ativos
   const [ativos, setAtivos] = useState<any[]>([]);
   const [buscaAtivos, setBuscaAtivos] = useState("");
   const [mostrarFormAtivo, setMostrarFormAtivo] = useState(false);
@@ -20,9 +38,6 @@ export default function GestaoPatrimonio() {
     data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: ""
   });
 
-  // ==========================================
-  // ESTADOS: SERVIÇOS E MOTOR DE PAGAMENTOS
-  // ==========================================
   const [servicos, setServicos] = useState<any[]>([]);
   const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [catInfraId, setCatInfraId] = useState("");
@@ -34,7 +49,6 @@ export default function GestaoPatrimonio() {
     valor_custo: "", data_vencimento: "", dia_vencimento: "10", status: "Ativo"
   });
 
-  // Motor de Lançamento
   const mesAtualStr = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
   const [mostrarMotor, setMostrarMotor] = useState(false);
   const [mesLancamento, setMesLancamento] = useState(mesAtualStr);
@@ -60,7 +74,7 @@ export default function GestaoPatrimonio() {
     }
   };
 
-  // --- LÓGICA DE ATIVOS ---
+  // logica ativos
   const salvarAtivo = async () => {
     if (!formAtivo.descricao || !formAtivo.valor_aquisicao || !formAtivo.data_aquisicao) return alert("Descrição, Data e Valor são obrigatórios.");
     setSalvando(true);
@@ -88,7 +102,7 @@ export default function GestaoPatrimonio() {
       return Math.max(0, residual);
   };
 
-  // --- LÓGICA DE SERVIÇOS E MOTOR DE PAGAMENTO ---
+//logica servicos
   const salvarServico = async () => {
     if (!formServico.descricao) return alert("A descrição é obrigatória.");
     setSalvando(true);
@@ -113,7 +127,7 @@ export default function GestaoPatrimonio() {
       fetchDados();
   };
 
-  // INTEGRAÇÃO FINANCEIRA: Gerar Lote de Contas a Pagar
+//integracao com financeiro
   const processarLancamentosDoMes = async () => {
       if (!mesLancamento || mesLancamento.length !== 7) return alert("Informe o mês no formato MM/AAAA.");
       
@@ -167,7 +181,7 @@ export default function GestaoPatrimonio() {
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
-        {/* CABEÇALHO */}
+        {/* cabecalho */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Facilities</h1>
@@ -179,13 +193,11 @@ export default function GestaoPatrimonio() {
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* ABA: ATIVOS FÍSICOS (PATRIMÔNIO) */}
-        {/* ========================================================================= */}
+        {/* aba ativos fisicos */}
         {abaAtiva === "ativos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
                 
-                {/* DASHBOARD ATIVOS */}
+                {/* dashboard dos ativos */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
                         <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><Laptop className="w-6 h-6"/></div>
@@ -296,13 +308,11 @@ export default function GestaoPatrimonio() {
             </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* ABA: SERVIÇOS E ESTRUTURA (FACILITIES) COM MOTOR FINANCEIRO */}
-        {/* ========================================================================= */}
+        {/* aba servicos */}
         {abaAtiva === "servicos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
                 
-                {/* DASHBOARD SERVIÇOS */}
+                {/* dashboard servicos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 border-l-4 border-l-emerald-500">
                         <div className="bg-emerald-100 p-3 rounded-full text-emerald-600"><Server className="w-6 h-6"/></div>
@@ -334,7 +344,7 @@ export default function GestaoPatrimonio() {
                         </div>
                     </div>
 
-                    {/* MOTOR DE PAGAMENTO FINANCEIRO EM LOTE */}
+                    {/* pagamento financeiro em lote */}
                     {mostrarMotor && (
                         <div className="p-6 bg-indigo-50 border-b border-indigo-200 space-y-4 animate-in slide-in-from-top-4">
                             <div className="flex justify-between items-center">
@@ -360,7 +370,7 @@ export default function GestaoPatrimonio() {
                         </div>
                     )}
 
-                    {/* FORMULÁRIO DE NOVO SERVIÇO */}
+                    {/* formulario novo servico */}
                     {mostrarFormServico && (
                         <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 space-y-4">
                             <h3 className="font-bold text-emerald-800 flex items-center gap-2 mb-4"><Wifi className="w-5 h-5"/> Novo Contrato de Serviço</h3>
