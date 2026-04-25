@@ -1,37 +1,21 @@
-//imports react
 import { useState, useEffect } from "react";
 import { 
-    AlertTriangle,
-    Building,
-    Calculator,
-    Car,
-    CheckCircle2,
-    FileBadge,
-    Landmark,
-    Laptop,
-    MapPin,
-    Plus,
-    Search,
-    Server,
-    Shield,
-    Sofa,
-    Tag,
-    Trash2,
-    Wifi,
-    Wrench } from "lucide-react";
-//imports componentes
+    AlertTriangle, Building, Calculator, Car, CheckCircle2, FileBadge, 
+    Landmark, Laptop, MapPin, Plus, Search, Server, Shield, Sofa, 
+    Tag, Trash2, Wifi, Wrench 
+} from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-//imports integracoes
 import { supabase } from "@/integrations/supabase/client";
 
-//exportacao da funcao
 export default function GestaoPatrimonio() {
   const [abaAtiva, setAbaAtiva] = useState<"ativos" | "servicos">("ativos");
 
-//estados ativos
+  // ==========================================
+  // ESTADOS: ATIVOS FÍSICOS
+  // ==========================================
   const [ativos, setAtivos] = useState<any[]>([]);
   const [buscaAtivos, setBuscaAtivos] = useState("");
   const [mostrarFormAtivo, setMostrarFormAtivo] = useState(false);
@@ -40,6 +24,9 @@ export default function GestaoPatrimonio() {
     data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: ""
   });
 
+  // ==========================================
+  // ESTADOS: SERVIÇOS E CONTRATOS
+  // ==========================================
   const [servicos, setServicos] = useState<any[]>([]);
   const [fornecedores, setFornecedores] = useState<any[]>([]);
   const [catInfraId, setCatInfraId] = useState("");
@@ -76,7 +63,7 @@ export default function GestaoPatrimonio() {
     }
   };
 
-  // logica ativos
+  // --- LÓGICA ATIVOS ---
   const salvarAtivo = async () => {
     if (!formAtivo.descricao || !formAtivo.valor_aquisicao || !formAtivo.data_aquisicao) return alert("Descrição, Data e Valor são obrigatórios.");
     setSalvando(true);
@@ -85,7 +72,7 @@ export default function GestaoPatrimonio() {
         await supabase.from('adm_ativos_fisicos').insert([payload]);
         alert("Ativo cadastrado com sucesso!");
         setMostrarFormAtivo(false);
-        setFormAtivo({ categoria: "TI / Computadores", descricao: "", marca_modelo: "", identificacao_extra: "", data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: "" });
+        setFormAtivo({ categoria: "TI / Informática", descricao: "", marca_modelo: "", identificacao_extra: "", data_aquisicao: "", valor_aquisicao: "", taxa_depreciacao_anual: "20", status: "Ativo", setor_alocado: "", responsavel: "" });
         fetchDados();
     } catch(e:any) { alert(e.message); } finally { setSalvando(false); }
   };
@@ -104,7 +91,7 @@ export default function GestaoPatrimonio() {
       return Math.max(0, residual);
   };
 
-//logica servicos
+  // --- LÓGICA SERVIÇOS ---
   const salvarServico = async () => {
     if (!formServico.descricao) return alert("A descrição é obrigatória.");
     setSalvando(true);
@@ -129,7 +116,7 @@ export default function GestaoPatrimonio() {
       fetchDados();
   };
 
-//integracao com financeiro
+  // --- INTEGRAÇÃO FINANCEIRO (FACILITIES) ---
   const processarLancamentosDoMes = async () => {
       if (!mesLancamento || mesLancamento.length !== 7) return alert("Informe o mês no formato MM/AAAA.");
       
@@ -143,9 +130,7 @@ export default function GestaoPatrimonio() {
           const [mes, ano] = mesLancamento.split('/');
           
           const lancamentosFinanceiros = servicosAtivos.map(s => {
-              // montagem data vencimento
               const dataVenc = new Date(Number(ano), Number(mes) - 1, s.dia_vencimento || 10);
-              
               return {
                   tipo: 'Despesa',
                   descricao: `${s.categoria}: ${s.descricao} - Ref. ${mesLancamento}`,
@@ -165,11 +150,7 @@ export default function GestaoPatrimonio() {
 
           alert("Lote de Contas a Pagar gerado com sucesso no Módulo Financeiro!");
           setMostrarMotor(false);
-      } catch (e: any) {
-          alert("Erro ao integrar com financeiro: " + e.message);
-      } finally {
-          setProcessando(false);
-      }
+      } catch (e: any) { alert("Erro ao integrar com financeiro: " + e.message); } finally { setProcessando(false); }
   };
 
   const ativosFiltrados = ativos.filter(a => a.descricao.toLowerCase().includes(buscaAtivos.toLowerCase()) || a.identificacao_extra?.toLowerCase().includes(buscaAtivos.toLowerCase()));
@@ -179,11 +160,11 @@ export default function GestaoPatrimonio() {
   const totalPatrimonioResidual = ativos.reduce((acc, a) => acc + calcularValorResidual(a), 0);
   const custoMensalServicos = servicos.filter(s => s.status === 'Ativo' && s.periodicidade === 'Mensal').reduce((acc, s) => acc + Number(s.valor_custo), 0);
 
-return (
+  return (
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
-        {/* cabecalho */}
+        {/* CABEÇALHO */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Building className="w-6 h-6 text-indigo-600" /> Gestão de Patrimônio e Facilities</h1>
@@ -195,7 +176,9 @@ return (
           </div>
         </div>
 
-        {/* aba ativos */}
+        {/* ========================================================================= */}
+        {/* ABA: ATIVOS FÍSICOS */}
+        {/* ========================================================================= */}
         {abaAtiva === "ativos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
                 
@@ -214,6 +197,7 @@ return (
                     </div>
                 </div>
 
+                {/* REMOVIDO o overflow-hidden do wrapper principal para que o SelectContent possa sobrepor livremente */}
                 <div className="bg-white rounded-xl border shadow-sm">
                     <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50 rounded-t-xl">
                         <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaAtivos} onChange={e => setBuscaAtivos(e.target.value)} placeholder="Buscar ativo por descrição, placa ou S/N..." className="pl-9 bg-white" /></div>
@@ -224,9 +208,12 @@ return (
                         <div className="p-6 bg-white border-b border-slate-100 space-y-6">
                             <h3 className="font-bold text-indigo-800 flex items-center gap-2 border-b border-indigo-100 pb-2"><Plus className="w-5 h-5"/> Registrar Novo Bem Físico</h3>
                             
-                            {/* identificaca do objeto */}
+                            {/* BLOCO 1: IDENTIFICAÇÃO DO BEM */}
+                            {/* z-20 garante que o Select aberto neste bloco sobreponha o bloco 2 */}
                             <div className="space-y-4 relative z-20">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Tag className="w-4 h-4 text-indigo-500"/> 1. Identificação Geral</h4>
+                                
+                                {/* Mudança para gap-6 e max 3 colunas para dar respiro aos textos */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase">Categoria *</label>
@@ -259,7 +246,7 @@ return (
                                 </div>
                             </div>
 
-                            {/* financeiro */}
+                            {/* BLOCO 2: FINANCEIRO E ALOCAÇÃO */}
                             <div className="space-y-4 relative z-10">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-500"/> 2. Financeiro e Alocação</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
@@ -306,6 +293,7 @@ return (
                         </div>
                     )}
 
+                    {/* A tabela sim deve ter overflow-x-auto, sem travar o form de cima */}
                     <div className="overflow-x-auto min-h-[400px]">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -359,7 +347,9 @@ return (
             </div>
         )}
 
-        {/* aba servicos de terceiros */}
+        {/* ========================================================================= */}
+        {/* ABA: SERVIÇOS E CONTRATOS */}
+        {/* ========================================================================= */}
         {abaAtiva === "servicos" && (
             <div className="space-y-6 animate-in fade-in duration-200">
                 
@@ -394,7 +384,7 @@ return (
                         </div>
                     </div>
 
-                    {/* pagamento em lote */}
+                    {/* PAGAMENTO EM LOTE */}
                     {mostrarMotor && (
                         <div className="p-6 bg-indigo-50 border-b border-indigo-200 space-y-4 animate-in slide-in-from-top-4">
                             <div className="flex justify-between items-center">
@@ -420,12 +410,12 @@ return (
                         </div>
                     )}
 
-                    {/* formulario novo servico */}
+                    {/* FORMULÁRIO NOVO SERVIÇO */}
                     {mostrarFormServico && (
                         <div className="p-6 bg-white border-b border-slate-100 space-y-6">
                             <h3 className="font-bold text-emerald-800 flex items-center gap-2 border-b border-emerald-100 pb-2"><Plus className="w-5 h-5"/> Novo Contrato de Serviço</h3>
                             
-                            {/* identificacao servico */}
+                            {/* BLOCO 1: IDENTIFICAÇÃO SERVIÇO */}
                             <div className="space-y-4 relative z-20">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Wifi className="w-4 h-4 text-emerald-500"/> 1. Identificação do Serviço</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
@@ -455,7 +445,7 @@ return (
                                 </div>
                             </div>
                             
-                            {/* condicoes de pagamento */}
+                            {/* BLOCO 2: CONDIÇÕES DE PAGAMENTO */}
                             <div className="space-y-4 relative z-10">
                                 <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Landmark className="w-4 h-4 text-emerald-500"/> 2. Condições de Pagamento e Vencimento</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
