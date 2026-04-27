@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, 
   Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, 
-  Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown 
+  Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, PackageSearch 
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -16,6 +17,7 @@ import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 export default function Financeiro() {
+  const navigate = useNavigate();
   const [abaAtiva, setAbaAtiva] = useState<"dashboard" | "pagar" | "receber">("pagar");
   
   // Estados do Banco de Dados
@@ -332,15 +334,16 @@ export default function Financeiro() {
       doc.setFont("helvetica", "normal");
       doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 280, 26, { align: "right" });
 
-      // Ordem rigorosa
+      // Ordem rigorosa: Emissão, Fornecedor, Documento, Vencimento, Pagamento, Status, Valor, Classificação, Descrição
       const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor", "Classificação", "Descrição"];
       
       const tableRows: any[] = [];
       let currentGroupValue: string | null = null;
-      let currentGroupSubtotal = 0; // Variável acumuladora para o subtotal do grupo
+      let currentGroupSubtotal = 0;
 
       lancamentosFiltrados.forEach(l => {
-        // Lógica de Separação em Grupos
+        
+        // Lógica de Separação em Grupos Baseada na Ordenação Ativa
         if (sortConfig) {
             let rowGroupValue = "";
             switch (sortConfig.key) {
@@ -355,10 +358,8 @@ export default function Financeiro() {
                 case 'descricao': rowGroupValue = l.descricao || 'Sem Descrição'; break;
             }
 
-            // Se o grupo mudou
             if (rowGroupValue !== currentGroupValue) {
                 
-                // Antes de criar o novo grupo, imprime o subtotal do grupo anterior (se não for o primeiro loop)
                 if (currentGroupValue !== null) {
                     tableRows.push([
                         { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
@@ -367,7 +368,6 @@ export default function Financeiro() {
                     ]);
                 }
 
-                // Cria o cabeçalho do novo grupo
                 tableRows.push([{
                     content: `${getSortLabel(sortConfig.key).toUpperCase()}: ${rowGroupValue}`,
                     colSpan: 9,
@@ -375,16 +375,14 @@ export default function Financeiro() {
                 }]);
                 
                 currentGroupValue = rowGroupValue;
-                currentGroupSubtotal = 0; // Reseta o somador
+                currentGroupSubtotal = 0; 
             }
         }
 
-        // Adiciona ao Subtotal do Grupo Atual
         if (sortConfig) {
             currentGroupSubtotal += Number(l.valor) || 0;
         }
 
-        // Adição dos Dados na Linha Normal
         tableRows.push([
           l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
           l.log_fornecedores?.nome_fantasia || '-',
@@ -398,7 +396,6 @@ export default function Financeiro() {
         ]);
       });
 
-      // Ao terminar o loop, precisamos imprimir o subtotal do ÚLTIMO grupo
       if (sortConfig && currentGroupValue !== null) {
           tableRows.push([
               { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
@@ -567,7 +564,7 @@ export default function Financeiro() {
             </div>
           )}
 
-          {/* TABELA */}
+          {/* TABELA (Com a nova ordem solicitada) */}
           <div className="overflow-x-auto min-h-[400px] relative z-0">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -625,7 +622,14 @@ export default function Financeiro() {
                       {/* 3. Documento */}
                       <td className="p-4 align-top whitespace-nowrap">
                         {lanc.documento_origem ? (
-                            <span className="text-[11px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center w-fit gap-1"><FileText className="w-3 h-3"/> {lanc.documento_origem}</span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[11px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center w-fit gap-1"><FileText className="w-3 h-3"/> {lanc.documento_origem}</span>
+                                {isPagar && (
+                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/logistica?busca=${encodeURIComponent(lanc.documento_origem)}`)} className="h-6 w-6 text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 p-0" title="Ver Nota Fiscal na Logística">
+                                        <PackageSearch className="w-3.5 h-3.5"/>
+                                    </Button>
+                                )}
+                            </div>
                         ) : '--'}
                       </td>
 
