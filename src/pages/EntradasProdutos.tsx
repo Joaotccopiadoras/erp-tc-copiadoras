@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ type FaturaXML = {
 };
 
 export default function Entradas() {
+  const location = useLocation();
   const [abaAtiva, setAbaAtiva] = useState<"receber" | "historico">("receber");
   const [modo, setModo] = useState<"formulario" | "bipagem" | "detalhe_historico">("formulario");
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export default function Entradas() {
   const [valorCofins, setValorCofins] = useState(0);
   const [valorOutros, setValorOutros] = useState(0);
   
-  // NOVO: INTEGRAÇÃO FINANCEIRA (AGORA COM MÚLTIPLAS PARCELAS)
+  // INTEGRAÇÃO FINANCEIRA
   const [gerarFinanceiro, setGerarFinanceiro] = useState(true);
   const [faturas, setFaturas] = useState<FaturaXML[]>([]);
   const [formaPagamento, setFormaPagamento] = useState("Boleto");
@@ -83,26 +85,46 @@ export default function Entradas() {
   const [itensDocSelecionado, setItensDocSelecionado] = useState<any[]>([]);
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
 
+  // ==========================================
+  // LÓGICA DE NAVEGAÇÃO / INTEGRAÇÃO COM URL
+  // ==========================================
   useEffect(() => {
-    const rascunhoSalvo = sessionStorage.getItem("entradas_rascunho");
-    if (rascunhoSalvo) {
-      try {
-        const draft = JSON.parse(rascunhoSalvo);
-        if (draft) {
-          setEditandoId(draft.editandoId || null); setFornecedorBusca(draft.fornecedorBusca || ""); setFornecedorId(draft.fornecedorId || null);
-          setDocumento(draft.documento || ""); setCfop(draft.cfop || ""); setChaveAcesso(draft.chaveAcesso || ""); setDataEmissao(draft.dataEmissao || "");
-          setLocalDestino(draft.localDestino || ""); setModalidadeFrete(draft.modalidadeFrete || "0 - CIF"); setTransportadoraBusca(draft.transportadoraBusca || "");
-          setTransportadoraId(draft.transportadoraId || null); setCteNumero(draft.cteNumero || ""); setCteChave(draft.cteChave || "");
-          setValorFrete(draft.valorFrete || 0); setValorIcms(draft.valorIcms || 0); setValorIcmsSt(draft.valorIcmsSt || 0);
-          setValorIpi(draft.valorIpi || 0); setValorPis(draft.valorPis || 0); setValorCofins(draft.valorCofins || 0); setValorOutros(draft.valorOutros || 0);
-          setGerarFinanceiro(draft.gerarFinanceiro ?? true); setFaturas(draft.faturas || []); setFormaPagamento(draft.formaPagamento || "Boleto");
-          setCentroCusto(draft.centroCusto || "ShowRoom / Geral"); setCategoriaFinId(draft.categoriaFinId || "");
-          setItens(draft.itens || []);
-          if (draft.modo) setModo(draft.modo);
-        }
-      } catch (e) {}
+    const params = new URLSearchParams(location.search);
+    const buscaViaUrl = params.get("busca");
+    
+    if (buscaViaUrl) {
+      // Se veio da tela Financeiro (ou outra) com parâmetro de busca
+      setAbaAtiva("historico");
+      setBuscaHistorico(buscaViaUrl);
+      fetchHistorico();
+      setModo("formulario");
+      // Limpa os rascunhos para não confundir o usuário
+      sessionStorage.removeItem("entradas_rascunho");
+      
+      // Limpa a URL na barra de endereços silenciosamente para não ficar re-ativando
+      window.history.replaceState(null, '', '/entradasprodutos');
+    } else {
+      // Executa o auto-save padrão caso não haja redirecionamento
+      const rascunhoSalvo = sessionStorage.getItem("entradas_rascunho");
+      if (rascunhoSalvo) {
+        try {
+          const draft = JSON.parse(rascunhoSalvo);
+          if (draft) {
+            setEditandoId(draft.editandoId || null); setFornecedorBusca(draft.fornecedorBusca || ""); setFornecedorId(draft.fornecedorId || null);
+            setDocumento(draft.documento || ""); setCfop(draft.cfop || ""); setChaveAcesso(draft.chaveAcesso || ""); setDataEmissao(draft.dataEmissao || "");
+            setLocalDestino(draft.localDestino || ""); setModalidadeFrete(draft.modalidadeFrete || "0 - CIF"); setTransportadoraBusca(draft.transportadoraBusca || "");
+            setTransportadoraId(draft.transportadoraId || null); setCteNumero(draft.cteNumero || ""); setCteChave(draft.cteChave || "");
+            setValorFrete(draft.valorFrete || 0); setValorIcms(draft.valorIcms || 0); setValorIcmsSt(draft.valorIcmsSt || 0);
+            setValorIpi(draft.valorIpi || 0); setValorPis(draft.valorPis || 0); setValorCofins(draft.valorCofins || 0); setValorOutros(draft.valorOutros || 0);
+            setGerarFinanceiro(draft.gerarFinanceiro ?? true); setFaturas(draft.faturas || []); setFormaPagamento(draft.formaPagamento || "Boleto");
+            setCentroCusto(draft.centroCusto || "ShowRoom / Geral"); setCategoriaFinId(draft.categoriaFinId || "");
+            setItens(draft.itens || []);
+            if (draft.modo) setModo(draft.modo);
+          }
+        } catch (e) {}
+      }
     }
-  }, []);
+  }, [location]);
 
   useEffect(() => {
     if (abaAtiva === "receber" && modo !== "detalhe_historico") {
@@ -181,7 +203,9 @@ export default function Entradas() {
   };
 
   const abrirDetalhesDocumento = async (doc: any) => {
-    setCarregandoDetalhes(true); setDocSelecionado(doc); setModo("detalhe_historico");
+    setCarregandoDetalhes(true); 
+    setDocSelecionado(doc); 
+    setModo("detalhe_historico");
     const { data, error } = await supabase.from('log_movimentacoes').select(`*, log_produtos(sku, nome), log_locais!local_id(nome)`).eq('documento_id', doc.id);
     if (!error && data) setItensDocSelecionado(data);
     setCarregandoDetalhes(false);
@@ -202,10 +226,7 @@ export default function Entradas() {
       await supabase.from('log_ctes').delete().eq('documento_entrada_id', doc.id);
       await supabase.from('log_numeros_serie').delete().eq('documento_entrada', doc.documento);
       await supabase.from('log_movimentacoes').delete().eq('documento_id', doc.id);
-      
-      // APAGA O FINANCEIRO GERADO SE AINDA ESTIVER PENDENTE
       await supabase.from('fin_lancamentos').delete().eq('documento_origem', doc.documento).eq('status', 'Pendente');
-      
       await supabase.from('log_documentos_entrada').delete().eq('id', doc.id);
 
       alert("Lançamento e financeiro excluídos com sucesso!");
@@ -239,31 +260,24 @@ export default function Entradas() {
       setFornecedorId(doc.fornecedor_id); setFornecedorBusca(doc.fornecedor_texto || "");
       setTransportadoraId(doc.transportadora_id); setTransportadoraBusca(doc.transportadora || "");
       
-      // Puxa info financeira do banco
       const { data: finData } = await supabase.from('fin_lancamentos').select('*').eq('documento_origem', doc.documento).eq('status', 'Pendente').order('data_vencimento', { ascending: true });
       if (finData && finData.length > 0) {
           setGerarFinanceiro(true);
-          const mapFaturas = finData.map((f, i) => ({
-             numero: String(i + 1),
-             vencimento: f.data_vencimento,
-             valor: Number(f.valor)
-          }));
+          const mapFaturas = finData.map((f, i) => ({ numero: String(i + 1), vencimento: f.data_vencimento, valor: Number(f.valor) }));
           setFaturas(mapFaturas);
           setFormaPagamento(finData[0].forma_pagamento || "Boleto");
           setCentroCusto(finData[0].centro_custo || "ShowRoom / Geral");
           setCategoriaFinId(finData[0].categoria_id || "");
       } else {
-          setGerarFinanceiro(false);
-          setFaturas([]);
+          setGerarFinanceiro(false); setFaturas([]);
       }
 
-      setItens(itensMapeados); setAbaAtiva("receber");
+      setItens(itensMapeados); setAbaAtiva("receber"); setModo("formulario");
     } catch (e: any) { alert(e.message); } finally { setCarregandoDetalhes(false); }
   };
 
   const cancelarEdicao = () => { limparFormulario(); setAbaAtiva("historico"); };
 
-  // --- XML MAGIA ---
   const processarXML = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -284,7 +298,6 @@ export default function Entradas() {
       const transCnpj = xmlDoc.querySelector("transporta CNPJ")?.textContent || "";
       const modFreteTag = xmlDoc.querySelector("transp modFrete")?.textContent || "0"; 
 
-      // MAGIA DA DATA DE VENCIMENTO E PARCELAS DO XML
       const dupNodes = xmlDoc.querySelectorAll("cobr dup");
       const novasFaturas: FaturaXML[] = [];
       
@@ -293,19 +306,12 @@ export default function Entradas() {
               const nDup = dup.querySelector("nDup")?.textContent || "";
               const dVenc = dup.querySelector("dVenc")?.textContent || "";
               const vDup = parseFloat(dup.querySelector("vDup")?.textContent || "0");
-              if (dVenc && vDup > 0) {
-                  novasFaturas.push({ numero: nDup, vencimento: dVenc, valor: vDup });
-              }
+              if (dVenc && vDup > 0) novasFaturas.push({ numero: nDup, vencimento: dVenc, valor: vDup });
           });
       }
 
-      if (novasFaturas.length > 0) {
-          setGerarFinanceiro(true);
-          setFaturas(novasFaturas);
-      } else {
-          // Se o fornecedor não enviou as parcelas, deixa a lista vazia (o usuário pode adicionar à mão)
-          setFaturas([]);
-      }
+      if (novasFaturas.length > 0) { setGerarFinanceiro(true); setFaturas(novasFaturas); } 
+      else { setFaturas([]); }
 
       const vFrete = parseFloat(xmlDoc.querySelector("total ICMSTot vFrete")?.textContent || "0");
       const vICMS = parseFloat(xmlDoc.querySelector("total ICMSTot vICMS")?.textContent || "0");
@@ -403,7 +409,7 @@ export default function Entradas() {
     if (!fornecedorBusca || !documento) return alert("Fornecedor e Número da NF são obrigatórios.");
     if (!localDestino) return alert("Selecione o Local de Destino.");
     if (itens.length === 0) return alert("Adicione produtos na entrada.");
-    if (gerarFinanceiro && faturas.length === 0) return alert("Para gerar o Financeiro, você precisa adicionar pelo menos uma parcela na lista.");
+    if (gerarFinanceiro && faturas.length === 0) return alert("Para gerar o Financeiro, adicione parcelas.");
 
     for (let i = 0; i < itens.length; i++) {
       if (itens[i].precisaMapeamento) return alert(`Mapeie o item: "${itens[i].nomeOriginalXML}" antes de salvar.`);
@@ -447,10 +453,8 @@ export default function Entradas() {
          docId = docData.id;
       }
 
-      // INTEGRAÇÃO FINANCEIRA: SALVA EM fin_lancamentos
       if (gerarFinanceiro) {
           const obsFin = `Referência: Lançamento de NF-e Nr. ${documento} | CFOP/Operação: ${cfop || 'N/A'}`;
-          
           const payloadFin = faturas.map((fat, idx) => ({
               tipo: 'Despesa',
               descricao: `NF-e ${documento} (Parc. ${fat.numero || idx+1}) - ${fornecedorBusca.split(']')[1]?.trim() || fornecedorBusca}`,
@@ -464,9 +468,8 @@ export default function Entradas() {
               observacoes: obsFin,
               centro_custo: centroCusto,
               forma_pagamento: formaPagamento,
-              valor_impostos: idx === 0 ? (valorIcms + valorIpi + valorIcmsSt + valorPis + valorCofins) : 0 // Joga os impostos todos na primeira parcela
+              valor_impostos: idx === 0 ? (valorIcms + valorIpi + valorIcmsSt + valorPis + valorCofins) : 0 
           }));
-
           const { error: finError } = await supabase.from('fin_lancamentos').insert(payloadFin);
           if (finError) throw new Error("Erro ao integrar com o Financeiro: " + finError.message);
       }
@@ -489,7 +492,8 @@ export default function Entradas() {
       alert("Entrada registrada e integrada ao Financeiro com sucesso!");
       limparFormulario();
       fetchHistorico();
-    } catch (error: any) { alert("Houve um erro técnico. Nada foi salvo. Motivo: \n" + error.message); } 
+      setAbaAtiva("historico");
+    } catch (error: any) { alert("Houve um erro técnico: \n" + error.message); } 
     finally { setSalvando(false); }
   };
 
@@ -505,14 +509,15 @@ export default function Entradas() {
         <input type="file" accept=".xml" ref={fileInputRef} style={{ display: "none" }} onChange={processarXML} />
 
         <div className="flex border-b border-slate-200">
-          <button onClick={() => setAbaAtiva("receber")} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "receber" ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500"}`}>
+          <button onClick={() => { setAbaAtiva("receber"); setModo("formulario"); }} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "receber" ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500"}`}>
             <div className="flex items-center gap-2"><PackageOpen className="w-4 h-4"/> {editandoId ? "Editando Recebimento" : "Novo Recebimento"}</div>
           </button>
-          <button onClick={() => setAbaAtiva("historico")} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "historico" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>
+          <button onClick={() => { setAbaAtiva("historico"); setModo("formulario"); }} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "historico" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>
             <div className="flex items-center gap-2"><History className="w-4 h-4"/> Histórico de Entradas</div>
           </button>
         </div>
 
+        {/* ABA RECEBER: FORMULÁRIO OU BIPAGEM */}
         {abaAtiva === "receber" && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center">
@@ -523,6 +528,7 @@ export default function Entradas() {
               {modo === "formulario" ? (
                 <div className="flex items-center gap-3">
                   {!editandoId && <Button variant="outline" onClick={limparFormulario} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm"><Eraser className="w-4 h-4" /> Limpar Tela</Button>}
+                  {editandoId && <Button variant="outline" onClick={cancelarEdicao} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm"><X className="w-4 h-4" /> Cancelar Edição</Button>}
                   <Button onClick={() => fileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><FileCode2 className="w-4 h-4" /> Importar XML</Button>
                 </div>
               ) : (<Button variant="outline" onClick={() => setModo("formulario")} className="gap-2"><ArrowLeft className="w-4 h-4"/> Voltar</Button>)}
@@ -572,7 +578,6 @@ export default function Entradas() {
                     </div>
                   </div>
 
-                  {/* NOVO BLOCO: INTEGRAÇÃO FINANCEIRA COM MULTIPLAS PARCELAS */}
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <div className="flex justify-between items-center mb-3 bg-emerald-50/50 p-2 rounded border border-emerald-100">
                       <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2"><Landmark className="w-5 h-5"/> Integração Financeira (Contas a Pagar)</h4>
@@ -609,7 +614,6 @@ export default function Entradas() {
                                 </div>
                             </div>
 
-                            {/* LISTA DE PARCELAS / DUPLICATAS */}
                             <div className="space-y-3 border-t border-emerald-200/60 pt-4">
                                 <div className="flex justify-between items-center">
                                     <label className="text-xs font-bold text-emerald-900 uppercase flex items-center gap-1">
@@ -637,7 +641,6 @@ export default function Entradas() {
                         </div>
                     )}
                   </div>
-
                 </div>
 
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -729,18 +732,24 @@ export default function Entradas() {
           </div>
         )}
 
+        {/* ABA HISTÓRICO */}
         {abaAtiva === "historico" && (
             <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* LISTAGEM PRINCIPAL DO HISTÓRICO */}
             {modo !== "detalhe_historico" && (
               <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                 <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
-                  <div className="relative flex-1 min-w-[200px] max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input placeholder="Buscar..." value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} className="pl-9 bg-white" /></div>
+                  <div className="relative flex-1 min-w-[200px] max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input placeholder="Buscar por NF, fornecedor ou chave..." value={buscaHistorico} onChange={e => setBuscaHistorico(e.target.value)} className="pl-9 bg-white" /></div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
-                        <th className="p-3 font-semibold border-b">Documento</th><th className="p-3 font-semibold border-b">Fornecedor</th><th className="p-3 font-semibold border-b text-right">Valor Total</th><th className="p-3 font-semibold border-b text-center">Ações</th>
+                        <th className="p-3 font-semibold border-b">Documento</th>
+                        <th className="p-3 font-semibold border-b">Fornecedor</th>
+                        <th className="p-3 font-semibold border-b text-right">Valor Total</th>
+                        <th className="p-3 font-semibold border-b text-center">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -749,7 +758,13 @@ export default function Entradas() {
                           <td className="p-3"><p className="font-bold text-slate-800 text-sm">{doc.tipo_documento} {doc.documento}</p></td>
                           <td className="p-3 text-sm text-slate-700">{doc.log_fornecedores?.nome_fantasia || doc.fornecedor_texto}</td>
                           <td className="p-3 text-right font-bold text-emerald-600">R$ {Number(doc.valor_total).toFixed(2).replace('.', ',')}</td>
-                          <td className="p-3 text-center"><div className="flex items-center justify-center gap-1"><Button onClick={() => abrirDetalhesDocumento(doc)} variant="outline" size="icon" className="h-8 w-8 text-slate-600"><Eye className="w-4 h-4"/></Button><Button onClick={() => carregarParaEdicao(doc)} variant="outline" size="icon" className="h-8 w-8 text-amber-600"><Pencil className="w-4 h-4"/></Button><Button onClick={() => excluirEntrada(doc)} variant="outline" size="icon" className="h-8 w-8 text-red-600"><Trash2 className="w-4 h-4"/></Button></div></td>
+                          <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                  <Button onClick={() => abrirDetalhesDocumento(doc)} variant="outline" size="icon" className="h-8 w-8 text-indigo-600 border-indigo-200 hover:bg-indigo-50" title="Ver Detalhes"><Eye className="w-4 h-4"/></Button>
+                                  <Button onClick={() => carregarParaEdicao(doc)} variant="outline" size="icon" className="h-8 w-8 text-amber-600 border-amber-200 hover:bg-amber-50" title="Editar / Retificar"><Pencil className="w-4 h-4"/></Button>
+                                  <Button onClick={() => excluirEntrada(doc)} variant="outline" size="icon" className="h-8 w-8 text-red-600 border-red-200 hover:bg-red-50" title="Excluir Entrada"><Trash2 className="w-4 h-4"/></Button>
+                              </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -757,8 +772,77 @@ export default function Entradas() {
                 </div>
               </div>
             )}
+
+            {/* PAINEL DE VISUALIZAÇÃO DE DETALHES DA NOTA */}
             {modo === "detalhe_historico" && docSelecionado && (
-              <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6"><Button variant="ghost" onClick={() => setModo("formulario")}><X className="w-5 h-5"/></Button></div>
+              <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6">
+                <div className="flex justify-between items-center border-b pb-4">
+                    <div>
+                        <Button variant="ghost" onClick={() => setModo("formulario")} className="mb-2 p-0 h-auto text-slate-400 hover:text-indigo-600 gap-2"><ArrowLeft className="w-4 h-4"/> Voltar à Lista</Button>
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><FileText className="w-6 h-6 text-indigo-600"/> Detalhes do Documento</h2>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Valor Total da Nota</p>
+                        <p className="text-3xl font-black text-emerald-600">R$ {Number(docSelecionado.valor_total).toFixed(2).replace('.',',')}</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-lg border border-slate-100">
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Fornecedor / Emitente</p>
+                        <p className="font-bold text-slate-800">{docSelecionado.log_fornecedores?.nome_fantasia || docSelecionado.fornecedor_texto || '--'}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Nº Documento</p>
+                            <p className="font-bold text-slate-800">{docSelecionado.documento}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Data de Emissão</p>
+                            <p className="font-bold text-slate-800">{docSelecionado.data_emissao ? new Date(docSelecionado.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '--'}</p>
+                        </div>
+                    </div>
+                    <div className="md:col-span-2 border-t border-slate-200 pt-3 mt-2 grid grid-cols-3 md:grid-cols-6 gap-2">
+                        <div><p className="text-[9px] font-bold text-slate-400 uppercase">Frete</p><p className="font-semibold text-xs text-slate-700">R$ {Number(docSelecionado.valor_frete).toFixed(2).replace('.',',')}</p></div>
+                        <div><p className="text-[9px] font-bold text-slate-400 uppercase">ICMS</p><p className="font-semibold text-xs text-slate-700">R$ {Number(docSelecionado.valor_icms).toFixed(2).replace('.',',')}</p></div>
+                        <div><p className="text-[9px] font-bold text-slate-400 uppercase">ICMS ST</p><p className="font-semibold text-xs text-slate-700">R$ {Number(docSelecionado.valor_icms_st).toFixed(2).replace('.',',')}</p></div>
+                        <div><p className="text-[9px] font-bold text-slate-400 uppercase">IPI</p><p className="font-semibold text-xs text-slate-700">R$ {Number(docSelecionado.valor_ipi).toFixed(2).replace('.',',')}</p></div>
+                        <div><p className="text-[9px] font-bold text-slate-400 uppercase">PIS/COFINS</p><p className="font-semibold text-xs text-slate-700">R$ {(Number(docSelecionado.valor_pis) + Number(docSelecionado.valor_cofins)).toFixed(2).replace('.',',')}</p></div>
+                        <div><p className="text-[9px] font-bold text-slate-400 uppercase">Outros Trib.</p><p className="font-semibold text-xs text-slate-700">R$ {Number(docSelecionado.valor_impostos).toFixed(2).replace('.',',')}</p></div>
+                    </div>
+                </div>
+
+                <h4 className="font-bold text-slate-700 flex items-center gap-2 border-b pb-2"><PackageOpen className="w-5 h-5 text-indigo-500"/> Produtos que Entraram nesta Nota</h4>
+                
+                <div className="overflow-x-auto border rounded-lg">
+                    <table className="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
+                                <th className="p-3 font-semibold border-b">Produto / SKU</th>
+                                <th className="p-3 font-semibold border-b">Local de Destino</th>
+                                <th className="p-3 font-semibold border-b text-center">Quantidade</th>
+                                <th className="p-3 font-semibold border-b text-right">Custo Un. (R$)</th>
+                                <th className="p-3 font-semibold border-b text-right">Total (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {carregandoDetalhes ? <tr><td colSpan={5} className="p-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr> : itensDocSelecionado.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-3">
+                                        <p className="font-bold text-slate-800">{item.log_produtos?.nome || 'Produto Desconhecido'}</p>
+                                        <p className="text-[10px] font-mono text-slate-500">{item.log_produtos?.sku || 'S/N'}</p>
+                                    </td>
+                                    <td className="p-3 text-xs font-medium text-slate-600">{item.log_locais?.nome || 'Não especificado'}</td>
+                                    <td className="p-3 text-center font-bold text-indigo-600">{item.quantidade}</td>
+                                    <td className="p-3 text-right text-xs">R$ {Number(item.custo_unitario).toFixed(4).replace('.',',')}</td>
+                                    <td className="p-3 text-right font-bold text-slate-700">R$ {(item.quantidade * Number(item.custo_unitario)).toFixed(2).replace('.',',')}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+              </div>
             )}
           </div>
         )}
