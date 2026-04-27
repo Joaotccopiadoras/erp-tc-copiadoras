@@ -8,7 +8,7 @@ import {
   Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, 
   Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, 
   Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, PackageSearch,
-  UploadCloud, AlertTriangle, Check, Paperclip, Upload, Receipt
+  UploadCloud, AlertTriangle, Check, Paperclip, Upload, Receipt, CalendarClock, Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -43,6 +43,7 @@ export default function Financeiro() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
 
   // Estados do Formulário Principal
+  const [isProjecao, setIsProjecao] = useState(false); // NOVO: Flag de Projeção
   const [descricao, setDescricao] = useState("");
   const [valorBruto, setValorBruto] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
@@ -55,7 +56,6 @@ export default function Financeiro() {
   const [formaPagamento, setFormaPagamento] = useState(""); 
   const [documentoOrigem, setDocumentoOrigem] = useState("");
   const [anexoDocumento, setAnexoDocumento] = useState("");
-  const [anexoComprovanteForm, setAnexoComprovanteForm] = useState("");
 
   // ==========================================
   // ESTADOS DO MODAL DE BAIXA COMPLEXA
@@ -63,7 +63,6 @@ export default function Financeiro() {
   const [modalBaixaAberto, setModalBaixaAberto] = useState(false);
   const [lancamentoBaixa, setLancamentoBaixa] = useState<any>(null);
   
-  // Campos da Baixa
   const [baixaData, setBaixaData] = useState("");
   const [baixaContaId, setBaixaContaId] = useState("");
   const [baixaForma, setBaixaForma] = useState("");
@@ -74,12 +73,8 @@ export default function Financeiro() {
   const [baixaArquivoUpload, setBaixaArquivoUpload] = useState<File | null>(null);
   const [salvandoBaixa, setSalvandoBaixa] = useState(false);
 
-  // Cálculos Dinâmicos
   const valorTotalBaixa = (
-      parseFloat(baixaValorBruto || "0") + 
-      parseFloat(baixaJurosMulta || "0") + 
-      parseFloat(baixaAcrescimo || "0") - 
-      parseFloat(baixaDesconto || "0")
+      parseFloat(baixaValorBruto || "0") + parseFloat(baixaJurosMulta || "0") + parseFloat(baixaAcrescimo || "0") - parseFloat(baixaDesconto || "0")
   ).toFixed(2);
 
   // Estados de Filtros Avançados
@@ -115,10 +110,8 @@ export default function Financeiro() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${prefixo}_${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
-
       const { error: uploadError } = await supabase.storage.from('financeiro').upload(filePath, file);
       if (uploadError) throw uploadError;
-
       const { data } = supabase.storage.from('financeiro').getPublicUrl(filePath);
       return data.publicUrl;
   };
@@ -137,7 +130,7 @@ export default function Financeiro() {
   // AUTO-SAVE BLINDADO
   // ==========================================
   useEffect(() => {
-    const rascunho = sessionStorage.getItem("financeiro_rascunho_v8");
+    const rascunho = sessionStorage.getItem("financeiro_rascunho_v9");
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
@@ -145,6 +138,7 @@ export default function Financeiro() {
         if (draft.mostrarForm !== undefined) setMostrarForm(draft.mostrarForm);
         if (draft.editandoLancamentoId !== undefined) setEditandoLancamentoId(draft.editandoLancamentoId);
         
+        setIsProjecao(draft.isProjecao || false);
         setDescricao(draft.descricao || ""); setValorBruto(draft.valorBruto || "");
         setDataEmissao(draft.dataEmissao || ""); setDataVencimento(draft.dataVencimento || "");
         setFornecedorId(draft.fornecedorId || "nenhum"); setTransacaoId(draft.transacaoId || "");
@@ -162,17 +156,14 @@ export default function Financeiro() {
 
   useEffect(() => {
     const draft = { 
-      abaAtiva, mostrarForm, editandoLancamentoId, descricao, valorBruto, dataEmissao, dataVencimento, 
+      abaAtiva, mostrarForm, editandoLancamentoId, isProjecao, descricao, valorBruto, dataEmissao, dataVencimento, 
       fornecedorId, transacaoId, contaId, centroCusto, segmentoNegocio, formaPagamento, documentoOrigem, 
       anexoDocumento, mostrarFiltros, sortConfig, ofxTransactions, contaConciliacaoId
     };
-    sessionStorage.setItem("financeiro_rascunho_v8", JSON.stringify(draft));
-  }, [abaAtiva, mostrarForm, editandoLancamentoId, descricao, valorBruto, dataEmissao, dataVencimento, fornecedorId, transacaoId, contaId, centroCusto, segmentoNegocio, formaPagamento, documentoOrigem, anexoDocumento, mostrarFiltros, sortConfig, ofxTransactions, contaConciliacaoId]);
+    sessionStorage.setItem("financeiro_rascunho_v9", JSON.stringify(draft));
+  }, [abaAtiva, mostrarForm, editandoLancamentoId, isProjecao, descricao, valorBruto, dataEmissao, dataVencimento, fornecedorId, transacaoId, contaId, centroCusto, segmentoNegocio, formaPagamento, documentoOrigem, anexoDocumento, mostrarFiltros, sortConfig, ofxTransactions, contaConciliacaoId]);
 
-  useEffect(() => {
-    fetchDadosBase();
-    fetchLancamentos();
-  }, [abaAtiva]);
+  useEffect(() => { fetchDadosBase(); fetchLancamentos(); }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
     const tipoFiltro = abaAtiva === 'conciliacao' ? null : (isPagar ? 'Despesa' : 'Receita');
@@ -209,16 +200,17 @@ export default function Financeiro() {
 
   const limparFormulario = () => {
     setMostrarForm(false); setEditandoLancamentoId(null);
-    setDescricao(""); setValorBruto(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
+    setIsProjecao(false); setDescricao(""); setValorBruto(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
     setFornecedorId("nenhum"); setCentroCusto(""); setSegmentoNegocio(""); setFormaPagamento(""); setTransacaoId("");
-    setAnexoDocumento(""); setAnexoComprovanteForm("");
+    setAnexoDocumento("");
   };
 
   // --- AÇÕES DO FORMULÁRIO GERAL ---
   const abrirNovoLancamento = () => { limparFormulario(); setMostrarForm(true); };
 
-  const abrirEditarLancamento = (lanc: any) => {
+  const abrirEditarLancamento = (lanc: any, efetivando = false) => {
     setEditandoLancamentoId(lanc.id);
+    setIsProjecao(efetivando ? false : lanc.status === 'Projetado');
     setDescricao(lanc.descricao || "");
     setValorBruto(lanc.valor_bruto?.toString() || lanc.valor?.toString() || "");
     setDataEmissao(lanc.data_emissao || "");
@@ -231,8 +223,8 @@ export default function Financeiro() {
     setFormaPagamento(lanc.forma_pagamento || "");
     setDocumentoOrigem(lanc.documento_origem || "");
     setAnexoDocumento(lanc.anexo_documento || "");
-    setAnexoComprovanteForm(lanc.anexo_comprovante || "");
     setMostrarForm(true);
+    window.scrollTo(0,0);
   };
 
   const salvarLancamento = async () => {
@@ -241,27 +233,33 @@ export default function Financeiro() {
     const vBrutoNum = parseFloat(valorBruto) || 0;
     const tipoLancamento = abaAtiva === 'conciliacao' ? (vBrutoNum < 0 ? 'Despesa' : 'Receita') : (isPagar ? 'Despesa' : 'Receita');
 
+    let statusParaSalvar = 'Pendente';
+    if (abaAtiva === 'conciliacao') statusParaSalvar = 'Pago';
+    else if (isProjecao) statusParaSalvar = 'Projetado';
+    else {
+        // Se não for conciliação nem projeção, checa se já estava pago antes para não perder o status
+        if (editandoLancamentoId) {
+            const lancAntigo = lancamentos.find(l => l.id === editandoLancamentoId);
+            if (lancAntigo && lancAntigo.status === 'Pago') statusParaSalvar = 'Pago';
+        }
+    }
+
     const payload = {
       tipo: tipoLancamento, descricao, valor: Math.abs(vBrutoNum), valor_bruto: Math.abs(vBrutoNum),
-      data_emissao: dataEmissao || null, data_vencimento: dataVencimento,
+      data_emissao: dataEmissao || null, data_vencimento: dataVencimento, status: statusParaSalvar,
       categoria_id: transacaoId, conta_bancaria_id: contaId,
       fornecedor_id: (tipoLancamento === 'Despesa' && fornecedorId !== "nenhum") ? fornecedorId : null,
       centro_custo: centroCusto, segmento_negocio: segmentoNegocio, forma_pagamento: formaPagamento, 
-      documento_origem: documentoOrigem, anexo_documento: anexoDocumento
+      documento_origem: documentoOrigem, anexo_documento: anexoDocumento,
+      data_pagamento: statusParaSalvar === 'Pago' ? (abaAtiva === 'conciliacao' ? dataVencimento : undefined) : null
     };
     
-    const statusFinal = abaAtiva === 'conciliacao' ? 'Pago' : 'Pendente';
-    const dataPag = abaAtiva === 'conciliacao' ? dataVencimento : null;
-
-    const finalPayload = editandoLancamentoId ? payload : { ...payload, status: statusFinal, data_pagamento: dataPag };
-
     const { error } = editandoLancamentoId 
-        ? await supabase.from('fin_lancamentos').update(finalPayload).eq('id', editandoLancamentoId) 
-        : await supabase.from('fin_lancamentos').insert([finalPayload]);
+        ? await supabase.from('fin_lancamentos').update(payload).eq('id', editandoLancamentoId) 
+        : await supabase.from('fin_lancamentos').insert([payload]);
         
-    if (!error) { 
-        alert("Lançamento Registrado!"); limparFormulario(); fetchLancamentos(); 
-    } else alert(error.message);
+    if (!error) { alert("Lançamento Registrado!"); limparFormulario(); fetchLancamentos(); } 
+    else alert(error.message);
   };
 
   const deletarLancamento = async (id: string) => {
@@ -294,45 +292,28 @@ export default function Financeiro() {
       setSalvandoBaixa(true);
       try {
           let urlComprovante = lancamentoBaixa.anexo_comprovante;
-
-          if (baixaArquivoUpload) {
-              urlComprovante = await fazerUploadArquivo(baixaArquivoUpload, "COMP");
-          }
+          if (baixaArquivoUpload) urlComprovante = await fazerUploadArquivo(baixaArquivoUpload, "COMP");
 
           const payloadBaixa = {
-              status: 'Pago',
-              data_pagamento: baixaData,
-              conta_bancaria_id: baixaContaId,
-              forma_pagamento: baixaForma,
-              valor_juros: parseFloat(baixaJurosMulta) || 0,
-              valor_acrescimo: parseFloat(baixaAcrescimo) || 0,
-              valor_desconto: parseFloat(baixaDesconto) || 0,
-              valor_pago: parseFloat(valorTotalBaixa),
-              valor: parseFloat(valorTotalBaixa), // Atualiza o valor contábil para o real pago
-              anexo_comprovante: urlComprovante
+              status: 'Pago', data_pagamento: baixaData, conta_bancaria_id: baixaContaId, forma_pagamento: baixaForma,
+              valor_juros: parseFloat(baixaJurosMulta) || 0, valor_acrescimo: parseFloat(baixaAcrescimo) || 0,
+              valor_desconto: parseFloat(baixaDesconto) || 0, valor_pago: parseFloat(valorTotalBaixa),
+              valor: parseFloat(valorTotalBaixa), anexo_comprovante: urlComprovante
           };
 
           const { error } = await supabase.from('fin_lancamentos').update(payloadBaixa).eq('id', lancamentoBaixa.id);
           if (error) throw error;
 
-          alert("Baixa confirmada com sucesso!");
-          setModalBaixaAberto(false);
-          fetchLancamentos();
-      } catch (error: any) {
-          alert("Erro ao realizar a baixa: " + error.message);
-      } finally {
-          setSalvandoBaixa(false);
-      }
+          alert("Baixa confirmada com sucesso!"); setModalBaixaAberto(false); fetchLancamentos();
+      } catch (error: any) { alert("Erro ao realizar a baixa: " + error.message); } 
+      finally { setSalvandoBaixa(false); }
   };
 
-
   // ==========================================
-  // MOTOR DE CONCILIAÇÃO BANCÁRIA (OFX PARSER)
+  // MOTOR DE CONCILIAÇÃO BANCÁRIA (OFX)
   // ==========================================
   const handleOfxUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+    const file = event.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
         const text = e.target?.result as string;
@@ -351,29 +332,25 @@ export default function Financeiro() {
 
             if (amtMatch && dateMatch) {
                 const amount = parseFloat(amtMatch[1]);
-                const dateRaw = dateMatch[1].substring(0, 8); // YYYYMMDD
+                const dateRaw = dateMatch[1].substring(0, 8); 
                 const dateFormatted = `${dateRaw.substring(0,4)}-${dateRaw.substring(4,6)}-${dateRaw.substring(6,8)}`;
-                
                 transactions.push({
-                    id: fitidMatch ? fitidMatch[1] : Math.random().toString(),
-                    tipo: amount < 0 ? 'Despesa' : 'Receita',
-                    data: dateFormatted,
-                    valor: Math.abs(amount),
-                    descricao: memoMatch ? memoMatch[1] : 'Transação Bancária',
-                    documento: chkMatch ? chkMatch[1] : '',
-                    conciliado: false
+                    id: fitidMatch ? fitidMatch[1] : Math.random().toString(), tipo: amount < 0 ? 'Despesa' : 'Receita',
+                    data: dateFormatted, valor: Math.abs(amount), descricao: memoMatch ? memoMatch[1] : 'Transação Bancária',
+                    documento: chkMatch ? chkMatch[1] : '', conciliado: false
                 });
             }
         }
         if (transactions.length > 0) { setOfxTransactions(transactions); setAbaAtiva("conciliacao"); } 
-        else alert("Nenhuma transação financeira válida encontrada neste arquivo OFX.");
+        else alert("Nenhuma transação válida encontrada.");
     };
     reader.readAsText(file);
     if (ofxInputRef.current) ofxInputRef.current.value = "";
   };
 
   const sugerirCorrespondencia = (ofxTx: OfxTransaction) => {
-      const candidatos = lancamentos.filter(l => l.status === 'Pendente' && l.tipo === ofxTx.tipo && Math.abs(Number(l.valor) - ofxTx.valor) < 0.05);
+      // Agora a IA também enxerga as Projeções como candidatos a baixar
+      const candidatos = lancamentos.filter(l => (l.status === 'Pendente' || l.status === 'Projetado') && l.tipo === ofxTx.tipo && Math.abs(Number(l.valor) - ofxTx.valor) < 0.05);
       if (candidatos.length === 0) return null;
       candidatos.sort((a, b) => Math.abs(new Date(a.data_vencimento).getTime() - new Date(ofxTx.data).getTime()) - Math.abs(new Date(b.data_vencimento).getTime() - new Date(ofxTx.data).getTime()));
       return candidatos[0]; 
@@ -381,15 +358,13 @@ export default function Financeiro() {
 
   const confirmarConciliacao = async (ofxTx: OfxTransaction, lancamentoId: string) => {
       await supabase.from('fin_lancamentos').update({ status: 'Pago', data_pagamento: ofxTx.data, conta_bancaria_id: contaConciliacaoId }).eq('id', lancamentoId);
-      fetchLancamentos();
-      setOfxTransactions(prev => prev.map(tx => tx.id === ofxTx.id ? { ...tx, conciliado: true } : tx));
+      fetchLancamentos(); setOfxTransactions(prev => prev.map(tx => tx.id === ofxTx.id ? { ...tx, conciliado: true } : tx));
   };
 
   const criarLancamentoDoOfx = (ofxTx: OfxTransaction) => {
-      setDescricao(ofxTx.descricao);
-      setValorBruto((ofxTx.tipo === 'Despesa' ? -ofxTx.valor : ofxTx.valor).toString());
+      setDescricao(ofxTx.descricao); setValorBruto((ofxTx.tipo === 'Despesa' ? -ofxTx.valor : ofxTx.valor).toString());
       setDataVencimento(ofxTx.data); setDataEmissao(ofxTx.data); setDocumentoOrigem(ofxTx.documento);
-      setContaId(contaConciliacaoId);
+      setContaId(contaConciliacaoId); setIsProjecao(false);
       const transfOpt = formasPagamentoBD.find(f => f.nome.toLowerCase().includes("transferência"));
       if (transfOpt) setFormaPagamento(transfOpt.nome);
       setMostrarForm(true); window.scrollTo(0, 0); 
@@ -400,6 +375,7 @@ export default function Financeiro() {
   // ==========================================
   const getComputedStatus = (lanc: any) => {
     if (lanc.status === 'Pago') return 'Pago';
+    if (lanc.status === 'Projetado') return 'Projetado';
     const isAtrasado = new Date(lanc.data_vencimento) < new Date(new Date().setHours(0,0,0,0));
     return isAtrasado ? 'Atrasado' : 'Pendente';
   };
@@ -417,14 +393,11 @@ export default function Financeiro() {
     if (filtroEmiFim && (!l.data_emissao || l.data_emissao > filtroEmiFim)) return false;
     if (filtroPagInicio && (!l.data_pagamento || l.data_pagamento < filtroPagInicio)) return false;
     if (filtroPagFim && (!l.data_pagamento || l.data_pagamento > filtroPagFim)) return false;
-    
     if (filtroCentroCusto !== "todos" && l.centro_custo !== filtroCentroCusto) return false;
     if (filtroSegmento !== "todos" && l.segmento_negocio !== filtroSegmento) return false;
     if (filtroTransacao !== "todos" && l.categoria_id !== filtroTransacao) return false;
-
     if (isPagar && filtroFornecedor !== "todos" && l.fornecedor_id !== filtroFornecedor) return false;
     if (!isPagar && filtroCliente && !(l.descricao||"").toLowerCase().includes(filtroCliente.toLowerCase())) return false;
-    
     if (filtroValorMin && Number(l.valor) < Number(filtroValorMin)) return false;
     if (filtroValorMax && Number(l.valor) > Number(filtroValorMax)) return false;
     
@@ -445,7 +418,7 @@ export default function Financeiro() {
         case 'pagamento': valA = a.data_pagamento ? new Date(a.data_pagamento).getTime() : 0; valB = b.data_pagamento ? new Date(b.data_pagamento).getTime() : 0; break;
         case 'status': valA = getComputedStatus(a); valB = getComputedStatus(b); break;
         case 'valor': valA = Number(a.valor); valB = Number(b.valor); break;
-        case 'classificacao': valA = (a.fin_categorias?.nome || "").toLowerCase(); valB = (b.fin_categorias?.nome || "").toLowerCase(); break;
+        case 'transacao': valA = (a.fin_categorias?.nome || "").toLowerCase(); valB = (b.fin_categorias?.nome || "").toLowerCase(); break;
         case 'descricao': valA = (a.descricao || "").toLowerCase(); valB = (b.descricao || "").toLowerCase(); break;
       }
       if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -454,40 +427,18 @@ export default function Financeiro() {
     });
   }
 
-  const handleSort = (key: string) => {
-    setSortConfig(prev => {
-      if (prev && prev.key === key) return prev.direction === 'asc' ? { key, direction: 'desc' } : null; 
-      return { key, direction: 'asc' };
-    });
-  };
+  const handleSort = (key: string) => { setSortConfig(prev => { if (prev && prev.key === key) return prev.direction === 'asc' ? { key, direction: 'desc' } : null; return { key, direction: 'asc' }; }); };
+  const renderSortIcon = (key: string) => { if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1 text-slate-600" /> : <ArrowDown className="w-3 h-3 inline ml-1 text-slate-600" />; return <ArrowDown className="w-3 h-3 inline ml-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />; };
 
-  const renderSortIcon = (key: string) => {
-    if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1 text-slate-600" /> : <ArrowDown className="w-3 h-3 inline ml-1 text-slate-600" />;
-    return <ArrowDown className="w-3 h-3 inline ml-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
-  };
-
-  const totalPendente = lancamentosFiltrados.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + Number(l.valor), 0);
+  const totalPendente = lancamentosFiltrados.filter(l => l.status === 'Pendente' || l.status === 'Projetado').reduce((acc, l) => acc + Number(l.valor), 0);
   const totalPago = lancamentosFiltrados.filter(l => l.status === 'Pago').reduce((acc, l) => acc + Number(l.valor), 0);
-  
   const temFiltroAtivo = filtroVencInicio || filtroVencFim || filtroEmiInicio || filtroEmiFim || filtroPagInicio || filtroPagFim || filtroCentroCusto !== "todos" || filtroSegmento !== "todos" || filtroTransacao !== "todos" || filtroFornecedor !== "todos" || filtroCliente || filtroStatus !== "todos" || filtroValorMin || filtroValorMax || busca;
 
   // ==========================================
   // FUNÇÕES DE EXPORTAÇÃO
   // ==========================================
-  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
-    try {
-      const res = await fetch(imageUrl); if (!res.ok) return null;
-      const blob = await res.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = () => resolve(null); reader.readAsDataURL(blob);
-      });
-    } catch (e) { return null; }
-  };
-
-  const getSortLabel = (key: string) => {
-    const labels: any = { 'emissao': 'Data de Emissão', 'fornecedor': isPagar ? 'Fornecedor' : 'Cliente', 'documento': 'Documento', 'vencimento': 'Data de Vencimento', 'pagamento': 'Data de Pagamento', 'status': 'Status', 'valor': 'Valor Total', 'classificacao': 'Classificação / Transação', 'descricao': 'Descrição' };
-    return labels[key] || 'Grupo';
-  };
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => { try { const res = await fetch(imageUrl); if (!res.ok) return null; const blob = await res.blob(); return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = () => resolve(null); reader.readAsDataURL(blob); }); } catch (e) { return null; } };
+  const getSortLabel = (key: string) => { const labels: any = { 'emissao': 'Data de Emissão', 'fornecedor': isPagar ? 'Fornecedor' : 'Cliente', 'documento': 'Documento', 'vencimento': 'Data de Vencimento', 'pagamento': 'Data de Pagamento', 'status': 'Status', 'valor': 'Valor Total', 'classificacao': 'Classificação / Transação', 'descricao': 'Descrição' }; return labels[key] || 'Grupo'; };
 
   const exportarPDF = async () => {
     setExportando(true);
@@ -522,17 +473,12 @@ export default function Financeiro() {
 
             if (rowGroupValue !== currentGroupValue) {
                 if (currentGroupValue !== null) {
-                    tableRows.push([
-                        { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-                        { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
-                        { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
-                    ]);
+                    tableRows.push([ { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } }, { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } }, { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } } ]);
                 }
                 tableRows.push([{ content: `${getSortLabel(sortConfig.key).toUpperCase()}: ${rowGroupValue}`, colSpan: 9, styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' } }]);
                 currentGroupValue = rowGroupValue; currentGroupSubtotal = 0; 
             }
         }
-
         if (sortConfig) currentGroupSubtotal += Number(l.valor) || 0;
 
         tableRows.push([
@@ -548,17 +494,13 @@ export default function Financeiro() {
       });
 
       if (sortConfig && currentGroupValue !== null) {
-          tableRows.push([
-              { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-              { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
-              { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
-          ]);
+          tableRows.push([ { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } }, { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } }, { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } } ]);
       }
 
       autoTable(doc, { head: [tableColumn], body: tableRows, startY: 35, theme: 'grid', styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' }, columnStyles: { 1: { cellWidth: 35 }, 7: { cellWidth: 35 }, 8: { cellWidth: 40 } }, headStyles: { fillColor: isPagar ? [190, 18, 60] : [5, 150, 105], textColor: 255 } });
       const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 35;
       doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-      doc.text(`TOTAL PENDENTE: R$ ${totalPendente.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 10, { align: "right" });
+      doc.text(`TOTAL ABERTO/PROJ.: R$ ${totalPendente.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 10, { align: "right" });
       doc.text(`TOTAL ${isPagar ? 'PAGO' : 'RECEBIDO'}: R$ ${totalPago.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 17, { align: "right" });
 
       doc.save(`Financeiro_TC_${abaAtiva}_${Date.now()}.pdf`);
@@ -575,7 +517,7 @@ export default function Financeiro() {
         { header: "Data de Emissão", key: "emissao", width: 15 }, { header: "Fornecedor / Cliente", key: "ent", width: 30 },
         { header: "Documento", key: "doc", width: 15 }, { header: "Vencimento", key: "venc", width: 15 },
         { header: "Data de Pagamento", key: "pag", width: 15 }, { header: "Status", key: "status", width: 15 },
-        { header: "Valor Bruto (R$)", key: "vBruto", width: 15 }, { header: "Juros/Multa (R$)", key: "vJuros", width: 15 },
+        { header: "Valor Bruto (R$)", key: "vBruto", width: 15 }, { header: "Juros/Acréscimos/Descontos (R$)", key: "vJuros", width: 15 },
         { header: "Valor Total (R$)", key: "valor", width: 15 }, { header: "Transação", key: "transacao", width: 25 },
         { header: "Centro de Custo", key: "cc", width: 20 }, { header: "Segmento de Negócio", key: "seg", width: 20 },
         { header: "Descrição", key: "desc", width: 40 }
@@ -588,7 +530,7 @@ export default function Financeiro() {
           venc: new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
           pag: l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
           status: getComputedStatus(l).toUpperCase(), 
-          vBruto: Number(l.valor_bruto || 0), vJuros: Number(l.valor_juros || 0), valor: Number(l.valor),
+          vBruto: Number(l.valor_bruto || 0), vJuros: (Number(l.valor_juros || 0) + Number(l.valor_acrescimo || 0) - Number(l.valor_desconto || 0)), valor: Number(l.valor),
           transacao: l.fin_categorias?.nome || '-', cc: l.centro_custo || 'Geral', seg: l.segmento_negocio || '-', desc: l.descricao
         });
       });
@@ -612,7 +554,6 @@ export default function Financeiro() {
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col h-auto max-h-[90vh]">
                     
-                    {/* Header do Modal */}
                     <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50 shrink-0">
                         <div>
                             <h2 className="text-xl font-black text-emerald-900 flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-600"/> Realizar Baixa Financeira</h2>
@@ -624,7 +565,6 @@ export default function Financeiro() {
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Bloco 1: Dados do Pagamento */}
                             <div className="md:col-span-2 space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Clock className="w-4 h-4"/> Como foi pago?</h3>
                                 
@@ -670,14 +610,13 @@ export default function Financeiro() {
                                 </div>
                             </div>
 
-                            {/* Bloco 2: Matemática Financeira */}
                             <div className="space-y-4 bg-slate-800 text-white p-5 rounded-xl shadow-lg flex flex-col justify-between">
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1 mb-4"><Calculator className="w-4 h-4"/> Composição de Valores</h3>
                                     
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs text-slate-300">Valor Bruto</span>
+                                            <span className="text-xs text-slate-300">Valor Original</span>
                                             <span className="text-sm font-medium">R$ {parseFloat(baixaValorBruto).toFixed(2).replace('.',',')}</span>
                                         </div>
                                         
@@ -707,7 +646,6 @@ export default function Financeiro() {
 
                     </div>
 
-                    {/* Footer do Modal */}
                     <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
                         <Button variant="outline" onClick={() => setModalBaixaAberto(false)}>Cancelar</Button>
                         <Button onClick={confirmarBaixaComplexa} disabled={salvandoBaixa} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 px-8">
@@ -754,24 +692,6 @@ export default function Financeiro() {
                         <Button variant="outline" className="border-indigo-300 text-indigo-700 bg-white" onClick={() => { setOfxTransactions([]); setAbaAtiva("pagar"); }}>Cancelar / Fechar</Button>
                     </div>
                 </div>
-
-                {/* FORMULÁRIO MANUAL (Para cadastrar os não encontrados) */}
-                {mostrarForm && (
-                  <div className={`p-6 rounded-xl border space-y-4 relative z-20 ${parseFloat(valorBruto) < 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'} shadow-inner animate-in fade-in`}>
-                    <div className="flex justify-between items-center mb-4"><h3 className={`font-bold flex items-center gap-2 ${parseFloat(valorBruto) < 0 ? 'text-rose-800' : 'text-emerald-800'}`}><DollarSign className="w-5 h-5"/> Registrar Transação não encontrada</h3><Button variant="ghost" onClick={() => setMostrarForm(false)}><X className="w-5 h-5"/></Button></div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="md:col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição *</label><Input value={descricao} onChange={e => setDescricao(e.target.value)} className="bg-white" /></div>
-                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor Bruto *</label><Input type="number" step="0.01" value={valorBruto} onChange={e => setValorBruto(e.target.value)} className="bg-white" /></div>
-                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Vencimento/Pagamento *</label><Input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="bg-white" /></div>
-                      {parseFloat(valorBruto) < 0 && (
-                        <div className="md:col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fornecedor</label><Select value={fornecedorId} onValueChange={setFornecedorId}><SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="nenhum">Avulso</SelectItem>{fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia}</SelectItem>)}</SelectContent></Select></div>
-                      )}
-                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Transação Financeira *</label><Select value={transacaoId} onValueChange={setTransacaoId}><SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent className="bg-white z-[9999]">{transacoesBD.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent></Select></div>
-                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Conta Bancária *</label><Select value={contaId} disabled><SelectTrigger className="bg-slate-100"><SelectValue/></SelectTrigger><SelectContent><SelectItem value={contaId}>Travada pelo Extrato</SelectItem></SelectContent></Select></div>
-                    </div>
-                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 mt-4"><Button variant="outline" onClick={() => setMostrarForm(false)} className="bg-white">Cancelar</Button><Button onClick={salvarLancamento} className={parseFloat(valorBruto) < 0 ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'}>Gravar Lançamento Direto</Button></div>
-                  </div>
-                )}
 
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                     <div className="overflow-x-auto min-h-[400px]">
@@ -843,7 +763,7 @@ export default function Financeiro() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
                     <div className={`p-3 rounded-full ${isPagar ? 'bg-rose-100 text-rose-600' : 'bg-sky-100 text-sky-600'}`}><Clock className="w-6 h-6"/></div>
-                    <div><p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{isPagar ? 'A Pagar (Filtro)' : 'A Receber (Filtro)'}</p><p className="text-2xl font-black text-slate-800">R$ {totalPendente.toFixed(2).replace('.', ',')}</p></div>
+                    <div><p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{isPagar ? 'Aberto / Projeções' : 'A Receber (Filtro)'}</p><p className="text-2xl font-black text-slate-800">R$ {totalPendente.toFixed(2).replace('.', ',')}</p></div>
                   </div>
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
                     <div className="bg-emerald-100 p-3 rounded-full text-emerald-600"><CheckCircle2 className="w-6 h-6"/></div>
@@ -887,7 +807,7 @@ export default function Financeiro() {
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Segmento de Negócio</label><Select value={filtroSegmento} onValueChange={setFiltroSegmento}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem>{segmentosBD.map(s => <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>)}</SelectContent></Select></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Vencimento (Início)</label><Input type="date" value={filtroVencInicio} onChange={e=>setFiltroVencInicio(e.target.value)} className="bg-white h-9" /></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Vencimento (Fim)</label><Input type="date" value={filtroVencFim} onChange={e=>setFiltroVencFim(e.target.value)} className="bg-white h-9" /></div>
-                          <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Status</label><Select value={filtroStatus} onValueChange={setFiltroStatus}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Atrasado">Atrasado</SelectItem><SelectItem value="Pago">Pago/Recebido</SelectItem></SelectContent></Select></div>
+                          <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Status</label><Select value={filtroStatus} onValueChange={setFiltroStatus}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="Projetado">Projetado (Previsão)</SelectItem><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Atrasado">Atrasado</SelectItem><SelectItem value="Pago">Pago/Recebido</SelectItem></SelectContent></Select></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label><Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem>{centrosCustoBD.map((cc:any) => <SelectItem key={cc.id} value={cc.nome}>{cc.nome}</SelectItem>)}</SelectContent></Select></div>
                           
                           {isPagar && (
@@ -903,10 +823,26 @@ export default function Financeiro() {
 
                   {/* FORMULÁRIO MANUAL COM UPLOAD */}
                   {mostrarForm && (
-                    <div className={`p-6 border-b space-y-4 relative z-20 ${isPagar ? 'bg-rose-50' : 'bg-emerald-50'} shadow-inner`}>
+                    <div className={`p-6 border-b space-y-4 relative z-20 ${isPagar ? 'bg-rose-50' : 'bg-emerald-50'} shadow-inner animate-in fade-in`}>
                       <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold flex items-center gap-2 text-slate-800">{editandoLancamentoId ? <Edit className="w-5 h-5"/> : <DollarSign className="w-5 h-5"/>} {editandoLancamentoId ? 'Editar Lançamento' : 'Novo Lançamento Manual'}</h3>
                         <Button variant="ghost" onClick={limparFormulario}><X className="w-5 h-5"/></Button>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 mb-4 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-full ${isProjecao ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-400'}`}>
+                                  <CalendarClock className="w-5 h-5"/>
+                              </div>
+                              <div>
+                                  <p className="text-sm font-bold text-slate-800">Lançamento Projetado (Previsão)</p>
+                                  <p className="text-xs text-slate-500">Marque se esta conta ainda não possui um boleto ou documento definitivo.</p>
+                              </div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={isProjecao} onChange={e => setIsProjecao(e.target.checked)} />
+                            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                          </label>
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -968,7 +904,7 @@ export default function Financeiro() {
                             <label className="text-xs font-bold text-slate-500 uppercase">Doc. (NF/Boleto) e Anexo</label>
                             <div className="flex gap-2">
                                 <Input value={documentoOrigem} onChange={e => setDocumentoOrigem(e.target.value)} placeholder="Nº Documento" className="bg-white flex-1" />
-                                <Button variant="outline" size="icon" onClick={() => docInputRef.current?.click()} className="bg-white text-indigo-600 hover:bg-indigo-50 border-indigo-200" title="Anexar Documento (PDF/Imagem)">
+                                <Button variant="outline" size="icon" onClick={() => docInputRef.current?.click()} className="bg-white text-indigo-600 hover:bg-indigo-50 border-indigo-200 shrink-0" title="Anexar Documento (PDF/Imagem)">
                                     <Paperclip className="w-4 h-4"/>
                                 </Button>
                             </div>
@@ -978,7 +914,7 @@ export default function Financeiro() {
 
                       <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 mt-4">
                         <Button variant="outline" onClick={limparFormulario} className="bg-white">Cancelar</Button>
-                        <Button onClick={salvarLancamento} className={isPagar ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}>{editandoLancamentoId ? 'Atualizar' : 'Salvar Lançamento'}</Button>
+                        <Button onClick={salvarLancamento} className={isPagar ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}>{editandoLancamentoId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}</Button>
                       </div>
                     </div>
                   )}
@@ -1060,7 +996,7 @@ export default function Financeiro() {
                               </td>
 
                               <td className="p-4 text-center align-top">
-                                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusAtual === 'Pago' ? 'bg-emerald-100 text-emerald-700' : isAtrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{statusAtual}</span>
+                                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusAtual === 'Pago' ? 'bg-emerald-100 text-emerald-700' : statusAtual === 'Projetado' ? 'bg-purple-100 text-purple-700 border border-purple-200' : isAtrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{statusAtual}</span>
                               </td>
                               
                               <td className="p-4 text-right align-top whitespace-nowrap">
@@ -1077,7 +1013,15 @@ export default function Financeiro() {
                               <td className="p-4 align-top"><p className="text-sm text-slate-800 leading-tight">{lanc.descricao}</p></td>
                               
                               <td className="p-4 text-center align-top">
-                                {lanc.status === 'Pendente' ? (
+                                {statusAtual === 'Projetado' ? (
+                                  <div className="space-y-2">
+                                    <Button size="sm" onClick={() => abrirEditarLancamento(lanc, true)} className="w-full bg-purple-600 hover:bg-purple-700 text-white text-[10px] h-7 shadow-sm gap-1"><Zap className="w-3 h-3"/> Efetivar</Button>
+                                    <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={() => abrirEditarLancamento(lanc)} className="p-1 text-slate-400 hover:text-indigo-600" title="Editar"><Edit className="w-3.5 h-3.5"/></button>
+                                      <button onClick={() => deletarLancamento(lanc.id)} className="p-1 text-slate-400 hover:text-red-500" title="Excluir"><Trash2 className="w-3.5 h-3.5"/></button>
+                                    </div>
+                                  </div>
+                                ) : lanc.status === 'Pendente' ? (
                                   <div className="space-y-2">
                                     <Button size="sm" onClick={() => abrirModalBaixa(lanc)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 text-[10px] h-7 shadow-sm">Realizar Baixa</Button>
                                     <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
