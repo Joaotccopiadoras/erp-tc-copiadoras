@@ -286,7 +286,7 @@ export default function Financeiro() {
   const temFiltroAtivo = filtroVencInicio || filtroVencFim || filtroEmiInicio || filtroEmiFim || filtroPagInicio || filtroPagFim || filtroCentroCusto !== "todos" || filtroFornecedor !== "todos" || filtroCliente || filtroStatus !== "todos" || filtroValorMin || filtroValorMax || busca;
 
   // ==========================================
-  // FUNÇÕES DE EXPORTAÇÃO
+  // FUNÇÕES DE EXPORTAÇÃO (AGRUPAMENTO E ORDENAÇÃO)
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -301,6 +301,21 @@ export default function Financeiro() {
     } catch (e) { return null; }
   };
 
+  const getSortLabel = (key: string) => {
+    const labels: any = {
+        'emissao': 'Data de Emissão',
+        'fornecedor': isPagar ? 'Fornecedor' : 'Cliente',
+        'documento': 'Documento',
+        'vencimento': 'Data de Vencimento',
+        'pagamento': 'Data de Pagamento',
+        'status': 'Status',
+        'valor': 'Valor',
+        'classificacao': 'Classificação / Categoria',
+        'descricao': 'Descrição'
+    };
+    return labels[key] || 'Grupo';
+  };
+
   const exportarPDF = async () => {
     setExportando(true);
     try {
@@ -308,6 +323,7 @@ export default function Financeiro() {
       const logo = await getBase64ImageFromUrl("/logo.png");
       const tituloRelatorio = isPagar ? "Relatório de Contas a Pagar" : "Relatório de Contas a Receber";
       
+      // Cabeçalho
       if (logo) doc.addImage(logo, "PNG", 14, 10, 40, 15);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
@@ -319,17 +335,49 @@ export default function Financeiro() {
       // Ordem rigorosa: Emissão, Fornecedor, Documento, Vencimento, Pagamento, Status, Valor, Classificação, Descrição
       const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor", "Classificação", "Descrição"];
       
-      const tableRows = lancamentosFiltrados.map(l => [
-        l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
-        l.log_fornecedores?.nome_fantasia || '-',
-        l.documento_origem || '-',
-        new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
-        l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
-        getComputedStatus(l).toUpperCase(),
-        `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`,
-        `${l.fin_categorias?.nome || '-'}\nC.C: ${l.centro_custo || 'Geral'}`,
-        l.descricao || '-'
-      ]);
+      const tableRows: any[] = [];
+      let currentGroupValue: string | null = null;
+
+      lancamentosFiltrados.forEach(l => {
+        
+        // Lógica de Separação em Grupos Baseada na Ordenação Ativa
+        if (sortConfig) {
+            let rowGroupValue = "";
+            switch (sortConfig.key) {
+                case 'emissao': rowGroupValue = l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : 'Sem Emissão'; break;
+                case 'fornecedor': rowGroupValue = l.log_fornecedores?.nome_fantasia || 'Avulso / Sem Fornecedor'; break;
+                case 'documento': rowGroupValue = l.documento_origem || 'Sem Documento'; break;
+                case 'vencimento': rowGroupValue = new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}); break;
+                case 'pagamento': rowGroupValue = l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : 'Pendente'; break;
+                case 'status': rowGroupValue = getComputedStatus(l).toUpperCase(); break;
+                case 'valor': rowGroupValue = `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`; break;
+                case 'classificacao': rowGroupValue = l.fin_categorias?.nome || 'Sem Categoria'; break;
+                case 'descricao': rowGroupValue = l.descricao || 'Sem Descrição'; break;
+            }
+
+            if (rowGroupValue !== currentGroupValue) {
+                tableRows.push([{
+                    content: `${getSortLabel(sortConfig.key).toUpperCase()}: ${rowGroupValue}`,
+                    colSpan: 9,
+                    styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
+                }]);
+                currentGroupValue = rowGroupValue;
+            }
+        }
+
+        // Adição dos Dados na Linha
+        tableRows.push([
+          l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          l.log_fornecedores?.nome_fantasia || '-',
+          l.documento_origem || '-',
+          new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
+          l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          getComputedStatus(l).toUpperCase(),
+          `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`,
+          `${l.fin_categorias?.nome || '-'}\nC.C: ${l.centro_custo || 'Geral'}`,
+          l.descricao || '-'
+        ]);
+      });
 
       autoTable(doc, {
         head: [tableColumn],
@@ -555,7 +603,7 @@ export default function Financeiro() {
                       {/* 4. Vencimento */}
                       <td className="p-4 text-sm font-medium align-top whitespace-nowrap">
                         <span className={`flex items-center gap-1.5 ${isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}`}>
-                          <Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                          <Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) }
                         </span>
                         {isAtrasado && <span className="text-[10px] text-rose-500 uppercase mt-0.5 block ml-5">Vencido</span>}
                       </td>
