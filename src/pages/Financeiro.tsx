@@ -124,6 +124,29 @@ export default function Financeiro() {
   };
 
   // --- AÇÕES ---
+  
+  // Função que faltava: Abrir form em branco
+  const abrirNovoLancamento = () => {
+    limparFormulario();
+    setMostrarForm(true);
+  };
+
+  // Função que faltava: Abrir form preenchido para edição
+  const abrirEditarLancamento = (lanc: any) => {
+    setEditandoLancamentoId(lanc.id);
+    setDescricao(lanc.descricao || "");
+    setValor(lanc.valor?.toString() || "");
+    setDataEmissao(lanc.data_emissao || "");
+    setDataVencimento(lanc.data_vencimento || "");
+    setFornecedorId(lanc.fornecedor_id || "nenhum");
+    setCategoriaId(lanc.categoria_id || "");
+    setContaId(lanc.conta_bancaria_id || (contasBancarias.length > 0 ? contasBancarias[0].id : ""));
+    setCentroCusto(lanc.centro_custo || "Geral");
+    setFormaPagamento(lanc.forma_pagamento || "Boleto");
+    setDocumentoOrigem(lanc.documento_origem || "");
+    setMostrarForm(true);
+  };
+
   const salvarLancamento = async () => {
     if (!descricao || !valor || !dataVencimento || !categoriaId || !contaId) return alert("Preencha os campos obrigatórios.");
     const payload = {
@@ -133,8 +156,15 @@ export default function Financeiro() {
       fornecedor_id: (isPagar && fornecedorId !== "nenhum") ? fornecedorId : null,
       centro_custo: centroCusto, forma_pagamento: formaPagamento, documento_origem: documentoOrigem
     };
-    const { error } = editandoLancamentoId ? await supabase.from('fin_lancamentos').update(payload).eq('id', editandoLancamentoId) : await supabase.from('fin_lancamentos').insert([{...payload, status: 'Pendente'}]);
-    if (!error) { alert("Sucesso!"); limparFormulario(); fetchLancamentos(); } else alert(error.message);
+    const { error } = editandoLancamentoId 
+        ? await supabase.from('fin_lancamentos').update(payload).eq('id', editandoLancamentoId) 
+        : await supabase.from('fin_lancamentos').insert([{...payload, status: 'Pendente'}]);
+        
+    if (!error) { 
+        alert("Sucesso!"); 
+        limparFormulario(); 
+        fetchLancamentos(); 
+    } else alert(error.message);
   };
 
   const deletarLancamento = async (id: string) => {
@@ -182,7 +212,7 @@ export default function Financeiro() {
   const temFiltroAtivo = filtroVencInicio || filtroVencFim || filtroEmiInicio || filtroEmiFim || filtroPagInicio || filtroPagFim || filtroCentroCusto !== "todos" || filtroFornecedor !== "todos" || filtroCliente || filtroStatus !== "todos" || filtroValorMin || filtroValorMax || busca;
 
   // ==========================================
-  // FUNÇÕES DE EXPORTAÇÃO (CORRIGIDAS)
+  // FUNÇÕES DE EXPORTAÇÃO
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -232,7 +262,7 @@ export default function Financeiro() {
         headStyles: { fillColor: isPagar ? [190, 18, 60] : [5, 150, 105], textColor: 255 },
       });
 
-      // Resumo Final (Ajuste do finalY)
+      // Resumo Final (Protegido contra tabela vazia)
       const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 35;
       
       doc.setFont("helvetica", "bold");
@@ -324,6 +354,9 @@ export default function Financeiro() {
               <Button variant={mostrarFiltros ? "default" : "outline"} onClick={() => setMostrarFiltros(!mostrarFiltros)} className={`gap-2 ${mostrarFiltros ? (isPagar ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white') : 'bg-white text-slate-600 border-slate-300'}`}>
                   <Filter className="w-4 h-4"/> Filtros
               </Button>
+              {temFiltroAtivo && !mostrarFiltros && (
+                  <Button variant="ghost" onClick={limparFiltros} className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2" title="Limpar Filtros"><X className="w-4 h-4"/></Button>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={exportarExcel} disabled={exportando} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2"><TableIcon className="w-4 h-4"/> Excel</Button>
@@ -338,12 +371,12 @@ export default function Financeiro() {
           {mostrarFiltros && (
               <div className={`p-5 border-b grid grid-cols-1 md:grid-cols-4 gap-5 relative z-30 ${isPagar ? 'bg-rose-50' : 'bg-emerald-50'}`}>
                   <div className="col-span-full flex justify-between items-center"><h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4"/> Filtros Avançados</h4><Button variant="ghost" size="sm" onClick={limparFiltros} className="text-red-500 h-8 px-2 text-xs">Limpar Filtros</Button></div>
-                  
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Vencimento Início</label><Input type="date" value={filtroVencInicio} onChange={e=>setFiltroVencInicio(e.target.value)} className="bg-white h-9" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Vencimento Fim</label><Input type="date" value={filtroVencFim} onChange={e=>setFiltroVencFim(e.target.value)} className="bg-white h-9" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Status</label><Select value={filtroStatus} onValueChange={setFiltroStatus}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Atrasado">Atrasado</SelectItem><SelectItem value="Pago">Pago/Recebido</SelectItem></SelectContent></Select></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label><Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem>{centrosDeCusto.map((cc:any) => <SelectItem key={cc} value={cc}>{cc}</SelectItem>)}</SelectContent></Select></div>
                   
+                  {/* Linha extra para Filtros que variam de acordo com a aba */}
                   {isPagar && (
                     <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase">Fornecedor</label><Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="nenhum">Sem Fornecedor</SelectItem>{fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}</SelectContent></Select></div>
                   )}
@@ -352,6 +385,7 @@ export default function Financeiro() {
                   )}
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Valor Mínimo (R$)</label><Input type="number" step="0.01" value={filtroValorMin} onChange={e=>setFiltroValorMin(e.target.value)} className="bg-white h-9" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Valor Máximo (R$)</label><Input type="number" step="0.01" value={filtroValorMax} onChange={e=>setFiltroValorMax(e.target.value)} className="bg-white h-9" /></div>
+
               </div>
           )}
 
