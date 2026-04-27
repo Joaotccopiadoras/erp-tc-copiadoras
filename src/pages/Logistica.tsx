@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Barcode, CheckCircle2, Edit, Package, Plus, Search, FileDigit, DollarSign, Settings2, 
   Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, 
-  Table as TableIcon, Database, Printer, Layers, MapPin, Save, X, ArrowLeftRight
+  Table as TableIcon, Database, Printer, Layers, MapPin, Save, X, ArrowLeftRight, FileText, Activity
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
@@ -43,7 +43,6 @@ export default function Logistica() {
   const [rastreiaSerie, setRastreiaSerie] = useState(false);
   const [imagemUrl, setImagemUrl] = useState("");
   
-  // Especificações e Tipagem
   const [isEquipamento, setIsEquipamento] = useState("Não");
   const [specs, setSpecs] = useState({ formato: "A4", ppm: "", ano: "" });
 
@@ -64,13 +63,20 @@ export default function Logistica() {
   const [carregandoPDF, setCarregandoPDF] = useState(false);
   const [cotacoesMercado, setCotacoesMercado] = useState<any[]>([]);
 
-  // ==========================================
-  // ESTADOS DO MODAL DE SALDOS POR LOCAL (INVENTÁRIO)
-  // ==========================================
+  // ESTADOS DO MODAL DE INVENTÁRIO
   const [modalSaldosAberto, setModalSaldosAberto] = useState(false);
   const [produtoSaldos, setProdutoSaldos] = useState<any | null>(null);
   const [saldosLocais, setSaldosLocais] = useState<any[]>([]);
   const [salvandoSaldos, setSalvandoSaldos] = useState(false);
+
+  // ==========================================
+  // ESTADOS DO MODAL DE EXTRATO/HISTÓRICO
+  // ==========================================
+  const [modalExtratoAberto, setModalExtratoAberto] = useState(false);
+  const [produtoExtrato, setProdutoExtrato] = useState<any | null>(null);
+  const [movimentacoesProduto, setMovimentacoesProduto] = useState<any[]>([]);
+  const [saldosAtuaisProduto, setSaldosAtuaisProduto] = useState<any[]>([]);
+  const [carregandoExtrato, setCarregandoExtrato] = useState(false);
 
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("logistica_rascunho");
@@ -129,7 +135,7 @@ export default function Logistica() {
   }, []);
 
   const fetchProdutos = async () => {
-    const { data, error } = await supabase.from('log_produtos').select('*').order('nome', { ascending: true });
+    const { data } = await supabase.from('log_produtos').select('*').order('nome', { ascending: true });
     if (data) setProdutos(data);
   };
 
@@ -172,24 +178,17 @@ export default function Logistica() {
     const payload = {
       sku, nome, fabricante, familia, perfil, modelo, categoria, condicao, rastreia_serie: rastreiaSerie, imagem_url: imagemUrl,
       is_equipamento: isEq, especificacoes: isEq ? specs : {},
-      ciclo_mensal_recomendado: parseInt(cicloRecomendado) || 0,
-      ciclo_mensal_maximo: parseInt(cicloMaximo) || 0,
-      rendimento_volume: parseInt(rendimentoVolume) || 0,
-      vida_util_estimada: parseInt(vidaUtilEstimada) || 0,
-      custo_base: parseFloat(custoBase.replace(',', '.')) || 0,
-      preco_venda: parseFloat(precoVenda.replace(',', '.')) || 0,
-      estoque_minimo: parseInt(estoqueMinimo) || 0,
-      ponto_pedido: parseInt(pontoPedido) || 0,
-      ncm, cest
+      ciclo_mensal_recomendado: parseInt(cicloRecomendado) || 0, ciclo_mensal_maximo: parseInt(cicloMaximo) || 0,
+      rendimento_volume: parseInt(rendimentoVolume) || 0, vida_util_estimada: parseInt(vidaUtilEstimada) || 0,
+      custo_base: parseFloat(custoBase.replace(',', '.')) || 0, preco_venda: parseFloat(precoVenda.replace(',', '.')) || 0,
+      estoque_minimo: parseInt(estoqueMinimo) || 0, ponto_pedido: parseInt(pontoPedido) || 0, ncm, cest
     };
 
     let erroBanco;
     if (produtoId) {
-      const { error } = await supabase.from('log_produtos').update(payload).eq('id', produtoId);
-      erroBanco = error;
+      const { error } = await supabase.from('log_produtos').update(payload).eq('id', produtoId); erroBanco = error;
     } else {
-      const { error } = await supabase.from('log_produtos').insert([payload]);
-      erroBanco = error;
+      const { error } = await supabase.from('log_produtos').insert([payload]); erroBanco = error;
     }
 
     if (erroBanco) alert("Erro ao salvar produto: " + erroBanco.message);
@@ -208,9 +207,7 @@ export default function Logistica() {
       const listaSaldos = locaisEstoque.map(local => {
           const saldoEncontrado = saldosSalvos?.find(s => s.local_id === local.id);
           return {
-              local_id: local.id,
-              nome: local.nome,
-              tipo: local.tipo || 'Físico',
+              local_id: local.id, nome: local.nome, tipo: local.tipo || 'Físico',
               quantidade: saldoEncontrado ? Number(saldoEncontrado.quantidade) : 0
           };
       });
@@ -225,29 +222,26 @@ export default function Logistica() {
       setSalvandoSaldos(true);
       try {
           const estoqueGlobalRecalculado = saldosLocais.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
+          const diferenca = estoqueGlobalRecalculado - (produtoSaldos.estoque_atual || 0);
 
-          // 1. Atualiza os saldos nas prateleiras (log_produto_saldos)
+          // 1. Atualiza os saldos nas prateleiras
           for (const s of saldosLocais) {
               await supabase.from('log_produto_saldos').upsert({
-                  produto_id: produtoSaldos.id,
-                  local_id: s.local_id,
-                  quantidade: s.quantidade
+                  produto_id: produtoSaldos.id, local_id: s.local_id, quantidade: s.quantidade
               }, { onConflict: 'produto_id, local_id' });
           }
 
-          // 2. FORÇA a sincronia na tabela principal (log_produtos)
+          // 2. Atualiza o saldo global
           await supabase.from('log_produtos').update({ estoque_atual: estoqueGlobalRecalculado }).eq('id', produtoSaldos.id);
 
-          // 3. Registra a movimentação de ajuste de inventário carimbando o usuário
-          await supabase.from('log_movimentacoes').insert({
-              produto_id: produtoSaldos.id,
-              tipo: 'Ajuste',
-              quantidade: estoqueGlobalRecalculado - (produtoSaldos.estoque_atual || 0), 
-              documento: 'INV-' + new Date().getTime(),
-              fornecedor_cliente: 'Ajuste Manual de Inventário',
-              usuario_nome: usuarioAtual,
-              centro_custo: 'Ajuste de Inventário'
-          });
+          // 3. Registra a movimentação de inventário (se houve mudança)
+          if (diferenca !== 0) {
+              await supabase.from('log_movimentacoes').insert({
+                  produto_id: produtoSaldos.id, tipo: 'Ajuste', quantidade: diferenca, 
+                  documento: 'INV-' + new Date().getTime(), fornecedor_cliente: 'Balanço Físico',
+                  usuario_nome: usuarioAtual, centro_custo: 'Ajuste de Inventário'
+              });
+          }
 
           alert("Inventário concluído! O estoque global e físico foram sincronizados.");
           setModalSaldosAberto(false);
@@ -255,6 +249,31 @@ export default function Logistica() {
       } catch (e: any) { alert("Erro ao atualizar saldos: " + e.message); } 
       finally { setSalvandoSaldos(false); }
   };
+
+  // ==========================================
+  // FUNÇÕES DE EXTRATO (FICHA DO PRODUTO)
+  // ==========================================
+  const abrirExtrato = async (prod: any) => {
+    setProdutoExtrato(prod);
+    setModalExtratoAberto(true);
+    setCarregandoExtrato(true);
+
+    try {
+        // Busca os saldos positivos cruzando com a tabela de locais manualmente
+        const { data: saldosSalvos } = await supabase.from('log_produto_saldos').select('*').eq('produto_id', prod.id).gt('quantidade', 0);
+        const saldosMapeados = (saldosSalvos || []).map(s => {
+            const localEncontrado = locaisEstoque.find(l => l.id === s.local_id);
+            return { nome: localEncontrado?.nome || 'Local Desconhecido', quantidade: s.quantidade };
+        });
+        setSaldosAtuaisProduto(saldosMapeados);
+
+        // Busca o histórico de movimentações
+        const { data: movs } = await supabase.from('log_movimentacoes').select('*').eq('produto_id', prod.id).order('data_movimentacao', { ascending: false }).limit(50);
+        if (movs) setMovimentacoesProduto(movs);
+    } catch(e) { console.error(e); }
+    finally { setCarregandoExtrato(false); }
+  };
+
 
   const toggleSelecao = (id: string) => { setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
 
@@ -380,6 +399,93 @@ export default function Logistica() {
             </div>
         )}
 
+        {/* ========================================================================= */}
+        {/* MODAL DE EXTRATO (FICHA DO PRODUTO) */}
+        {/* ========================================================================= */}
+        {modalExtratoAberto && produtoExtrato && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col h-[90vh]">
+                    
+                    <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-indigo-50 shrink-0">
+                        <div>
+                            <h2 className="text-xl font-black text-indigo-900 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600"/> Ficha do Produto</h2>
+                            <p className="text-xs text-indigo-700 font-bold mt-1 uppercase tracking-widest">{produtoExtrato.sku} - {produtoExtrato.nome}</p>
+                        </div>
+                        <button onClick={() => setModalExtratoAberto(false)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-full"><X className="w-5 h-5"/></button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        
+                        {/* Seção 1: Saldos Distribuídos */}
+                        <div className="space-y-3">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="w-4 h-4"/> Onde está guardado? (Saldos Físicos)</h3>
+                            <div className="flex gap-3 flex-wrap">
+                                {carregandoExtrato ? <Loader2 className="w-5 h-5 animate-spin text-slate-400"/> : saldosAtuaisProduto.length === 0 ? (
+                                    <p className="text-sm text-slate-500 italic bg-slate-50 px-4 py-2 rounded-md border border-slate-200">Nenhum saldo distribuído. Faça o Inventário.</p>
+                                ) : (
+                                    saldosAtuaisProduto.map((s, i) => (
+                                        <div key={i} className="bg-white border border-slate-200 shadow-sm rounded-lg px-4 py-3 flex flex-col items-center justify-center min-w-[120px]">
+                                            <span className="text-2xl font-black text-emerald-600">{s.quantidade}</span>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase mt-1 text-center leading-tight">{s.nome}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Seção 2: Histórico de Movimentações */}
+                        <div className="space-y-3 pt-6 border-t border-slate-100">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Activity className="w-4 h-4"/> Extrato de Movimentações (Auditoria)</h3>
+                            
+                            <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider">
+                                            <th className="p-3 font-semibold border-b">Data / Responsável</th>
+                                            <th className="p-3 font-semibold border-b">Natureza / Origem</th>
+                                            <th className="p-3 font-semibold border-b">Documento</th>
+                                            <th className="p-3 font-semibold border-b text-right">Movimentação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {carregandoExtrato ? <tr><td colSpan={4} className="p-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr> : movimentacoesProduto.length === 0 ? (
+                                            <tr><td colSpan={4} className="p-8 text-center text-slate-400 italic">Nenhuma movimentação registrada.</td></tr>
+                                        ) : movimentacoesProduto.map((mov, i) => {
+                                            const isEntrada = mov.tipo === 'Entrada' || (mov.tipo === 'Ajuste' && mov.quantidade > 0);
+                                            const isSaida = mov.tipo === 'Saída' || (mov.tipo === 'Ajuste' && mov.quantidade < 0);
+                                            
+                                            return (
+                                                <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="p-3">
+                                                        <p className="font-bold text-slate-800">{new Date(mov.data_movimentacao).toLocaleDateString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                        <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5"><Database className="w-3 h-3"/> {mov.usuario_nome || 'Sistema'}</p>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <p className="font-semibold text-slate-700 text-sm">{mov.fornecedor_cliente || 'Ajuste Interno'}</p>
+                                                        <p className="text-[10px] text-slate-500 mt-0.5 bg-slate-100 inline-block px-1.5 rounded">C.C: {mov.centro_custo || 'Geral'}</p>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{mov.documento || 'Sem Ref'}</span>
+                                                    </td>
+                                                    <td className="p-3 text-right">
+                                                        <p className={`font-black text-base ${isEntrada ? 'text-emerald-600' : isSaida ? 'text-rose-600' : 'text-slate-600'}`}>
+                                                            {mov.quantidade > 0 ? '+' : ''}{mov.quantidade}
+                                                        </p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase">{mov.tipo}</p>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
@@ -497,7 +603,12 @@ export default function Logistica() {
                         </div>
                         
                         <div className="flex flex-col gap-1 ml-2 border-l border-slate-200 pl-3">
-                            <Button variant="outline" size="sm" onClick={() => abrirSaldosEstoque(prod)} className="h-7 text-xs font-bold text-emerald-700 border-emerald-200 hover:bg-emerald-50 gap-1 bg-emerald-50/30" title="Balanço/Inventário e Saldos por Local">
+                            {/* NOVO BOTÃO DE EXTRATO / FICHA DO PRODUTO */}
+                            <Button variant="outline" size="sm" onClick={() => abrirExtrato(prod)} className="h-7 text-xs font-bold text-indigo-700 border-indigo-200 hover:bg-indigo-50 gap-1 bg-indigo-50/30" title="Ver saldos por local e histórico">
+                                <Search className="w-3 h-3"/> Extrato
+                            </Button>
+                            
+                            <Button variant="outline" size="sm" onClick={() => abrirSaldosEstoque(prod)} className="h-7 text-xs font-bold text-emerald-700 border-emerald-200 hover:bg-emerald-50 gap-1 bg-emerald-50/30" title="Fazer Balanço / Ajuste de Inventário">
                                 <ArrowLeftRight className="w-3 h-3"/> Inventário
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => editarProduto(prod)} className="h-7 text-xs text-slate-500 hover:text-stone-700 gap-1">
