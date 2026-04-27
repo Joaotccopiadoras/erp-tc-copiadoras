@@ -239,8 +239,11 @@ export default function Financeiro() {
 
         {/* ÁREA PRINCIPAL UNIFICADA (PAGAR / RECEBER) */}
         {(abaAtiva === "pagar" || abaAtiva === "receber") && (
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-            <div className="p-4 border-b flex flex-wrap gap-4 justify-between items-center bg-slate-50">
+          // REMOVIDO o overflow-hidden desta div para não cortar os Selects!
+          <div className="bg-white rounded-xl border shadow-sm">
+            
+            {/* Cabecalho da Tabela e Buscas */}
+            <div className="p-4 border-b flex flex-wrap gap-4 justify-between items-center bg-slate-50 rounded-t-xl">
               <div className="relative w-full max-w-sm">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder={isPagar ? "Buscar fornecedor, NF ou descrição..." : "Buscar cliente, NF ou descrição..."} className="pl-9 bg-white" />
@@ -260,6 +263,7 @@ export default function Financeiro() {
                    </h3>
                    <span className={`text-xs font-medium italic ${isPagar ? 'text-rose-500' : 'text-emerald-500'}`}>Rascunho salvo automaticamente</span>
                 </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-2 md:col-span-2">
                       <label className="text-xs font-bold text-slate-500 uppercase">{isPagar ? 'Descrição' : 'Descrição / Cliente'} <span className="text-red-500">*</span></label>
@@ -276,7 +280,7 @@ export default function Financeiro() {
                         <label className="text-xs font-bold text-slate-500 uppercase">Fornecedor / Credor</label>
                         <Select value={fornecedorId} onValueChange={setFornecedorId}>
                           <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white z-[9999]">
                             <SelectItem value="nenhum">Avulso / Sem Fornecedor</SelectItem>
                             {fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}
                           </SelectContent>
@@ -287,38 +291,49 @@ export default function Financeiro() {
                   )}
 
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Centro de Custo / Setor</label><Input value={centroCusto} onChange={e => setCentroCusto(e.target.value)} placeholder="Ex: Administrativo" className="bg-white" /></div>
+                  
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase">Forma de Pagamento</label>
                     <Select value={formaPagamento} onValueChange={setFormaPagamento}>
                         <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                        <SelectContent position="popper" className="z-[99] bg-white"><SelectItem value="Boleto">Boleto Bancário</SelectItem><SelectItem value="PIX">PIX</SelectItem><SelectItem value="Transferência">Transferência Bancária</SelectItem><SelectItem value="Cartão">Cartão de Crédito</SelectItem><SelectItem value="Dinheiro">Dinheiro</SelectItem></SelectContent>
+                        <SelectContent className="bg-white z-[9999]">
+                            <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                            <SelectItem value="PIX">PIX</SelectItem>
+                            <SelectItem value="Transferência">Transferência Bancária</SelectItem>
+                            <SelectItem value="Cartão">Cartão de Crédito</SelectItem>
+                            <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                        </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase">Categoria Financeira <span className="text-red-500">*</span></label>
                     <Select value={categoriaId} onValueChange={setCategoriaId}>
                       <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                      <SelectContent>{categorias.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
+                      <SelectContent className="bg-white z-[9999]">
+                          {categorias.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase">Conta Bancária <span className="text-red-500">*</span></label>
                     <Select value={contaId} onValueChange={setContaId}>
                       <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                      <SelectContent>{contasBancarias.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
+                      <SelectContent className="bg-white z-[9999]">
+                          {contasBancarias.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={limparFormulario}>Cancelar</Button>
-                  <Button onClick={salvarLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white`}>
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-200/50 mt-4">
+                  <Button variant="outline" onClick={limparFormulario} className="bg-white">Cancelar</Button>
+                  <Button onClick={salvarLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white shadow-md`}>
                       {editandoLancamentoId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* TABELA DE LANÇAMENTOS */}
+            {/* TABELA DE LANÇAMENTOS (Com scroll independente para não quebrar cards) */}
             <div className="overflow-x-auto min-h-[400px]">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -328,7 +343,7 @@ export default function Financeiro() {
                     <th className="p-4 font-semibold border-b">Classificação (C.Custo)</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
                     <th className="p-4 font-semibold border-b text-right">Valor</th>
-                    <th className="p-4 font-semibold border-b text-center w-32">Ação</th>
+                    <th className="p-4 font-semibold border-b text-center w-24">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
