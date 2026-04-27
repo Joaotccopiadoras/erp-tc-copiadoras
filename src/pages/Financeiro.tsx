@@ -181,6 +181,19 @@ export default function Financeiro() {
     fetchLancamentos();
   };
 
+  // Função para navegar para a Logística com foco na Nota
+  const irParaLogistica = (documentoOrigem: string) => {
+      // 1. Tenta forçar o Session Storage para a aba de "Entradas/Notas" caso a Logística use auto-save
+      try {
+          const mockState = { abaAtiva: "entradas", busca: documentoOrigem };
+          sessionStorage.setItem("logistica_rascunho", JSON.stringify(mockState));
+          sessionStorage.setItem("logistica_rascunho_v2", JSON.stringify(mockState));
+      } catch (e) {}
+      
+      // 2. Navega passando a aba e a busca diretamente na URL
+      navigate(`/logistica?aba=entradas&busca=${encodeURIComponent(documentoOrigem)}`);
+  };
+
   // ==========================================
   // MOTOR DE FILTROS, ORDENAÇÃO E CÁLCULOS
   // ==========================================
@@ -334,7 +347,7 @@ export default function Financeiro() {
       doc.setFont("helvetica", "normal");
       doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 280, 26, { align: "right" });
 
-      // Ordem rigorosa: Emissão, Fornecedor, Documento, Vencimento, Pagamento, Status, Valor, Classificação, Descrição
+      // Ordem rigorosa
       const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor", "Classificação", "Descrição"];
       
       const tableRows: any[] = [];
@@ -625,7 +638,7 @@ export default function Financeiro() {
                             <div className="flex items-center gap-1.5">
                                 <span className="text-[11px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center w-fit gap-1"><FileText className="w-3 h-3"/> {lanc.documento_origem}</span>
                                 {isPagar && (
-                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/logistica?busca=${encodeURIComponent(lanc.documento_origem)}`)} className="h-6 w-6 text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 p-0" title="Ver Nota Fiscal na Logística">
+                                    <Button variant="ghost" size="icon" onClick={() => irParaLogistica(lanc.documento_origem)} className="h-6 w-6 text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 p-0" title="Ver Nota Fiscal na Logística">
                                         <PackageSearch className="w-3.5 h-3.5"/>
                                     </Button>
                                 )}
