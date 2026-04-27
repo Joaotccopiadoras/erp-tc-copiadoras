@@ -181,17 +181,16 @@ export default function Financeiro() {
     fetchLancamentos();
   };
 
-  // Função para navegar para a Logística com foco na Nota
+  // Função para navegar para a tela de Entradas de Produtos com foco na Nota
   const irParaLogistica = (documentoOrigem: string) => {
-      // 1. Tenta forçar o Session Storage para a aba de "Entradas/Notas" caso a Logística use auto-save
       try {
-          const mockState = { abaAtiva: "entradas", busca: documentoOrigem };
-          sessionStorage.setItem("logistica_rascunho", JSON.stringify(mockState));
-          sessionStorage.setItem("logistica_rascunho_v2", JSON.stringify(mockState));
+          // Prepara o auto-save da tela de Entradas caso exista
+          const mockState = { abaAtiva: "historico", busca: documentoOrigem };
+          sessionStorage.setItem("entradasprodutos_rascunho", JSON.stringify(mockState));
       } catch (e) {}
       
-      // 2. Navega passando a aba e a busca diretamente na URL
-      navigate(`/logistica?aba=entradas&busca=${encodeURIComponent(documentoOrigem)}`);
+      // Navega para a URL correta passando o número da NF
+      navigate(`/entradasprodutos?busca=${encodeURIComponent(documentoOrigem)}`);
   };
 
   // ==========================================
@@ -347,7 +346,7 @@ export default function Financeiro() {
       doc.setFont("helvetica", "normal");
       doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 280, 26, { align: "right" });
 
-      // Ordem rigorosa
+      // Ordem rigorosa: Emissão, Fornecedor, Documento, Vencimento, Pagamento, Status, Valor, Classificação, Descrição
       const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor", "Classificação", "Descrição"];
       
       const tableRows: any[] = [];
