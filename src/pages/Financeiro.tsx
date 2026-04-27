@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, 
+  ArrowDownCircle,
+  PackageSearch,
+  Wallet, 
+  ArrowUpCircle,
+  DollarSign, Calendar, Search, 
   Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, 
   Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, 
   UploadCloud, AlertTriangle, Check, Link as LinkIcon
