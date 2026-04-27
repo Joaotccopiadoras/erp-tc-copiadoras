@@ -15,6 +15,7 @@ import autoTable from "jspdf-autotable";
 
 export default function Logistica() {
   const [modo, setModo] = useState<"lista" | "editar" | "lote">("lista");
+  const [usuarioAtual, setUsuarioAtual] = useState("Sistema");
 
   const [produtos, setProdutos] = useState<any[]>([]);
   const [locaisEstoque, setLocaisEstoque] = useState<any[]>([]);
@@ -114,6 +115,18 @@ export default function Logistica() {
           fetchLocaisEstoque();
       }
   }, [modo]);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        const { data } = await supabase.from('permissoes').select('nome').eq('email', user.email).single();
+        if (data?.nome) setUsuarioAtual(data.nome);
+        else setUsuarioAtual(user.email);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const fetchProdutos = async () => {
     const { data, error } = await supabase.from('log_produtos').select('*').order('nome', { ascending: true });
@@ -225,13 +238,15 @@ export default function Logistica() {
           // 2. FORÇA a sincronia na tabela principal (log_produtos)
           await supabase.from('log_produtos').update({ estoque_atual: estoqueGlobalRecalculado }).eq('id', produtoSaldos.id);
 
-          // 3. Opcional: Registra uma movimentação de ajuste de inventário
+          // 3. Registra a movimentação de ajuste de inventário carimbando o usuário
           await supabase.from('log_movimentacoes').insert({
               produto_id: produtoSaldos.id,
               tipo: 'Ajuste',
-              quantidade: estoqueGlobalRecalculado - (produtoSaldos.estoque_atual || 0), // A diferença para mais ou para menos
+              quantidade: estoqueGlobalRecalculado - (produtoSaldos.estoque_atual || 0), 
               documento: 'INV-' + new Date().getTime(),
-              fornecedor_cliente: 'Ajuste Manual de Inventário'
+              fornecedor_cliente: 'Ajuste Manual de Inventário',
+              usuario_nome: usuarioAtual,
+              centro_custo: 'Ajuste de Inventário'
           });
 
           alert("Inventário concluído! O estoque global e físico foram sincronizados.");
@@ -476,7 +491,6 @@ export default function Logistica() {
                     <div className="flex items-center gap-3">
                         <div className="text-right hidden md:block"><p className="text-xs font-semibold text-slate-500">Custo: R$ {Number(prod.custo_base || 0).toFixed(2).replace('.', ',')}</p><p className="text-sm font-bold text-emerald-600">Venda: R$ {Number(prod.preco_venda || 0).toFixed(2).replace('.', ',')}</p></div>
                         
-                        {/* NOVO BLOCO DE ESTOQUE GLOBAL */}
                         <div className="text-center bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
                             <p className="text-[10px] font-bold text-slate-500 uppercase leading-none mb-1">Estoque</p>
                             <p className={`text-lg font-black leading-none ${prod.estoque_atual > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{prod.estoque_atual || 0}</p>

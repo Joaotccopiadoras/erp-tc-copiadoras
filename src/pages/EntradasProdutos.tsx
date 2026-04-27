@@ -33,6 +33,7 @@ export default function Entradas() {
   const [abaAtiva, setAbaAtiva] = useState<"receber" | "historico">("receber");
   const [modo, setModo] = useState<"formulario" | "bipagem" | "detalhe_historico">("formulario");
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [usuarioAtual, setUsuarioAtual] = useState("Sistema");
   
   // ESTADOS: DADOS DA NOTA
   const [fornecedorBusca, setFornecedorBusca] = useState(""); 
@@ -85,26 +86,15 @@ export default function Entradas() {
   const [itensDocSelecionado, setItensDocSelecionado] = useState<any[]>([]);
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
 
-  // ==========================================
-  // LÓGICA DE NAVEGAÇÃO / INTEGRAÇÃO COM URL
-  // ==========================================
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const buscaViaUrl = params.get("busca");
     
     if (buscaViaUrl) {
-      // Se veio da tela Financeiro (ou outra) com parâmetro de busca
-      setAbaAtiva("historico");
-      setBuscaHistorico(buscaViaUrl);
-      fetchHistorico();
-      setModo("formulario");
-      // Limpa os rascunhos para não confundir o usuário
+      setAbaAtiva("historico"); setBuscaHistorico(buscaViaUrl); fetchHistorico(); setModo("formulario");
       sessionStorage.removeItem("entradas_rascunho");
-      
-      // Limpa a URL na barra de endereços silenciosamente para não ficar re-ativando
       window.history.replaceState(null, '', '/entradasprodutos');
     } else {
-      // Executa o auto-save padrão caso não haja redirecionamento
       const rascunhoSalvo = sessionStorage.getItem("entradas_rascunho");
       if (rascunhoSalvo) {
         try {
@@ -144,13 +134,15 @@ export default function Entradas() {
   ]);
 
   useEffect(() => { fetchDadosBase(); }, []);
-
-  useEffect(() => {
-    if (abaAtiva === "historico") { fetchHistorico(); setModo("formulario"); } 
-    else { fetchDadosBase(); }
-  }, [abaAtiva]);
+  useEffect(() => { if (abaAtiva === "historico") { fetchHistorico(); setModo("formulario"); } else { fetchDadosBase(); } }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const { data } = await supabase.from('permissoes').select('nome').eq('email', user.email).single();
+      if (data?.nome) setUsuarioAtual(data.nome); else setUsuarioAtual(user.email);
+    }
+
     const [prodRes, fornRes, locRes, catFinRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, rastreia_serie, custo_base, fator_conversao').order('nome'),
       supabase.from('log_fornecedores').select('id, razao_social, nome_fantasia, cnpj_cpf, codigo_sequencial, is_transportadora'), 
@@ -177,15 +169,8 @@ export default function Entradas() {
     return (f.razao_social?.toLowerCase() || "").includes(termo) || (f.nome_fantasia?.toLowerCase() || "").includes(termo) || (f.cnpj_cpf?.toLowerCase() || "").includes(termo) || (f.codigo_sequencial?.toString() || "").includes(termo);
   });
 
-  const transportadorasFiltradas = fornecedoresBD.filter(f => {
-    const termo = transportadoraBusca.toLowerCase();
-    return (f.is_transportadora === true || f.is_transportadora === null) && 
-           ((f.razao_social?.toLowerCase() || "").includes(termo) || (f.nome_fantasia?.toLowerCase() || "").includes(termo) || (f.cnpj_cpf?.toLowerCase() || "").includes(termo) || (f.codigo_sequencial?.toString() || "").includes(termo));
-  });
-
   const selecionarFornecedor = (f: any) => { setFornecedorId(f.id); setFornecedorBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownFornecedor(false); };
-  const selecionarTransportadora = (f: any) => { setTransportadoraId(f.id); setTransportadoraBusca(`[${f.codigo_sequencial}] ${f.nome_fantasia || f.razao_social}`); setMostrarDropdownTransp(false); };
-
+  
   const limparFormulario = () => {
     if (!confirm("Deseja realmente limpar todos os campos?")) return;
     sessionStorage.removeItem("entradas_rascunho");
@@ -203,9 +188,7 @@ export default function Entradas() {
   };
 
   const abrirDetalhesDocumento = async (doc: any) => {
-    setCarregandoDetalhes(true); 
-    setDocSelecionado(doc); 
-    setModo("detalhe_historico");
+    setCarregandoDetalhes(true); setDocSelecionado(doc); setModo("detalhe_historico");
     const { data, error } = await supabase.from('log_movimentacoes').select(`*, log_produtos(sku, nome), log_locais!local_id(nome)`).eq('documento_id', doc.id);
     if (!error && data) setItensDocSelecionado(data);
     setCarregandoDetalhes(false);
@@ -258,7 +241,6 @@ export default function Entradas() {
       setValorIcms(doc.valor_icms || 0); setValorIcmsSt(doc.valor_icms_st || 0); setValorIpi(doc.valor_ipi || 0); setValorPis(doc.valor_pis || 0);
       setValorCofins(doc.valor_cofins || 0); setValorOutros(doc.valor_impostos || 0);
       setFornecedorId(doc.fornecedor_id); setFornecedorBusca(doc.fornecedor_texto || "");
-      setTransportadoraId(doc.transportadora_id); setTransportadoraBusca(doc.transportadora || "");
       
       const { data: finData } = await supabase.from('fin_lancamentos').select('*').eq('documento_origem', doc.documento).eq('status', 'Pendente').order('data_vencimento', { ascending: true });
       if (finData && finData.length > 0) {
@@ -294,8 +276,6 @@ export default function Entradas() {
       const natOp = xmlDoc.querySelector("ide natOp")?.textContent || ""; 
       const chAcesso = xmlDoc.querySelector("protNFe chNFe")?.textContent || xmlDoc.querySelector("infNFe")?.getAttribute("Id")?.replace("NFe", "") || "";
       const dhEmi = xmlDoc.querySelector("ide dhEmi")?.textContent?.split("T")[0] || "";
-      const transNome = xmlDoc.querySelector("transporta xNome")?.textContent || "";
-      const transCnpj = xmlDoc.querySelector("transporta CNPJ")?.textContent || "";
       const modFreteTag = xmlDoc.querySelector("transp modFrete")?.textContent || "0"; 
 
       const dupNodes = xmlDoc.querySelectorAll("cobr dup");
@@ -333,13 +313,6 @@ export default function Entradas() {
       const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === cnpjEmitente);
       if (fornMatch) { setFornecedorId(fornMatch.id); setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`); } 
       else { setFornecedorId(null); setFornecedorBusca(emitente); }
-
-      if (transNome || transCnpj) {
-          const transFormatado = transCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-          const transpMatch = fornecedoresBD.find(f => f.cnpj_cpf === transFormatado || f.cnpj_cpf === transCnpj || f.razao_social === transNome);
-          if (transpMatch) { setTransportadoraId(transpMatch.id); setTransportadoraBusca(`[${transpMatch.codigo_sequencial}] ${transpMatch.nome_fantasia || transpMatch.razao_social}`); }
-          else { setTransportadoraId(null); setTransportadoraBusca(transNome); }
-      }
 
       const detNodes = xmlDoc.querySelectorAll("det");
       const novosItens: ItemEntrada[] = [];
@@ -479,7 +452,20 @@ export default function Entradas() {
       }
 
       for (const item of itens) {
-        await supabase.from('log_movimentacoes').insert({ produto_id: item.produtoId, tipo: 'Entrada', quantidade: item.quantidade, custo_unitario: item.custo, documento_id: docId, local_id: localDestino, documento: documento, fornecedor_cliente: fornecedorBusca });
+        // Agora carimba o usuário e o centro de custo no banco de log_movimentacoes
+        await supabase.from('log_movimentacoes').insert({ 
+            produto_id: item.produtoId, 
+            tipo: 'Entrada', 
+            quantidade: item.quantidade, 
+            custo_unitario: item.custo, 
+            documento_id: docId, 
+            local_id: localDestino, 
+            documento: documento, 
+            fornecedor_cliente: fornecedorBusca,
+            usuario_nome: usuarioAtual,
+            centro_custo: centroCusto || 'Geral'
+        });
+        
         if (item.rastreiaSerie && item.series.length > 0) {
           const payloadSeries = item.series.map(s => ({ produto_id: item.produtoId, numero_serie: s, status: 'Em Estoque', documento_entrada: documento, local_id: localDestino }));
           await supabase.from('log_numeros_serie').insert(payloadSeries);
@@ -641,6 +627,7 @@ export default function Entradas() {
                         </div>
                     )}
                   </div>
+
                 </div>
 
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
