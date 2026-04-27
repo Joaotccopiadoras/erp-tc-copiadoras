@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard } from "lucide-react";
+import { Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, Edit, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Financeiro() {
@@ -18,6 +18,8 @@ export default function Financeiro() {
 
   // Estados do Novo Lançamento Manual (Modal/Form)
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [editandoLancamentoId, setEditandoLancamentoId] = useState<string | null>(null);
+  
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
@@ -26,7 +28,7 @@ export default function Financeiro() {
   const [categoriaId, setCategoriaId] = useState("");
   const [contaId, setContaId] = useState("");
   const [centroCusto, setCentroCusto] = useState("Geral");
-  const [formaPagamento, setFormaPagamento] = useState("Boleto"); // AQUI ESTÁ A DECLARAÇÃO CORRETA
+  const [formaPagamento, setFormaPagamento] = useState("Boleto");
   const [documentoOrigem, setDocumentoOrigem] = useState("");
 
   // Variável auxiliar para adaptar a tela (Cores, Textos, Filtros)
@@ -36,11 +38,12 @@ export default function Financeiro() {
   // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
   // ==========================================
   useEffect(() => {
-    const rascunho = sessionStorage.getItem("financeiro_rascunho");
+    const rascunho = sessionStorage.getItem("financeiro_rascunho_v2");
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
         if (draft.mostrarForm !== undefined) setMostrarForm(draft.mostrarForm);
+        if (draft.editandoLancamentoId !== undefined) setEditandoLancamentoId(draft.editandoLancamentoId);
         if (draft.descricao) setDescricao(draft.descricao);
         if (draft.valor) setValor(draft.valor);
         if (draft.dataEmissao) setDataEmissao(draft.dataEmissao);
@@ -57,14 +60,15 @@ export default function Financeiro() {
 
   useEffect(() => {
     if (mostrarForm || descricao || valor) {
-      const draft = { mostrarForm, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem };
-      sessionStorage.setItem("financeiro_rascunho", JSON.stringify(draft));
+      const draft = { mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem };
+      sessionStorage.setItem("financeiro_rascunho_v2", JSON.stringify(draft));
     }
-  }, [mostrarForm, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem]);
+  }, [mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem]);
 
   const limparFormulario = () => {
-    sessionStorage.removeItem("financeiro_rascunho");
+    sessionStorage.removeItem("financeiro_rascunho_v2");
     setMostrarForm(false);
+    setEditandoLancamentoId(null);
     setDescricao(""); setValor(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
     setFornecedorId("nenhum"); setCentroCusto("Geral"); setFormaPagamento("Boleto"); setCategoriaId("");
   };
@@ -102,6 +106,26 @@ export default function Financeiro() {
     if (error) console.error("Erro ao buscar lançamentos:", error);
   };
 
+  const abrirNovoLancamento = () => {
+    limparFormulario();
+    setMostrarForm(true);
+  };
+
+  const abrirEditarLancamento = (lanc: any) => {
+    setEditandoLancamentoId(lanc.id);
+    setDescricao(lanc.descricao || "");
+    setValor(lanc.valor?.toString() || "");
+    setDataEmissao(lanc.data_emissao || "");
+    setDataVencimento(lanc.data_vencimento || "");
+    setFornecedorId(lanc.fornecedor_id || "nenhum");
+    setCategoriaId(lanc.categoria_id || "");
+    setContaId(lanc.conta_bancaria_id || (contasBancarias.length > 0 ? contasBancarias[0].id : ""));
+    setCentroCusto(lanc.centro_custo || "Geral");
+    setFormaPagamento(lanc.forma_pagamento || "Boleto");
+    setDocumentoOrigem(lanc.documento_origem || "");
+    setMostrarForm(true);
+  };
+
   const salvarLancamento = async () => {
     if (!descricao || !valor || !dataVencimento || !categoriaId || !contaId) {
       return alert("Preencha todos os campos obrigatórios (Descricão, Valor, Vencimento, Categoria e Conta Bancária).");
@@ -119,18 +143,32 @@ export default function Financeiro() {
       centro_custo: centroCusto,
       forma_pagamento: formaPagamento,
       documento_origem: documentoOrigem,
-      status: 'Pendente'
+      status: editandoLancamentoId ? undefined : 'Pendente' // Preserva status se estiver editando
     };
 
-    const { error } = await supabase.from('fin_lancamentos').insert([payload]);
+    let error;
+    if (editandoLancamentoId) {
+        const result = await supabase.from('fin_lancamentos').update(payload).eq('id', editandoLancamentoId);
+        error = result.error;
+    } else {
+        const result = await supabase.from('fin_lancamentos').insert([payload]);
+        error = result.error;
+    }
     
     if (error) {
       alert("Erro ao salvar: " + error.message);
     } else {
-      alert("Lançamento registrado com sucesso!");
+      alert(editandoLancamentoId ? "Lançamento atualizado com sucesso!" : "Lançamento registrado com sucesso!");
       limparFormulario();
       fetchLancamentos();
     }
+  };
+
+  const deletarLancamento = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este lançamento permanentemente?")) return;
+    const { error } = await supabase.from('fin_lancamentos').delete().eq('id', id);
+    if (!error) fetchLancamentos();
+    else alert("Erro ao excluir: " + error.message);
   };
 
   const darBaixa = async (id: string) => {
@@ -169,8 +207,8 @@ export default function Financeiro() {
             <p className="text-slate-500">Controle de Contas a Pagar, Receber e Fluxo de Caixa.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button onClick={() => { setAbaAtiva("pagar"); setMostrarForm(false); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "pagar" ? "bg-white shadow-sm text-rose-700" : "text-slate-600 hover:text-slate-900"}`}><ArrowDownCircle className="w-4 h-4"/> Contas a Pagar</button>
-            <button onClick={() => { setAbaAtiva("receber"); setMostrarForm(false); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "receber" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600 hover:text-slate-900"}`}><ArrowUpCircle className="w-4 h-4"/> Contas a Receber</button>
+            <button onClick={() => { setAbaAtiva("pagar"); limparFormulario(); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "pagar" ? "bg-white shadow-sm text-rose-700" : "text-slate-600 hover:text-slate-900"}`}><ArrowDownCircle className="w-4 h-4"/> Contas a Pagar</button>
+            <button onClick={() => { setAbaAtiva("receber"); limparFormulario(); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "receber" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600 hover:text-slate-900"}`}><ArrowUpCircle className="w-4 h-4"/> Contas a Receber</button>
           </div>
         </div>
 
@@ -207,7 +245,7 @@ export default function Financeiro() {
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder={isPagar ? "Buscar fornecedor, NF ou descrição..." : "Buscar cliente, NF ou descrição..."} className="pl-9 bg-white" />
               </div>
-              <Button onClick={() => setMostrarForm(!mostrarForm)} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white gap-2`}>
+              <Button onClick={abrirNovoLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white gap-2`}>
                 <Plus className="w-4 h-4" /> Novo Lançamento Manual
               </Button>
             </div>
@@ -217,7 +255,8 @@ export default function Financeiro() {
               <div className={`p-6 border-b space-y-4 ${isPagar ? 'bg-rose-50/30 border-rose-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
                 <div className="flex justify-between items-center mb-4">
                    <h3 className={`font-bold flex items-center gap-2 ${isPagar ? 'text-rose-800' : 'text-emerald-800'}`}>
-                       <DollarSign className="w-5 h-5"/> {isPagar ? 'Registrar Despesa Avulsa' : 'Registrar Receita Avulsa'}
+                       {editandoLancamentoId ? <Edit className="w-5 h-5"/> : <DollarSign className="w-5 h-5"/>} 
+                       {editandoLancamentoId ? (isPagar ? 'Editar Despesa' : 'Editar Receita') : (isPagar ? 'Registrar Despesa Avulsa' : 'Registrar Receita Avulsa')}
                    </h3>
                    <span className={`text-xs font-medium italic ${isPagar ? 'text-rose-500' : 'text-emerald-500'}`}>Rascunho salvo automaticamente</span>
                 </div>
@@ -232,7 +271,6 @@ export default function Financeiro() {
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data de Emissão</label><Input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} className="bg-white" /></div>
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Documento / NF</label><Input value={documentoOrigem} onChange={e => setDocumentoOrigem(e.target.value)} placeholder="Ex: Fatura 1029" className="bg-white" /></div>
                   
-                  {/* Se for Despesa, mostra o Fornecedor. Se for Receita, esconde (pois o cliente vai na descrição) */}
                   {isPagar ? (
                       <div className="space-y-2 md:col-span-2">
                         <label className="text-xs font-bold text-slate-500 uppercase">Fornecedor / Credor</label>
@@ -251,7 +289,7 @@ export default function Financeiro() {
                   <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Centro de Custo / Setor</label><Input value={centroCusto} onChange={e => setCentroCusto(e.target.value)} placeholder="Ex: Administrativo" className="bg-white" /></div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase">Forma de Pagamento</label>
-                    <Select value={formaPagamento} onValueChange={setFormaPagamento}> {/* AQUI ESTAVA O ERRO DE DIGITAÇÃO! CORRIGIDO */}
+                    <Select value={formaPagamento} onValueChange={setFormaPagamento}>
                         <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                         <SelectContent position="popper" className="z-[99] bg-white"><SelectItem value="Boleto">Boleto Bancário</SelectItem><SelectItem value="PIX">PIX</SelectItem><SelectItem value="Transferência">Transferência Bancária</SelectItem><SelectItem value="Cartão">Cartão de Crédito</SelectItem><SelectItem value="Dinheiro">Dinheiro</SelectItem></SelectContent>
                     </Select>
@@ -273,7 +311,9 @@ export default function Financeiro() {
                 </div>
                 <div className="flex justify-end gap-2 pt-4">
                   <Button variant="outline" onClick={limparFormulario}>Cancelar</Button>
-                  <Button onClick={salvarLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white`}>Salvar Lançamento</Button>
+                  <Button onClick={salvarLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white`}>
+                      {editandoLancamentoId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
+                  </Button>
                 </div>
               </div>
             )}
@@ -288,7 +328,7 @@ export default function Financeiro() {
                     <th className="p-4 font-semibold border-b">Classificação (C.Custo)</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
                     <th className="p-4 font-semibold border-b text-right">Valor</th>
-                    <th className="p-4 font-semibold border-b text-center w-24">Ação</th>
+                    <th className="p-4 font-semibold border-b text-center w-32">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -299,7 +339,7 @@ export default function Financeiro() {
                       const isAtrasado = new Date(lanc.data_vencimento) < new Date(new Date().setHours(0,0,0,0)) && lanc.status === 'Pendente';
                       
                       return (
-                        <tr key={lanc.id} className="hover:bg-slate-50 transition-colors">
+                        <tr key={lanc.id} className="hover:bg-slate-50 transition-colors group">
                           <td className="p-4 text-sm font-medium align-top">
                             <span className={`flex items-center gap-1.5 ${isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}`}>
                               <Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
@@ -339,13 +379,23 @@ export default function Financeiro() {
                           
                           <td className="p-4 text-center align-top">
                             {lanc.status === 'Pendente' ? (
-                              <Button variant="outline" size="sm" onClick={() => darBaixa(lanc.id)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 text-xs h-8 shadow-sm">
-                                  {isPagar ? 'Pagar' : 'Receber'}
-                              </Button>
+                                <div className="space-y-2">
+                                    <Button variant="outline" size="sm" onClick={() => darBaixa(lanc.id)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 text-xs h-8 shadow-sm">
+                                        {isPagar ? 'Pagar' : 'Receber'}
+                                    </Button>
+                                    <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="icon" onClick={() => abrirEditarLancamento(lanc)} className="h-7 w-7 text-slate-400 hover:text-indigo-600" title="Editar Lançamento"><Edit className="w-3.5 h-3.5"/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => deletarLancamento(lanc.id)} className="h-7 w-7 text-slate-300 hover:text-red-500" title="Excluir Lançamento"><Trash2 className="w-3.5 h-3.5"/></Button>
+                                    </div>
+                                </div>
                             ) : (
                               <div className="flex flex-col items-center">
                                   <span className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{isPagar ? 'Pago em' : 'Recebido em'}</span>
-                                  <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-100">{new Date(lanc.data_pagamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                                  <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-100 mb-2">{new Date(lanc.data_pagamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                                  <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button variant="ghost" size="icon" onClick={() => abrirEditarLancamento(lanc)} className="h-7 w-7 text-slate-400 hover:text-indigo-600" title="Editar Lançamento"><Edit className="w-3.5 h-3.5"/></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => deletarLancamento(lanc.id)} className="h-7 w-7 text-slate-300 hover:text-red-500" title="Excluir Lançamento"><Trash2 className="w-3.5 h-3.5"/></Button>
+                                  </div>
                               </div>
                             )}
                           </td>
