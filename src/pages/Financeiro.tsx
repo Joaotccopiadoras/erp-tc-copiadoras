@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, 
   Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, 
-  Edit, Trash2, Filter, X, Table as TableIcon 
+  Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown 
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,6 +29,7 @@ export default function Financeiro() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editandoLancamentoId, setEditandoLancamentoId] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
 
   // Estados do Formulário
   const [descricao, setDescricao] = useState("");
@@ -63,7 +64,7 @@ export default function Financeiro() {
   // AUTO-SAVE E FETCH DATA
   // ==========================================
   useEffect(() => {
-    const rascunho = sessionStorage.getItem("financeiro_rascunho_v3");
+    const rascunho = sessionStorage.getItem("financeiro_rascunho_v4");
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
@@ -75,6 +76,7 @@ export default function Financeiro() {
         setContaId(draft.contaId || ""); setCentroCusto(draft.centroCusto || "Geral");
         setFormaPagamento(draft.formaPagamento || "Boleto"); setDocumentoOrigem(draft.documentoOrigem || "");
         setMostrarFiltros(draft.mostrarFiltros || false);
+        if (draft.sortConfig !== undefined) setSortConfig(draft.sortConfig);
       } catch(e) {}
     }
   }, []);
@@ -82,10 +84,10 @@ export default function Financeiro() {
   useEffect(() => {
     const draft = { 
       mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, 
-      fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros
+      fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros, sortConfig
     };
-    sessionStorage.setItem("financeiro_rascunho_v3", JSON.stringify(draft));
-  }, [mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros]);
+    sessionStorage.setItem("financeiro_rascunho_v4", JSON.stringify(draft));
+  }, [mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros, sortConfig]);
 
   useEffect(() => {
     fetchDadosBase();
@@ -121,17 +123,15 @@ export default function Financeiro() {
     setFiltroPagInicio(""); setFiltroPagFim(""); setFiltroCentroCusto("todos");
     setFiltroFornecedor("todos"); setFiltroCliente(""); setFiltroStatus("todos");
     setFiltroValorMin(""); setFiltroValorMax(""); setBusca("");
+    setSortConfig(null);
   };
 
   // --- AÇÕES ---
-  
-  // Função que faltava: Abrir form em branco
   const abrirNovoLancamento = () => {
     limparFormulario();
     setMostrarForm(true);
   };
 
-  // Função que faltava: Abrir form preenchido para edição
   const abrirEditarLancamento = (lanc: any) => {
     setEditandoLancamentoId(lanc.id);
     setDescricao(lanc.descricao || "");
@@ -180,9 +180,17 @@ export default function Financeiro() {
   };
 
   // ==========================================
-  // MOTOR DE FILTROS E CÁLCULOS
+  // MOTOR DE FILTROS, ORDENAÇÃO E CÁLCULOS
   // ==========================================
-  const lancamentosFiltrados = lancamentos.filter(l => {
+  
+  // Função auxiliar para determinar o status real (considerando atraso)
+  const getComputedStatus = (lanc: any) => {
+    if (lanc.status === 'Pago') return 'Pago';
+    const isAtrasado = new Date(lanc.data_vencimento) < new Date(new Date().setHours(0,0,0,0));
+    return isAtrasado ? 'Atrasado' : 'Pendente';
+  };
+
+  let lancamentosFiltrados = lancamentos.filter(l => {
     if (busca) {
       const termo = busca.toLowerCase();
       if (!((l.descricao||"").toLowerCase().includes(termo) || (l.documento_origem||"").toLowerCase().includes(termo) || (l.log_fornecedores?.nome_fantasia||"").toLowerCase().includes(termo))) return false;
@@ -199,12 +207,64 @@ export default function Financeiro() {
     if (filtroValorMin && Number(l.valor) < Number(filtroValorMin)) return false;
     if (filtroValorMax && Number(l.valor) > Number(filtroValorMax)) return false;
     
-    const isAtrasado = new Date(l.data_vencimento) < new Date(new Date().setHours(0,0,0,0)) && l.status === 'Pendente';
-    if (filtroStatus === "Pago" && l.status !== 'Pago') return false;
-    if (filtroStatus === "Pendente" && (l.status !== 'Pendente' || isAtrasado)) return false; 
-    if (filtroStatus === "Atrasado" && !isAtrasado) return false;
+    const statusReal = getComputedStatus(l);
+    if (filtroStatus !== "todos" && statusReal !== filtroStatus) return false;
+    
     return true;
   });
+
+  // Aplicar Ordenação
+  if (sortConfig !== null) {
+    lancamentosFiltrados.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      switch (sortConfig.key) {
+        case 'vencimento':
+          valA = new Date(a.data_vencimento).getTime();
+          valB = new Date(b.data_vencimento).getTime();
+          break;
+        case 'descricao':
+          valA = (a.descricao || "").toLowerCase();
+          valB = (b.descricao || "").toLowerCase();
+          break;
+        case 'categoria':
+          valA = (a.fin_categorias?.nome || "").toLowerCase();
+          valB = (b.fin_categorias?.nome || "").toLowerCase();
+          break;
+        case 'status':
+          valA = getComputedStatus(a);
+          valB = getComputedStatus(b);
+          break;
+        case 'valor':
+          valA = Number(a.valor);
+          valB = Number(b.valor);
+          break;
+        default:
+          break;
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => {
+      if (prev && prev.key === key) {
+        return prev.direction === 'asc' ? { key, direction: 'desc' } : null; // Clica a 3ª vez remove ordenação
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const renderSortIcon = (key: string) => {
+    if (sortConfig?.key === key) {
+      return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1 text-slate-600" /> : <ArrowDown className="w-3 h-3 inline ml-1 text-slate-600" />;
+    }
+    return <ArrowDown className="w-3 h-3 inline ml-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+  };
 
   const totalPendente = lancamentosFiltrados.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + Number(l.valor), 0);
   const totalPago = lancamentosFiltrados.filter(l => l.status === 'Pago').reduce((acc, l) => acc + Number(l.valor), 0);
@@ -249,7 +309,7 @@ export default function Financeiro() {
         `${l.descricao}\n${l.log_fornecedores?.nome_fantasia || ''}`,
         l.documento_origem || '-',
         `${l.fin_categorias?.nome || '-'}\nC.C: ${l.centro_custo || 'Geral'}`,
-        l.status === 'Pago' ? (isPagar ? 'PAGO' : 'RECEBIDO') : 'PENDENTE',
+        getComputedStatus(l).toUpperCase(),
         `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`
       ]);
 
@@ -298,7 +358,7 @@ export default function Financeiro() {
           doc: l.documento_origem || '-',
           cat: l.fin_categorias?.nome || '-',
           cc: l.centro_custo || 'Geral',
-          status: l.status,
+          status: getComputedStatus(l),
           valor: Number(l.valor)
         });
       });
@@ -408,44 +468,101 @@ export default function Financeiro() {
           )}
 
           {/* TABELA */}
-          <div className="overflow-x-auto min-h-[400px]">
+          <div className="overflow-x-auto min-h-[400px] relative z-0">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider">
-                  <th className="p-4 font-semibold border-b w-32">Vencimento</th>
-                  <th className="p-4 font-semibold border-b min-w-[250px]">Descrição / Credor</th>
-                  <th className="p-4 font-semibold border-b">Classificação</th>
-                  <th className="p-4 font-semibold border-b text-center">Status</th>
-                  <th className="p-4 font-semibold border-b text-right">Valor</th>
+                  <th className="p-4 font-semibold border-b w-32 cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('vencimento')}>
+                      Vencimento {renderSortIcon('vencimento')}
+                  </th>
+                  <th className="p-4 font-semibold border-b min-w-[250px] cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('descricao')}>
+                      Descrição / Credor {renderSortIcon('descricao')}
+                  </th>
+                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('categoria')}>
+                      Classificação {renderSortIcon('categoria')}
+                  </th>
+                  <th className="p-4 font-semibold border-b text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('status')}>
+                      Status {renderSortIcon('status')}
+                  </th>
+                  <th className="p-4 font-semibold border-b text-right cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('valor')}>
+                      Valor {renderSortIcon('valor')}
+                  </th>
                   <th className="p-4 font-semibold border-b text-center w-24">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {lancamentosFiltrados.map(lanc => {
-                  const isAtrasado = new Date(lanc.data_vencimento) < new Date(new Date().setHours(0,0,0,0)) && lanc.status === 'Pendente';
-                  return (
-                    <tr key={lanc.id} className="hover:bg-slate-50 transition-colors group">
-                      <td className="p-4 text-sm align-top"><span className={isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}>{new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></td>
-                      <td className="p-4 align-top"><p className="font-bold text-slate-800 text-sm">{lanc.descricao}</p>{lanc.log_fornecedores?.nome_fantasia && <p className="text-xs text-slate-600">{lanc.log_fornecedores.nome_fantasia}</p>}{lanc.documento_origem && <span className="text-[10px] text-indigo-700 font-bold">Doc: {lanc.documento_origem}</span>}</td>
-                      <td className="p-4 align-top"><p className="text-xs font-semibold text-slate-700">{lanc.fin_categorias?.nome}</p><p className="text-[10px] text-slate-500">CC: {lanc.centro_custo}</p></td>
-                      <td className="p-4 text-center align-top"><span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-full ${lanc.status === 'Pago' ? 'bg-emerald-100 text-emerald-700' : isAtrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{isAtrasado ? 'Atrasado' : (lanc.status === 'Pago' ? (isPagar ? 'Pago' : 'Recebido') : lanc.status)}</span></td>
-                      <td className="p-4 text-right align-top font-bold text-sm">R$ {Number(lanc.valor).toFixed(2).replace('.', ',')}</td>
-                      <td className="p-4 text-center align-top">
-                        {lanc.status === 'Pendente' ? (
-                          <div className="space-y-2">
-                            <Button size="sm" onClick={() => darBaixa(lanc.id)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 text-[10px] h-7">Baixar</Button>
-                            <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => abrirEditarLancamento(lanc)} className="p-1 text-slate-400 hover:text-indigo-600"><Edit className="w-3.5 h-3.5"/></button>
-                              <button onClick={() => deletarLancamento(lanc.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
-                            </div>
+                {lancamentosFiltrados.length === 0 ? (
+                  <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum lançamento corresponde aos filtros aplicados.</td></tr>
+                ) : (
+                  lancamentosFiltrados.map(lanc => {
+                    const statusAtual = getComputedStatus(lanc);
+                    const isAtrasado = statusAtual === 'Atrasado';
+                    
+                    return (
+                      <tr key={lanc.id} className="hover:bg-slate-50 transition-colors group">
+                        <td className="p-4 text-sm font-medium align-top">
+                          <span className={`flex items-center gap-1.5 ${isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}`}>
+                            <Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                          </span>
+                          {isAtrasado && <span className="text-[10px] text-rose-500 uppercase mt-0.5 block ml-5">Vencido</span>}
+                        </td>
+                        
+                        <td className="p-4 align-top">
+                          <p className="font-bold text-slate-800 text-sm mb-1 leading-tight">{lanc.descricao}</p>
+                          {lanc.log_fornecedores?.nome_fantasia && (
+                              <p className="text-xs text-slate-600 flex items-center gap-1"><Building2 className="w-3 h-3 text-slate-400"/> {lanc.log_fornecedores.nome_fantasia}</p>
+                          )}
+                          <div className="flex gap-2 mt-1.5">
+                              {lanc.documento_origem && <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1"><FileText className="w-3 h-3"/> Ref: {lanc.documento_origem}</span>}
+                              {lanc.data_emissao && <span className="text-[10px] text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">Emissão: {new Date(lanc.data_emissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>}
                           </div>
-                        ) : (
-                          <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-100">PAGO</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+
+                        <td className="p-4 align-top">
+                          <p className="text-xs font-semibold text-slate-700 mb-1">{lanc.fin_categorias?.nome || 'Sem Categoria'}</p>
+                          <p className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded inline-block mb-1 border">C. Custo: {lanc.centro_custo || 'Geral'}</p>
+                          <p className="text-[10px] text-slate-500 flex items-center gap-1"><CreditCard className="w-3 h-3"/> {lanc.forma_pagamento || 'Boleto'}</p>
+                        </td>
+
+                        <td className="p-4 text-center align-top">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${lanc.status === 'Pago' ? 'bg-emerald-100 text-emerald-700' : isAtrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {isAtrasado ? 'Atrasado' : (lanc.status === 'Pago' ? (isPagar ? 'Pago' : 'Recebido') : lanc.status)}
+                          </span>
+                        </td>
+                        
+                        <td className="p-4 text-right align-top">
+                          <p className={`font-bold text-base ${isPagar ? 'text-rose-600' : 'text-emerald-600'}`}>
+                              R$ {Number(lanc.valor).toFixed(2).replace('.', ',')}
+                          </p>
+                          {lanc.valor_impostos > 0 && <p className="text-[10px] text-slate-400 mt-1">Inc. R$ {Number(lanc.valor_impostos).toFixed(2).replace('.',',')} Trib.</p>}
+                        </td>
+                        
+                        <td className="p-4 text-center align-top">
+                          {lanc.status === 'Pendente' ? (
+                              <div className="space-y-2">
+                                  <Button variant="outline" size="sm" onClick={() => darBaixa(lanc.id)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 text-xs h-8 shadow-sm">
+                                      {isPagar ? 'Pagar' : 'Receber'}
+                                  </Button>
+                                  <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button variant="ghost" size="icon" onClick={() => abrirEditarLancamento(lanc)} className="h-7 w-7 text-slate-400 hover:text-indigo-600" title="Editar Lançamento"><Edit className="w-3.5 h-3.5"/></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => deletarLancamento(lanc.id)} className="h-7 w-7 text-slate-300 hover:text-red-500" title="Excluir Lançamento"><Trash2 className="w-3.5 h-3.5"/></Button>
+                                  </div>
+                              </div>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                                <span className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{isPagar ? 'Pago em' : 'Recebido em'}</span>
+                                <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-100 mb-2">{new Date(lanc.data_pagamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                                <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="icon" onClick={() => abrirEditarLancamento(lanc)} className="h-7 w-7 text-slate-400 hover:text-indigo-600" title="Editar Lançamento"><Edit className="w-3.5 h-3.5"/></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => deletarLancamento(lanc.id)} className="h-7 w-7 text-slate-300 hover:text-red-500" title="Excluir Lançamento"><Trash2 className="w-3.5 h-3.5"/></Button>
+                                </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
