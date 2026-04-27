@@ -1,17 +1,14 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  ArrowDownCircle,
-  PackageSearch,
-  Wallet, 
-  ArrowUpCircle,
-  DollarSign, Calendar, Search, 
+  Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, 
   Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, 
-  Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, 
-  UploadCloud, AlertTriangle, Check, Link as LinkIcon
+  Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, PackageSearch,
+  UploadCloud, AlertTriangle, Check
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -20,7 +17,6 @@ import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// Tipagem para as transações do OFX
 type OfxTransaction = {
   id: string;
   tipo: "Despesa" | "Receita";
@@ -32,7 +28,7 @@ type OfxTransaction = {
 };
 
 export default function Financeiro() {
-  // Adicionamos a aba "conciliacao"
+  const navigate = useNavigate();
   const [abaAtiva, setAbaAtiva] = useState<"dashboard" | "pagar" | "receber" | "conciliacao">("pagar");
   
   // Estados do Banco de Dados
@@ -75,9 +71,7 @@ export default function Financeiro() {
   const [filtroValorMin, setFiltroValorMin] = useState("");
   const [filtroValorMax, setFiltroValorMax] = useState("");
 
-  // ==========================================
-  // ESTADOS DA CONCILIAÇÃO BANCÁRIA (OFX)
-  // ==========================================
+  // Estados da Conciliação (OFX)
   const ofxInputRef = useRef<HTMLInputElement>(null);
   const [ofxTransactions, setOfxTransactions] = useState<OfxTransaction[]>([]);
   const [contaConciliacaoId, setContaConciliacaoId] = useState("");
@@ -85,17 +79,47 @@ export default function Financeiro() {
   const isPagar = abaAtiva === "pagar";
 
   // ==========================================
-  // AUTO-SAVE E FETCH DATA
+  // AUTO-SAVE BLINDADO (INCLUINDO OFX)
   // ==========================================
+  useEffect(() => {
+    const rascunho = sessionStorage.getItem("financeiro_rascunho_v6");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.abaAtiva) setAbaAtiva(draft.abaAtiva);
+        if (draft.mostrarForm !== undefined) setMostrarForm(draft.mostrarForm);
+        if (draft.editandoLancamentoId !== undefined) setEditandoLancamentoId(draft.editandoLancamentoId);
+        setDescricao(draft.descricao || ""); setValor(draft.valor || "");
+        setDataEmissao(draft.dataEmissao || ""); setDataVencimento(draft.dataVencimento || "");
+        setFornecedorId(draft.fornecedorId || "nenhum"); setCategoriaId(draft.categoriaId || "");
+        setContaId(draft.contaId || ""); setCentroCusto(draft.centroCusto || "Geral");
+        setFormaPagamento(draft.formaPagamento || "Boleto"); setDocumentoOrigem(draft.documentoOrigem || "");
+        setMostrarFiltros(draft.mostrarFiltros || false);
+        if (draft.sortConfig !== undefined) setSortConfig(draft.sortConfig);
+        
+        // Recupera dados do OFX
+        if (draft.ofxTransactions) setOfxTransactions(draft.ofxTransactions);
+        if (draft.contaConciliacaoId) setContaConciliacaoId(draft.contaConciliacaoId);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    const draft = { 
+      abaAtiva, mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, 
+      fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros, sortConfig,
+      ofxTransactions, contaConciliacaoId
+    };
+    sessionStorage.setItem("financeiro_rascunho_v6", JSON.stringify(draft));
+  }, [abaAtiva, mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros, sortConfig, ofxTransactions, contaConciliacaoId]);
+
   useEffect(() => {
     fetchDadosBase();
     fetchLancamentos();
   }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
-    // Se estiver em conciliação, pega categorias de despesa e receita
     const tipoFiltro = abaAtiva === 'conciliacao' ? null : (isPagar ? 'Despesa' : 'Receita');
-    
     let catsQuery = supabase.from('fin_categorias').select('*');
     if (tipoFiltro) catsQuery = catsQuery.eq('tipo', tipoFiltro);
 
@@ -115,12 +139,8 @@ export default function Financeiro() {
   };
 
   const fetchLancamentos = async () => {
-    // Se estiver na aba de conciliação, precisamos de TODOS os pendentes (Receitas e Despesas)
     let query = supabase.from('fin_lancamentos').select(`*, log_fornecedores(nome_fantasia), fin_categorias(nome)`).order('data_vencimento', { ascending: true });
-    
-    if (abaAtiva !== 'conciliacao') {
-        query = query.eq('tipo', isPagar ? 'Despesa' : 'Receita');
-    }
+    if (abaAtiva !== 'conciliacao') query = query.eq('tipo', isPagar ? 'Despesa' : 'Receita');
     
     const { data } = await query;
     if (data) setLancamentos(data);
@@ -140,7 +160,7 @@ export default function Financeiro() {
     setSortConfig(null);
   };
 
-  // --- AÇÕES ---
+  // --- AÇÕES DO FORMULÁRIO GERAL ---
   const abrirNovoLancamento = () => {
     limparFormulario();
     setMostrarForm(true);
@@ -164,8 +184,6 @@ export default function Financeiro() {
   const salvarLancamento = async () => {
     if (!descricao || !valor || !dataVencimento || !categoriaId || !contaId) return alert("Preencha os campos obrigatórios.");
     
-    // Se estivermos salvando a partir da tela de conciliação, o tipo deve ser inferido.
-    // Como simplificação, usamos a flag isPagar ou deixamos o usuário preencher o form correto.
     const tipoLancamento = abaAtiva === 'conciliacao' ? (parseFloat(valor) < 0 ? 'Despesa' : 'Receita') : (isPagar ? 'Despesa' : 'Receita');
     const valorReal = Math.abs(parseFloat(valor));
 
@@ -177,7 +195,6 @@ export default function Financeiro() {
       centro_custo: centroCusto, forma_pagamento: formaPagamento, documento_origem: documentoOrigem
     };
     
-    // Se salvou pela aba de conciliação, ele já entra como PAGO e com a data de pagamento = vencimento (data do banco)
     const statusFinal = abaAtiva === 'conciliacao' ? 'Pago' : 'Pendente';
     const dataPag = abaAtiva === 'conciliacao' ? dataVencimento : null;
 
@@ -191,9 +208,6 @@ export default function Financeiro() {
         alert("Lançamento Registrado!"); 
         limparFormulario(); 
         fetchLancamentos(); 
-        if (abaAtiva === 'conciliacao') {
-            // Se registrou pela conciliação, marca no state do OFX que foi resolvido (por simplificação recarrega)
-        }
     } else alert(error.message);
   };
 
@@ -209,6 +223,14 @@ export default function Financeiro() {
     fetchLancamentos();
   };
 
+  const irParaLogistica = (documentoOrigem: string) => {
+      try {
+          const mockState = { abaAtiva: "historico", busca: documentoOrigem };
+          sessionStorage.setItem("entradasprodutos_rascunho", JSON.stringify(mockState));
+      } catch (e) {}
+      navigate(`/entradasprodutos?busca=${encodeURIComponent(documentoOrigem)}`);
+  };
+
   // ==========================================
   // MOTOR DE CONCILIAÇÃO BANCÁRIA (OFX PARSER)
   // ==========================================
@@ -220,8 +242,6 @@ export default function Financeiro() {
     reader.onload = (e) => {
         const text = e.target?.result as string;
         const transactions: OfxTransaction[] = [];
-        
-        // Expressão Regular para encontrar blocos de transação <STMTTRN> ... </STMTTRN>
         const trnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/g;
         let match;
         
@@ -262,50 +282,38 @@ export default function Financeiro() {
     if (ofxInputRef.current) ofxInputRef.current.value = "";
   };
 
-  // Inteligência de Correspondência
   const sugerirCorrespondencia = (ofxTx: OfxTransaction) => {
-      // Procura lançamentos pendentes com o mesmo tipo e valor (com tolerância de centavos por arredondamento)
-      const candidatos = lancamentos.filter(l => 
-          l.status === 'Pendente' && 
-          l.tipo === ofxTx.tipo &&
-          Math.abs(Number(l.valor) - ofxTx.valor) < 0.05
-      );
-
+      const candidatos = lancamentos.filter(l => l.status === 'Pendente' && l.tipo === ofxTx.tipo && Math.abs(Number(l.valor) - ofxTx.valor) < 0.05);
       if (candidatos.length === 0) return null;
 
-      // Ordena os candidatos pela proximidade da data (Vencimento vs Data do Banco)
       candidatos.sort((a, b) => {
           const diffA = Math.abs(new Date(a.data_vencimento).getTime() - new Date(ofxTx.data).getTime());
           const diffB = Math.abs(new Date(b.data_vencimento).getTime() - new Date(ofxTx.data).getTime());
           return diffA - diffB;
       });
-
-      return candidatos[0]; // Retorna a melhor sugestão
+      return candidatos[0]; 
   };
 
   const confirmarConciliacao = async (ofxTx: OfxTransaction, lancamentoId: string) => {
-      // Baixa o lançamento do ERP usando a data real que o dinheiro caiu na conta (do OFX)
       await darBaixa(lancamentoId, ofxTx.data);
-      // Marca na tela
       setOfxTransactions(prev => prev.map(tx => tx.id === ofxTx.id ? { ...tx, conciliado: true } : tx));
   };
 
   const criarLancamentoDoOfx = (ofxTx: OfxTransaction) => {
-      // Abre o form preenchido com dados do banco
       setDescricao(ofxTx.descricao);
-      setValor(ofxTx.valor.toString());
+      setValor((ofxTx.tipo === 'Despesa' ? -ofxTx.valor : ofxTx.valor).toString());
       setDataVencimento(ofxTx.data);
       setDataEmissao(ofxTx.data);
       setDocumentoOrigem(ofxTx.documento);
       setContaId(contaConciliacaoId);
-      setFormaPagamento("Transferência"); // Padrão extrato
+      setFormaPagamento("Transferência");
       setMostrarForm(true);
-      window.scrollTo(0, 0); // Sobe para o form
+      window.scrollTo(0, 0); 
   };
 
 
   // ==========================================
-  // MOTOR DE FILTROS E ORDENAÇÃO GERAL
+  // MOTOR DE FILTROS, ORDENAÇÃO E CÁLCULOS
   // ==========================================
   const getComputedStatus = (lanc: any) => {
     if (lanc.status === 'Pago') return 'Pago';
@@ -314,7 +322,7 @@ export default function Financeiro() {
   };
 
   let lancamentosFiltrados = lancamentos.filter(l => {
-    if (abaAtiva === 'conciliacao') return false; // Na aba conciliação, não mostramos a tabela normal
+    if (abaAtiva === 'conciliacao') return false; 
     
     if (busca) {
       const termo = busca.toLowerCase();
@@ -360,13 +368,17 @@ export default function Financeiro() {
 
   const handleSort = (key: string) => {
     setSortConfig(prev => {
-      if (prev && prev.key === key) return prev.direction === 'asc' ? { key, direction: 'desc' } : null; 
+      if (prev && prev.key === key) {
+        return prev.direction === 'asc' ? { key, direction: 'desc' } : null; 
+      }
       return { key, direction: 'asc' };
     });
   };
 
   const renderSortIcon = (key: string) => {
-    if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1 text-slate-600" /> : <ArrowDown className="w-3 h-3 inline ml-1 text-slate-600" />;
+    if (sortConfig?.key === key) {
+      return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline ml-1 text-slate-600" /> : <ArrowDown className="w-3 h-3 inline ml-1 text-slate-600" />;
+    }
     return <ArrowDown className="w-3 h-3 inline ml-1 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
   };
 
@@ -383,13 +395,20 @@ export default function Financeiro() {
       const res = await fetch(imageUrl); if (!res.ok) return null;
       const blob = await res.blob();
       return new Promise((resolve) => {
-        const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = () => resolve(null); reader.readAsDataURL(blob);
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
       });
     } catch (e) { return null; }
   };
 
   const getSortLabel = (key: string) => {
-    const labels: any = { 'emissao': 'Data de Emissão', 'fornecedor': isPagar ? 'Fornecedor' : 'Cliente', 'documento': 'Documento', 'vencimento': 'Data de Vencimento', 'pagamento': 'Data de Pagamento', 'status': 'Status', 'valor': 'Valor', 'classificacao': 'Classificação / Categoria', 'descricao': 'Descrição' };
+    const labels: any = {
+        'emissao': 'Data de Emissão', 'fornecedor': isPagar ? 'Fornecedor' : 'Cliente',
+        'documento': 'Documento', 'vencimento': 'Data de Vencimento', 'pagamento': 'Data de Pagamento',
+        'status': 'Status', 'valor': 'Valor', 'classificacao': 'Classificação / Categoria', 'descricao': 'Descrição'
+    };
     return labels[key] || 'Grupo';
   };
 
@@ -432,7 +451,6 @@ export default function Financeiro() {
                         { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
                     ]);
                 }
-
                 tableRows.push([{ content: `${getSortLabel(sortConfig.key).toUpperCase()}: ${rowGroupValue}`, colSpan: 9, styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' } }]);
                 currentGroupValue = rowGroupValue; currentGroupSubtotal = 0; 
             }
@@ -545,8 +563,8 @@ export default function Financeiro() {
 
                 {/* FORMULÁRIO MANUAL (Para cadastrar os não encontrados) */}
                 {mostrarForm && (
-                  <div className={`p-6 rounded-xl border space-y-4 relative z-20 ${formAtivoTipo === 'Despesa' ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'} shadow-inner animate-in fade-in`}>
-                    <div className="flex justify-between items-center mb-4"><h3 className={`font-bold flex items-center gap-2 ${formAtivoTipo === 'Despesa' ? 'text-rose-800' : 'text-emerald-800'}`}><DollarSign className="w-5 h-5"/> Registrar Transação não encontrada</h3><Button variant="ghost" onClick={() => setMostrarForm(false)}><X className="w-5 h-5"/></Button></div>
+                  <div className={`p-6 rounded-xl border space-y-4 relative z-20 ${parseFloat(valor) < 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'} shadow-inner animate-in fade-in`}>
+                    <div className="flex justify-between items-center mb-4"><h3 className={`font-bold flex items-center gap-2 ${parseFloat(valor) < 0 ? 'text-rose-800' : 'text-emerald-800'}`}><DollarSign className="w-5 h-5"/> Registrar Transação não encontrada</h3><Button variant="ghost" onClick={() => setMostrarForm(false)}><X className="w-5 h-5"/></Button></div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div className="md:col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição *</label><Input value={descricao} onChange={e => setDescricao(e.target.value)} className="bg-white" /></div>
                       <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor *</label><Input type="number" step="0.01" value={valor} onChange={e => setValor(e.target.value)} className="bg-white" /></div>
@@ -773,9 +791,8 @@ export default function Financeiro() {
                                 {lanc.documento_origem ? (
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-[11px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center w-fit gap-1"><FileText className="w-3 h-3"/> {lanc.documento_origem}</span>
-                                        {/* AQUI ESTÁ O BOTÃO QUE VOCÊ PEDIU DE INTEGRAÇÃO COM LOGÍSTICA (AGORA COM O LINK CERTO) */}
                                         {isPagar && (
-                                            <Button variant="ghost" size="icon" onClick={() => navigate(`/entradasprodutos?busca=${encodeURIComponent(lanc.documento_origem)}`)} className="h-6 w-6 text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 p-0" title="Ver Nota Fiscal no Recebimento Físico">
+                                            <Button variant="ghost" size="icon" onClick={() => irParaLogistica(lanc.documento_origem)} className="h-6 w-6 text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 p-0" title="Ver Nota Fiscal no Recebimento Físico">
                                                 <PackageSearch className="w-3.5 h-3.5"/>
                                             </Button>
                                         )}
