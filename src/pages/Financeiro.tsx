@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, Edit, Trash2 } from "lucide-react";
+import { Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, Edit, Trash2, Filter, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Financeiro() {
@@ -31,14 +31,30 @@ export default function Financeiro() {
   const [formaPagamento, setFormaPagamento] = useState("Boleto");
   const [documentoOrigem, setDocumentoOrigem] = useState("");
 
-  // Variável auxiliar para adaptar a tela (Cores, Textos, Filtros)
+  // ==========================================
+  // ESTADOS DE FILTROS AVANÇADOS
+  // ==========================================
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [filtroVencInicio, setFiltroVencInicio] = useState("");
+  const [filtroVencFim, setFiltroVencFim] = useState("");
+  const [filtroEmiInicio, setFiltroEmiInicio] = useState("");
+  const [filtroEmiFim, setFiltroEmiFim] = useState("");
+  const [filtroPagInicio, setFiltroPagInicio] = useState("");
+  const [filtroPagFim, setFiltroPagFim] = useState("");
+  const [filtroCentroCusto, setFiltroCentroCusto] = useState("todos");
+  const [filtroFornecedor, setFiltroFornecedor] = useState("todos");
+  const [filtroCliente, setFiltroCliente] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroValorMin, setFiltroValorMin] = useState("");
+  const [filtroValorMax, setFiltroValorMax] = useState("");
+
   const isPagar = abaAtiva === "pagar";
 
   // ==========================================
-  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
+  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO E FILTROS)
   // ==========================================
   useEffect(() => {
-    const rascunho = sessionStorage.getItem("financeiro_rascunho_v2");
+    const rascunho = sessionStorage.getItem("financeiro_rascunho_v3");
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
@@ -54,29 +70,65 @@ export default function Financeiro() {
         if (draft.centroCusto) setCentroCusto(draft.centroCusto);
         if (draft.formaPagamento) setFormaPagamento(draft.formaPagamento);
         if (draft.documentoOrigem) setDocumentoOrigem(draft.documentoOrigem);
+        
+        // Filtros
+        if (draft.mostrarFiltros !== undefined) setMostrarFiltros(draft.mostrarFiltros);
+        if (draft.filtroVencInicio) setFiltroVencInicio(draft.filtroVencInicio);
+        if (draft.filtroVencFim) setFiltroVencFim(draft.filtroVencFim);
+        if (draft.filtroEmiInicio) setFiltroEmiInicio(draft.filtroEmiInicio);
+        if (draft.filtroEmiFim) setFiltroEmiFim(draft.filtroEmiFim);
+        if (draft.filtroPagInicio) setFiltroPagInicio(draft.filtroPagInicio);
+        if (draft.filtroPagFim) setFiltroPagFim(draft.filtroPagFim);
+        if (draft.filtroCentroCusto) setFiltroCentroCusto(draft.filtroCentroCusto);
+        if (draft.filtroFornecedor) setFiltroFornecedor(draft.filtroFornecedor);
+        if (draft.filtroCliente) setFiltroCliente(draft.filtroCliente);
+        if (draft.filtroStatus) setFiltroStatus(draft.filtroStatus);
+        if (draft.filtroValorMin) setFiltroValorMin(draft.filtroValorMin);
+        if (draft.filtroValorMax) setFiltroValorMax(draft.filtroValorMax);
+        if (draft.busca) setBusca(draft.busca);
       } catch(e) {}
     }
   }, []);
 
   useEffect(() => {
-    if (mostrarForm || descricao || valor) {
-      const draft = { mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem };
-      sessionStorage.setItem("financeiro_rascunho_v2", JSON.stringify(draft));
-    }
-  }, [mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem]);
+    const draft = { 
+      mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, 
+      fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem,
+      mostrarFiltros, filtroVencInicio, filtroVencFim, filtroEmiInicio, filtroEmiFim, 
+      filtroPagInicio, filtroPagFim, filtroCentroCusto, filtroFornecedor, filtroCliente, 
+      filtroStatus, filtroValorMin, filtroValorMax, busca
+    };
+    sessionStorage.setItem("financeiro_rascunho_v3", JSON.stringify(draft));
+  }, [
+    mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, 
+    fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem,
+    mostrarFiltros, filtroVencInicio, filtroVencFim, filtroEmiInicio, filtroEmiFim, 
+    filtroPagInicio, filtroPagFim, filtroCentroCusto, filtroFornecedor, filtroCliente, 
+    filtroStatus, filtroValorMin, filtroValorMax, busca
+  ]);
 
   const limparFormulario = () => {
-    sessionStorage.removeItem("financeiro_rascunho_v2");
     setMostrarForm(false);
     setEditandoLancamentoId(null);
     setDescricao(""); setValor(""); setDataVencimento(""); setDataEmissao(""); setDocumentoOrigem("");
     setFornecedorId("nenhum"); setCentroCusto("Geral"); setFormaPagamento("Boleto"); setCategoriaId("");
+  };
+
+  const limparFiltros = () => {
+    setFiltroVencInicio(""); setFiltroVencFim("");
+    setFiltroEmiInicio(""); setFiltroEmiFim("");
+    setFiltroPagInicio(""); setFiltroPagFim("");
+    setFiltroCentroCusto("todos"); setFiltroFornecedor("todos");
+    setFiltroCliente(""); setFiltroStatus("todos");
+    setFiltroValorMin(""); setFiltroValorMax("");
+    setBusca("");
   };
   // ==========================================
 
   useEffect(() => {
     fetchDadosBase();
     fetchLancamentos();
+    limparFiltros(); // Limpa filtros ao trocar de aba
   }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
@@ -143,7 +195,7 @@ export default function Financeiro() {
       centro_custo: centroCusto,
       forma_pagamento: formaPagamento,
       documento_origem: documentoOrigem,
-      status: editandoLancamentoId ? undefined : 'Pendente' // Preserva status se estiver editando
+      status: editandoLancamentoId ? undefined : 'Pendente' 
     };
 
     let error;
@@ -184,15 +236,64 @@ export default function Financeiro() {
     else alert("Erro ao baixar título: " + error.message);
   };
 
-  // Cálculos do Resumo
-  const totalPendente = lancamentos.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + Number(l.valor), 0);
-  const totalPago = lancamentos.filter(l => l.status === 'Pago').reduce((acc, l) => acc + Number(l.valor), 0);
+  // ==========================================
+  // MOTOR DE FILTROS AVANÇADOS
+  // ==========================================
+  const lancamentosFiltrados = lancamentos.filter(l => {
+    // 1. Busca Global
+    if (busca) {
+      const termo = busca.toLowerCase();
+      const matchDesc = (l.descricao || "").toLowerCase().includes(termo);
+      const matchDoc = (l.documento_origem || "").toLowerCase().includes(termo);
+      const matchForn = (l.log_fornecedores?.nome_fantasia || "").toLowerCase().includes(termo);
+      if (!matchDesc && !matchDoc && !matchForn) return false;
+    }
 
-  const lancamentosFiltrados = lancamentos.filter(l => 
-    (l.descricao?.toLowerCase() || "").includes(busca.toLowerCase()) || 
-    (l.documento_origem?.toLowerCase() || "").includes(busca.toLowerCase()) ||
-    (l.log_fornecedores?.nome_fantasia?.toLowerCase() || "").includes(busca.toLowerCase())
-  );
+    // 2. Datas de Vencimento
+    if (filtroVencInicio && l.data_vencimento < filtroVencInicio) return false;
+    if (filtroVencFim && l.data_vencimento > filtroVencFim) return false;
+
+    // 3. Datas de Emissão
+    if (filtroEmiInicio && (!l.data_emissao || l.data_emissao < filtroEmiInicio)) return false;
+    if (filtroEmiFim && (!l.data_emissao || l.data_emissao > filtroEmiFim)) return false;
+
+    // 4. Datas de Pagamento
+    if (filtroPagInicio && (!l.data_pagamento || l.data_pagamento < filtroPagInicio)) return false;
+    if (filtroPagFim && (!l.data_pagamento || l.data_pagamento > filtroPagFim)) return false;
+
+    // 5. Centro de Custo
+    if (filtroCentroCusto !== "todos" && l.centro_custo !== filtroCentroCusto) return false;
+
+    // 6. Fornecedor (Pagar)
+    if (isPagar && filtroFornecedor !== "todos" && l.fornecedor_id !== filtroFornecedor) return false;
+
+    // 7. Cliente (Receber)
+    if (!isPagar && filtroCliente) {
+      const nomeClienteBusca = filtroCliente.toLowerCase();
+      if (!(l.descricao || "").toLowerCase().includes(nomeClienteBusca)) return false;
+    }
+
+    // 8. Faixa de Valor
+    if (filtroValorMin && Number(l.valor) < Number(filtroValorMin)) return false;
+    if (filtroValorMax && Number(l.valor) > Number(filtroValorMax)) return false;
+
+    // 9. Status
+    const isAtrasado = new Date(l.data_vencimento) < new Date(new Date().setHours(0,0,0,0)) && l.status === 'Pendente';
+    if (filtroStatus === "Pago" && l.status !== 'Pago') return false;
+    if (filtroStatus === "Pendente" && (l.status !== 'Pendente' || isAtrasado)) return false; 
+    if (filtroStatus === "Atrasado" && !isAtrasado) return false;
+
+    return true;
+  });
+
+  // Cálculos do Resumo AGORA RESPEITAM OS FILTROS
+  const totalPendente = lancamentosFiltrados.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + Number(l.valor), 0);
+  const totalPago = lancamentosFiltrados.filter(l => l.status === 'Pago').reduce((acc, l) => acc + Number(l.valor), 0);
+
+  // Lista de Centros de Custo dinâmicos
+  const centrosDeCusto = Array.from(new Set(lancamentos.map(l => l.centro_custo).filter(Boolean))).sort();
+
+  const temFiltroAtivo = filtroVencInicio || filtroVencFim || filtroEmiInicio || filtroEmiFim || filtroPagInicio || filtroPagFim || filtroCentroCusto !== "todos" || filtroFornecedor !== "todos" || filtroCliente || filtroStatus !== "todos" || filtroValorMin || filtroValorMax || busca;
 
   return (
     <AppLayout>
@@ -212,19 +313,19 @@ export default function Financeiro() {
           </div>
         </div>
 
-        {/* RESUMO RÁPIDO (Cores adaptáveis) */}
+        {/* RESUMO RÁPIDO (Respeitando filtros) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
             <div className={`p-3 rounded-full ${isPagar ? 'bg-rose-100 text-rose-600' : 'bg-sky-100 text-sky-600'}`}><Clock className="w-6 h-6"/></div>
             <div>
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{isPagar ? 'A Pagar (Pendente)' : 'A Receber (Pendente)'}</p>
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{isPagar ? 'A Pagar (Filtro)' : 'A Receber (Filtro)'}</p>
                 <p className="text-2xl font-black text-slate-800">R$ {totalPendente.toFixed(2).replace('.', ',')}</p>
             </div>
           </div>
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
             <div className="bg-emerald-100 p-3 rounded-full text-emerald-600"><CheckCircle2 className="w-6 h-6"/></div>
             <div>
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{isPagar ? 'Total Pago' : 'Total Recebido'}</p>
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{isPagar ? 'Total Pago (Filtro)' : 'Total Recebido (Filtro)'}</p>
                 <p className="text-2xl font-black text-slate-800">R$ {totalPago.toFixed(2).replace('.', ',')}</p>
             </div>
           </div>
@@ -239,23 +340,118 @@ export default function Financeiro() {
 
         {/* ÁREA PRINCIPAL UNIFICADA (PAGAR / RECEBER) */}
         {(abaAtiva === "pagar" || abaAtiva === "receber") && (
-          // REMOVIDO o overflow-hidden desta div para não cortar os Selects!
           <div className="bg-white rounded-xl border shadow-sm">
             
-            {/* Cabecalho da Tabela e Buscas */}
+            {/* Cabecalho da Tabela e Buscas Simples */}
             <div className="p-4 border-b flex flex-wrap gap-4 justify-between items-center bg-slate-50 rounded-t-xl">
-              <div className="relative w-full max-w-sm">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder={isPagar ? "Buscar fornecedor, NF ou descrição..." : "Buscar cliente, NF ou descrição..."} className="pl-9 bg-white" />
+              <div className="flex gap-2 w-full md:w-auto flex-1 max-w-xl">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder={isPagar ? "Buscar fornecedor, NF ou descrição..." : "Buscar cliente, NF ou descrição..."} className="pl-9 bg-white" />
+                </div>
+                <Button variant={mostrarFiltros ? "default" : "outline"} onClick={() => setMostrarFiltros(!mostrarFiltros)} className={`gap-2 ${mostrarFiltros ? (isPagar ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white') : 'bg-white text-slate-600 border-slate-300'}`}>
+                    <Filter className="w-4 h-4"/> Filtros
+                </Button>
+                {temFiltroAtivo && !mostrarFiltros && (
+                    <Button variant="ghost" onClick={limparFiltros} className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2" title="Limpar Filtros"><X className="w-4 h-4"/></Button>
+                )}
               </div>
-              <Button onClick={abrirNovoLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white gap-2`}>
+              <Button onClick={abrirNovoLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white gap-2 shadow-sm`}>
                 <Plus className="w-4 h-4" /> Novo Lançamento Manual
               </Button>
             </div>
 
+            {/* PAINEL DE FILTROS AVANÇADOS */}
+            {mostrarFiltros && (
+                <div className={`p-5 border-b border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-5 ${isPagar ? 'bg-rose-50/30' : 'bg-emerald-50/30'}`}>
+                    <div className="col-span-1 md:col-span-4 flex justify-between items-center mb-[-10px]">
+                        <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4 opacity-50"/> Filtros Avançados</h4>
+                        <Button variant="ghost" size="sm" onClick={limparFiltros} className="text-red-500 hover:bg-red-50 h-8 px-2 text-xs font-semibold">Limpar Filtros</Button>
+                    </div>
+                    
+                    {/* Linha 1: Datas */}
+                    <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Data de Vencimento</label>
+                        <div className="flex items-center gap-2">
+                            <Input type="date" value={filtroVencInicio} onChange={e=>setFiltroVencInicio(e.target.value)} className="bg-white h-9" />
+                            <span className="text-xs text-slate-400">até</span>
+                            <Input type="date" value={filtroVencFim} onChange={e=>setFiltroVencFim(e.target.value)} className="bg-white h-9" />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Data de Emissão</label>
+                        <div className="flex items-center gap-2">
+                            <Input type="date" value={filtroEmiInicio} onChange={e=>setFiltroEmiInicio(e.target.value)} className="bg-white h-9" />
+                            <span className="text-xs text-slate-400">até</span>
+                            <Input type="date" value={filtroEmiFim} onChange={e=>setFiltroEmiFim(e.target.value)} className="bg-white h-9" />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Data de {isPagar ? 'Pagamento' : 'Recebimento'}</label>
+                        <div className="flex items-center gap-2">
+                            <Input type="date" value={filtroPagInicio} onChange={e=>setFiltroPagInicio(e.target.value)} className="bg-white h-9" />
+                            <span className="text-xs text-slate-400">até</span>
+                            <Input type="date" value={filtroPagFim} onChange={e=>setFiltroPagFim(e.target.value)} className="bg-white h-9" />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Faixa de Valor (R$)</label>
+                        <div className="flex items-center gap-2">
+                            <Input type="number" step="0.01" value={filtroValorMin} onChange={e=>setFiltroValorMin(e.target.value)} placeholder="Mínimo" className="bg-white h-9" />
+                            <span className="text-xs text-slate-400">até</span>
+                            <Input type="number" step="0.01" value={filtroValorMax} onChange={e=>setFiltroValorMax(e.target.value)} placeholder="Máximo" className="bg-white h-9" />
+                        </div>
+                    </div>
+
+                    {/* Linha 2: Entidades e Status */}
+                    <div className="space-y-1.5 md:col-span-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Status</label>
+                        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                            <SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger>
+                            <SelectContent className="z-[9999]">
+                                <SelectItem value="todos">Todos os Status</SelectItem>
+                                <SelectItem value="Pendente">Pendente (No Prazo)</SelectItem>
+                                <SelectItem value="Atrasado">Atrasado / Vencido</SelectItem>
+                                <SelectItem value="Pago">{isPagar ? 'Pago' : 'Recebido'}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label>
+                        <Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}>
+                            <SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger>
+                            <SelectContent className="z-[9999]">
+                                <SelectItem value="todos">Todos os Centros</SelectItem>
+                                {centrosDeCusto.map((cc:any) => <SelectItem key={cc} value={cc}>{cc}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                        {isPagar ? (
+                            <>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Fornecedor</label>
+                                <Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}>
+                                    <SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger>
+                                    <SelectContent className="z-[9999]">
+                                        <SelectItem value="todos">Todos os Fornecedores</SelectItem>
+                                        <SelectItem value="nenhum">Sem Fornecedor Vinculado</SelectItem>
+                                        {fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </>
+                        ) : (
+                            <>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Nome do Cliente</label>
+                                <Input value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Digite parte do nome..." className="bg-white h-9" />
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* FORMULÁRIO MANUAL */}
             {mostrarForm && (
-              <div className={`p-6 border-b space-y-4 ${isPagar ? 'bg-rose-50/30 border-rose-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
+              <div className={`p-6 border-b space-y-4 ${isPagar ? 'bg-rose-50/80 border-rose-100' : 'bg-emerald-50/80 border-emerald-100'} shadow-inner`}>
                 <div className="flex justify-between items-center mb-4">
                    <h3 className={`font-bold flex items-center gap-2 ${isPagar ? 'text-rose-800' : 'text-emerald-800'}`}>
                        {editandoLancamentoId ? <Edit className="w-5 h-5"/> : <DollarSign className="w-5 h-5"/>} 
@@ -348,7 +544,7 @@ export default function Financeiro() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {lancamentosFiltrados.length === 0 ? (
-                    <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum lançamento encontrado nesta categoria.</td></tr>
+                    <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum lançamento corresponde aos filtros aplicados.</td></tr>
                   ) : (
                     lancamentosFiltrados.map(lanc => {
                       const isAtrasado = new Date(lanc.data_vencimento) < new Date(new Date().setHours(0,0,0,0)) && lanc.status === 'Pendente';
