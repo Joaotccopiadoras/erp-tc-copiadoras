@@ -362,8 +362,9 @@ export default function Financeiro() {
             </div>
 
             {/* PAINEL DE FILTROS AVANÇADOS */}
+            {/* Adicionado: relative z-30 e removido transparência para evitar sobreposição do grid da tabela */}
             {mostrarFiltros && (
-                <div className={`p-5 border-b border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-5 ${isPagar ? 'bg-rose-50/30' : 'bg-emerald-50/30'}`}>
+                <div className={`p-5 border-b border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-5 relative z-30 ${isPagar ? 'bg-rose-50' : 'bg-emerald-50'}`}>
                     <div className="col-span-1 md:col-span-4 flex justify-between items-center mb-[-10px]">
                         <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4 opacity-50"/> Filtros Avançados</h4>
                         <Button variant="ghost" size="sm" onClick={limparFiltros} className="text-red-500 hover:bg-red-50 h-8 px-2 text-xs font-semibold">Limpar Filtros</Button>
@@ -408,7 +409,7 @@ export default function Financeiro() {
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Status</label>
                         <Select value={filtroStatus} onValueChange={setFiltroStatus}>
                             <SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger>
-                            <SelectContent className="z-[9999]">
+                            <SelectContent className="z-[9999] bg-white">
                                 <SelectItem value="todos">Todos os Status</SelectItem>
                                 <SelectItem value="Pendente">Pendente (No Prazo)</SelectItem>
                                 <SelectItem value="Atrasado">Atrasado / Vencido</SelectItem>
@@ -420,7 +421,7 @@ export default function Financeiro() {
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label>
                         <Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}>
                             <SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger>
-                            <SelectContent className="z-[9999]">
+                            <SelectContent className="z-[9999] bg-white">
                                 <SelectItem value="todos">Todos os Centros</SelectItem>
                                 {centrosDeCusto.map((cc:any) => <SelectItem key={cc} value={cc}>{cc}</SelectItem>)}
                             </SelectContent>
@@ -432,7 +433,7 @@ export default function Financeiro() {
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Fornecedor</label>
                                 <Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}>
                                     <SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger>
-                                    <SelectContent className="z-[9999]">
+                                    <SelectContent className="z-[9999] bg-white">
                                         <SelectItem value="todos">Todos os Fornecedores</SelectItem>
                                         <SelectItem value="nenhum">Sem Fornecedor Vinculado</SelectItem>
                                         {fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}
@@ -450,8 +451,9 @@ export default function Financeiro() {
             )}
 
             {/* FORMULÁRIO MANUAL */}
+            {/* Adicionado: relative z-20 e removido transparência para evitar sobreposição do grid da tabela */}
             {mostrarForm && (
-              <div className={`p-6 border-b space-y-4 ${isPagar ? 'bg-rose-50/80 border-rose-100' : 'bg-emerald-50/80 border-emerald-100'} shadow-inner`}>
+              <div className={`p-6 border-b space-y-4 relative z-20 ${isPagar ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'} shadow-inner`}>
                 <div className="flex justify-between items-center mb-4">
                    <h3 className={`font-bold flex items-center gap-2 ${isPagar ? 'text-rose-800' : 'text-emerald-800'}`}>
                        {editandoLancamentoId ? <Edit className="w-5 h-5"/> : <DollarSign className="w-5 h-5"/>} 
@@ -529,8 +531,8 @@ export default function Financeiro() {
               </div>
             )}
 
-            {/* TABELA DE LANÇAMENTOS (Com scroll independente para não quebrar cards) */}
-            <div className="overflow-x-auto min-h-[400px]">
+            {/* TABELA DE LANÇAMENTOS */}
+            <div className="overflow-x-auto min-h-[400px] relative z-0">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider">
