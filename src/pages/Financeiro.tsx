@@ -332,15 +332,15 @@ export default function Financeiro() {
       doc.setFont("helvetica", "normal");
       doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 280, 26, { align: "right" });
 
-      // Ordem rigorosa: Emissão, Fornecedor, Documento, Vencimento, Pagamento, Status, Valor, Classificação, Descrição
+      // Ordem rigorosa
       const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor", "Classificação", "Descrição"];
       
       const tableRows: any[] = [];
       let currentGroupValue: string | null = null;
+      let currentGroupSubtotal = 0; // Variável acumuladora para o subtotal do grupo
 
       lancamentosFiltrados.forEach(l => {
-        
-        // Lógica de Separação em Grupos Baseada na Ordenação Ativa
+        // Lógica de Separação em Grupos
         if (sortConfig) {
             let rowGroupValue = "";
             switch (sortConfig.key) {
@@ -355,17 +355,36 @@ export default function Financeiro() {
                 case 'descricao': rowGroupValue = l.descricao || 'Sem Descrição'; break;
             }
 
+            // Se o grupo mudou
             if (rowGroupValue !== currentGroupValue) {
+                
+                // Antes de criar o novo grupo, imprime o subtotal do grupo anterior (se não for o primeiro loop)
+                if (currentGroupValue !== null) {
+                    tableRows.push([
+                        { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
+                        { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+                        { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
+                    ]);
+                }
+
+                // Cria o cabeçalho do novo grupo
                 tableRows.push([{
                     content: `${getSortLabel(sortConfig.key).toUpperCase()}: ${rowGroupValue}`,
                     colSpan: 9,
                     styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
                 }]);
+                
                 currentGroupValue = rowGroupValue;
+                currentGroupSubtotal = 0; // Reseta o somador
             }
         }
 
-        // Adição dos Dados na Linha
+        // Adiciona ao Subtotal do Grupo Atual
+        if (sortConfig) {
+            currentGroupSubtotal += Number(l.valor) || 0;
+        }
+
+        // Adição dos Dados na Linha Normal
         tableRows.push([
           l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
           l.log_fornecedores?.nome_fantasia || '-',
@@ -378,6 +397,15 @@ export default function Financeiro() {
           l.descricao || '-'
         ]);
       });
+
+      // Ao terminar o loop, precisamos imprimir o subtotal do ÚLTIMO grupo
+      if (sortConfig && currentGroupValue !== null) {
+          tableRows.push([
+              { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
+              { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+              { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
+          ]);
+      }
 
       autoTable(doc, {
         head: [tableColumn],
@@ -509,6 +537,7 @@ export default function Financeiro() {
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Status</label><Select value={filtroStatus} onValueChange={setFiltroStatus}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Atrasado">Atrasado</SelectItem><SelectItem value="Pago">Pago/Recebido</SelectItem></SelectContent></Select></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label><Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem>{centrosDeCusto.map((cc:any) => <SelectItem key={cc} value={cc}>{cc}</SelectItem>)}</SelectContent></Select></div>
                   
+                  {/* Linha extra para Filtros que variam de acordo com a aba */}
                   {isPagar && (
                     <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase">Fornecedor</label><Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="nenhum">Sem Fornecedor</SelectItem>{fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}</SelectContent></Select></div>
                   )}
@@ -538,7 +567,7 @@ export default function Financeiro() {
             </div>
           )}
 
-          {/* TABELA (Com a nova ordem solicitada) */}
+          {/* TABELA */}
           <div className="overflow-x-auto min-h-[400px] relative z-0">
             <table className="w-full text-left border-collapse">
               <thead>
