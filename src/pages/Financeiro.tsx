@@ -8,7 +8,7 @@ import {
   Wallet, ArrowDownCircle, ArrowUpCircle, DollarSign, Calendar, Search, 
   Plus, CheckCircle2, Clock, Landmark, FileText, Building2, CreditCard, 
   Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, PackageSearch,
-  UploadCloud, AlertTriangle, Check, Paperclip, Upload, Download, Receipt
+  UploadCloud, AlertTriangle, Check, Paperclip, Upload, Receipt
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -110,7 +110,6 @@ export default function Financeiro() {
   // UPLOAD DE ARQUIVOS (SUPABASE STORAGE)
   // ==========================================
   const docInputRef = useRef<HTMLInputElement>(null);
-  const comprovanteInputRef = useRef<HTMLInputElement>(null);
 
   const fazerUploadArquivo = async (file: File, prefixo: string) => {
       const fileExt = file.name.split('.').pop();
@@ -276,7 +275,7 @@ export default function Financeiro() {
   };
 
   // ==========================================
-  // NOVO: SISTEMA COMPLEXO DE BAIXA
+  // MODAL DE BAIXA COMPLEXA
   // ==========================================
   const abrirModalBaixa = (lanc: any) => {
       setLancamentoBaixa(lanc);
@@ -446,7 +445,7 @@ export default function Financeiro() {
         case 'pagamento': valA = a.data_pagamento ? new Date(a.data_pagamento).getTime() : 0; valB = b.data_pagamento ? new Date(b.data_pagamento).getTime() : 0; break;
         case 'status': valA = getComputedStatus(a); valB = getComputedStatus(b); break;
         case 'valor': valA = Number(a.valor); valB = Number(b.valor); break;
-        case 'transacao': valA = (a.fin_categorias?.nome || "").toLowerCase(); valB = (b.fin_categorias?.nome || "").toLowerCase(); break;
+        case 'classificacao': valA = (a.fin_categorias?.nome || "").toLowerCase(); valB = (b.fin_categorias?.nome || "").toLowerCase(); break;
         case 'descricao': valA = (a.descricao || "").toLowerCase(); valB = (b.descricao || "").toLowerCase(); break;
       }
       if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -469,16 +468,142 @@ export default function Financeiro() {
 
   const totalPendente = lancamentosFiltrados.filter(l => l.status === 'Pendente').reduce((acc, l) => acc + Number(l.valor), 0);
   const totalPago = lancamentosFiltrados.filter(l => l.status === 'Pago').reduce((acc, l) => acc + Number(l.valor), 0);
+  
   const temFiltroAtivo = filtroVencInicio || filtroVencFim || filtroEmiInicio || filtroEmiFim || filtroPagInicio || filtroPagFim || filtroCentroCusto !== "todos" || filtroSegmento !== "todos" || filtroTransacao !== "todos" || filtroFornecedor !== "todos" || filtroCliente || filtroStatus !== "todos" || filtroValorMin || filtroValorMax || busca;
 
   // ==========================================
-  // RENDERIZAÇÃO
+  // FUNÇÕES DE EXPORTAÇÃO
   // ==========================================
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
+    try {
+      const res = await fetch(imageUrl); if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = () => resolve(null); reader.readAsDataURL(blob);
+      });
+    } catch (e) { return null; }
+  };
+
+  const getSortLabel = (key: string) => {
+    const labels: any = { 'emissao': 'Data de Emissão', 'fornecedor': isPagar ? 'Fornecedor' : 'Cliente', 'documento': 'Documento', 'vencimento': 'Data de Vencimento', 'pagamento': 'Data de Pagamento', 'status': 'Status', 'valor': 'Valor Total', 'classificacao': 'Classificação / Transação', 'descricao': 'Descrição' };
+    return labels[key] || 'Grupo';
+  };
+
+  const exportarPDF = async () => {
+    setExportando(true);
+    try {
+      const doc = new jsPDF("landscape");
+      const logo = await getBase64ImageFromUrl("/logo.png");
+      const tituloRelatorio = isPagar ? "Relatório de Contas a Pagar" : "Relatório de Contas a Receber";
+      
+      if (logo) doc.addImage(logo, "PNG", 14, 10, 40, 15);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(tituloRelatorio, 280, 20, { align: "right" });
+      doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 280, 26, { align: "right" });
+
+      const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor Total", "Classificação", "Descrição"];
+      const tableRows: any[] = [];
+      let currentGroupValue: string | null = null;
+      let currentGroupSubtotal = 0;
+
+      lancamentosFiltrados.forEach(l => {
+        if (sortConfig) {
+            let rowGroupValue = "";
+            switch (sortConfig.key) {
+                case 'emissao': rowGroupValue = l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : 'Sem Emissão'; break;
+                case 'fornecedor': rowGroupValue = l.log_fornecedores?.nome_fantasia || 'Avulso / Sem Fornecedor'; break;
+                case 'documento': rowGroupValue = l.documento_origem || 'Sem Documento'; break;
+                case 'vencimento': rowGroupValue = new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}); break;
+                case 'pagamento': rowGroupValue = l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : 'Pendente'; break;
+                case 'status': rowGroupValue = getComputedStatus(l).toUpperCase(); break;
+                case 'valor': rowGroupValue = `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`; break;
+                case 'classificacao': rowGroupValue = l.fin_categorias?.nome || 'Sem Categoria'; break;
+                case 'descricao': rowGroupValue = l.descricao || 'Sem Descrição'; break;
+            }
+
+            if (rowGroupValue !== currentGroupValue) {
+                if (currentGroupValue !== null) {
+                    tableRows.push([
+                        { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
+                        { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+                        { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
+                    ]);
+                }
+                tableRows.push([{ content: `${getSortLabel(sortConfig.key).toUpperCase()}: ${rowGroupValue}`, colSpan: 9, styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' } }]);
+                currentGroupValue = rowGroupValue; currentGroupSubtotal = 0; 
+            }
+        }
+
+        if (sortConfig) currentGroupSubtotal += Number(l.valor) || 0;
+
+        tableRows.push([
+          l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          l.log_fornecedores?.nome_fantasia || '-', l.documento_origem || '-',
+          new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
+          l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          getComputedStatus(l).toUpperCase(),
+          `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`,
+          `${l.fin_categorias?.nome || '-'}\nC.C: ${l.centro_custo || 'Geral'}\nSeg: ${l.segmento_negocio || '-'}`,
+          l.descricao || '-'
+        ]);
+      });
+
+      if (sortConfig && currentGroupValue !== null) {
+          tableRows.push([
+              { content: `SUBTOTAL:`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
+              { content: `R$ ${currentGroupSubtotal.toFixed(2).replace('.',',')}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: [15, 23, 42] } },
+              { content: '', colSpan: 2, styles: { fillColor: [241, 245, 249] } }
+          ]);
+      }
+
+      autoTable(doc, { head: [tableColumn], body: tableRows, startY: 35, theme: 'grid', styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' }, columnStyles: { 1: { cellWidth: 35 }, 7: { cellWidth: 35 }, 8: { cellWidth: 40 } }, headStyles: { fillColor: isPagar ? [190, 18, 60] : [5, 150, 105], textColor: 255 } });
+      const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 35;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+      doc.text(`TOTAL PENDENTE: R$ ${totalPendente.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 10, { align: "right" });
+      doc.text(`TOTAL ${isPagar ? 'PAGO' : 'RECEBIDO'}: R$ ${totalPago.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 17, { align: "right" });
+
+      doc.save(`Financeiro_TC_${abaAtiva}_${Date.now()}.pdf`);
+    } catch (e) { console.error(e); alert("Erro ao gerar PDF."); } finally { setExportando(false); }
+  };
+
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet(isPagar ? "Contas a Pagar" : "Contas a Receber");
+      
+      worksheet.columns = [
+        { header: "Data de Emissão", key: "emissao", width: 15 }, { header: "Fornecedor / Cliente", key: "ent", width: 30 },
+        { header: "Documento", key: "doc", width: 15 }, { header: "Vencimento", key: "venc", width: 15 },
+        { header: "Data de Pagamento", key: "pag", width: 15 }, { header: "Status", key: "status", width: 15 },
+        { header: "Valor Bruto (R$)", key: "vBruto", width: 15 }, { header: "Juros/Multa (R$)", key: "vJuros", width: 15 },
+        { header: "Valor Total (R$)", key: "valor", width: 15 }, { header: "Transação", key: "transacao", width: 25 },
+        { header: "Centro de Custo", key: "cc", width: 20 }, { header: "Segmento de Negócio", key: "seg", width: 20 },
+        { header: "Descrição", key: "desc", width: 40 }
+      ];
+
+      lancamentosFiltrados.forEach(l => {
+        worksheet.addRow({
+          emissao: l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          ent: l.log_fornecedores?.nome_fantasia || '-', doc: l.documento_origem || '-',
+          venc: new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
+          pag: l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          status: getComputedStatus(l).toUpperCase(), 
+          vBruto: Number(l.valor_bruto || 0), vJuros: Number(l.valor_juros || 0), valor: Number(l.valor),
+          transacao: l.fin_categorias?.nome || '-', cc: l.centro_custo || 'Geral', seg: l.segmento_negocio || '-', desc: l.descricao
+        });
+      });
+
+      worksheet.getRow(1).font = { bold: true };
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), `Financeiro_TC_${abaAtiva}.xlsx`);
+    } catch (e) { console.error(e); alert("Erro ao gerar Excel."); } finally { setExportando(false); }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         <input type="file" accept=".ofx" ref={ofxInputRef} className="hidden" onChange={handleOfxUpload} />
-        <input type="file" ref={docInputRef} className="hidden" onChange={handleUploadDocumento} />
+        <input type="file" accept="image/*,.pdf" ref={docInputRef} className="hidden" onChange={handleUploadDocumento} />
 
         {/* ========================================================================= */}
         {/* MODAL DE BAIXA COMPLEXA */}
@@ -538,7 +663,7 @@ export default function Financeiro() {
                                                     <Upload className="w-6 h-6 mb-2 text-slate-400" />
                                                     <p className="text-xs font-semibold">Clique para anexar o comprovante PDF/Img</p>
                                                 </div>
-                                                <input type="file" className="hidden" onChange={e => { if(e.target.files?.[0]) setBaixaArquivoUpload(e.target.files[0]) }} />
+                                                <input type="file" accept="image/*,.pdf" className="hidden" onChange={e => { if(e.target.files?.[0]) setBaixaArquivoUpload(e.target.files[0]) }} />
                                             </label>
                                         </div>
                                     )}
@@ -629,6 +754,24 @@ export default function Financeiro() {
                         <Button variant="outline" className="border-indigo-300 text-indigo-700 bg-white" onClick={() => { setOfxTransactions([]); setAbaAtiva("pagar"); }}>Cancelar / Fechar</Button>
                     </div>
                 </div>
+
+                {/* FORMULÁRIO MANUAL (Para cadastrar os não encontrados) */}
+                {mostrarForm && (
+                  <div className={`p-6 rounded-xl border space-y-4 relative z-20 ${parseFloat(valorBruto) < 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'} shadow-inner animate-in fade-in`}>
+                    <div className="flex justify-between items-center mb-4"><h3 className={`font-bold flex items-center gap-2 ${parseFloat(valorBruto) < 0 ? 'text-rose-800' : 'text-emerald-800'}`}><DollarSign className="w-5 h-5"/> Registrar Transação não encontrada</h3><Button variant="ghost" onClick={() => setMostrarForm(false)}><X className="w-5 h-5"/></Button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="md:col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Descrição *</label><Input value={descricao} onChange={e => setDescricao(e.target.value)} className="bg-white" /></div>
+                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor Bruto *</label><Input type="number" step="0.01" value={valorBruto} onChange={e => setValorBruto(e.target.value)} className="bg-white" /></div>
+                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Vencimento/Pagamento *</label><Input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="bg-white" /></div>
+                      {parseFloat(valorBruto) < 0 && (
+                        <div className="md:col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fornecedor</label><Select value={fornecedorId} onValueChange={setFornecedorId}><SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="nenhum">Avulso</SelectItem>{fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia}</SelectItem>)}</SelectContent></Select></div>
+                      )}
+                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Transação Financeira *</label><Select value={transacaoId} onValueChange={setTransacaoId}><SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger><SelectContent className="bg-white z-[9999]">{transacoesBD.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent></Select></div>
+                      <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Conta Bancária *</label><Select value={contaId} disabled><SelectTrigger className="bg-slate-100"><SelectValue/></SelectTrigger><SelectContent><SelectItem value={contaId}>Travada pelo Extrato</SelectItem></SelectContent></Select></div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 mt-4"><Button variant="outline" onClick={() => setMostrarForm(false)} className="bg-white">Cancelar</Button><Button onClick={salvarLancamento} className={parseFloat(valorBruto) < 0 ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'}>Gravar Lançamento Direto</Button></div>
+                  </div>
+                )}
 
                 <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                     <div className="overflow-x-auto min-h-[400px]">
@@ -727,8 +870,8 @@ export default function Financeiro() {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => {}} disabled={exportando} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2"><TableIcon className="w-4 h-4"/> Excel</Button>
-                      <Button variant="outline" onClick={() => {}} disabled={exportando} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2"><FileText className="w-4 h-4"/> PDF</Button>
+                      <Button variant="outline" onClick={exportarExcel} disabled={exportando} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2"><TableIcon className="w-4 h-4"/> Excel</Button>
+                      <Button variant="outline" onClick={exportarPDF} disabled={exportando} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2"><FileText className="w-4 h-4"/> PDF</Button>
                       <Button onClick={abrirNovoLancamento} className={`${isPagar ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white gap-2 shadow-sm`}>
                         <Plus className="w-4 h-4" /> Novo Lançamento
                       </Button>
@@ -737,7 +880,6 @@ export default function Financeiro() {
 
                   {mostrarFiltros && (
                       <div className={`p-5 border-b grid grid-cols-1 md:grid-cols-4 gap-5 relative z-30 ${isPagar ? 'bg-rose-50' : 'bg-emerald-50'}`}>
-                          {/* FILTROS (MANTIDOS IGUAIS PARA NÃO POLUIR) */}
                           <div className="col-span-full flex justify-between items-center"><h4 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4"/> Filtros Avançados</h4><Button variant="ghost" size="sm" onClick={limparFiltros} className="text-red-500 h-8 px-2 text-xs">Limpar Filtros</Button></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Data de Emissão (Início)</label><Input type="date" value={filtroEmiInicio} onChange={e=>setFiltroEmiInicio(e.target.value)} className="bg-white h-9" /></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Data de Emissão (Fim)</label><Input type="date" value={filtroEmiFim} onChange={e=>setFiltroEmiFim(e.target.value)} className="bg-white h-9" /></div>
@@ -747,6 +889,15 @@ export default function Financeiro() {
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Vencimento (Fim)</label><Input type="date" value={filtroVencFim} onChange={e=>setFiltroVencFim(e.target.value)} className="bg-white h-9" /></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Status</label><Select value={filtroStatus} onValueChange={setFiltroStatus}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Atrasado">Atrasado</SelectItem><SelectItem value="Pago">Pago/Recebido</SelectItem></SelectContent></Select></div>
                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label><Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem>{centrosCustoBD.map((cc:any) => <SelectItem key={cc.id} value={cc.nome}>{cc.nome}</SelectItem>)}</SelectContent></Select></div>
+                          
+                          {isPagar && (
+                            <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase">Fornecedor</label><Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="nenhum">Sem Fornecedor</SelectItem>{fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}</SelectContent></Select></div>
+                          )}
+                          {!isPagar && (
+                            <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase">Nome do Cliente</label><Input value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Digite parte do nome..." className="bg-white h-9" /></div>
+                          )}
+                          <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Valor Mínimo (R$)</label><Input type="number" step="0.01" value={filtroValorMin} onChange={e=>setFiltroValorMin(e.target.value)} className="bg-white h-9" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Valor Máximo (R$)</label><Input type="number" step="0.01" value={filtroValorMax} onChange={e=>setFiltroValorMax(e.target.value)} className="bg-white h-9" /></div>
                       </div>
                   )}
 
@@ -813,7 +964,6 @@ export default function Financeiro() {
                         <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data Vencimento *</label><Input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} className="bg-white" /></div>
                         <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Valor Original (R$) *</label><Input type="number" step="0.01" value={valorBruto} onChange={e => setValorBruto(e.target.value)} className="bg-white" /></div>
                         
-                        {/* AQUI ESTÁ O NOVO BLOCO DE DOCUMENTO E ANEXO */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-500 uppercase">Doc. (NF/Boleto) e Anexo</label>
                             <div className="flex gap-2">
@@ -822,7 +972,7 @@ export default function Financeiro() {
                                     <Paperclip className="w-4 h-4"/>
                                 </Button>
                             </div>
-                            {anexoDocumento && <a href={anexoDocumento} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 hover:underline"><CheckCircle2 className="w-3 h-3"/> Documento Anexado</a>}
+                            {anexoDocumento && <a href={anexoDocumento} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 hover:underline mt-1"><CheckCircle2 className="w-3 h-3"/> Documento Anexado</a>}
                         </div>
                       </div>
 
@@ -838,25 +988,50 @@ export default function Financeiro() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider">
-                          <th className="p-4 font-semibold border-b">Documentação</th>
-                          <th className="p-4 font-semibold border-b min-w-[200px]">Fornecedor / Cliente</th>
-                          <th className="p-4 font-semibold border-b whitespace-nowrap">Vencimento</th>
-                          <th className="p-4 font-semibold border-b whitespace-nowrap">Pagamento</th>
-                          <th className="p-4 font-semibold border-b text-center">Status</th>
-                          <th className="p-4 font-semibold border-b text-right">Valores</th>
-                          <th className="p-4 font-semibold border-b">Classificação</th>
-                          <th className="p-4 font-semibold border-b min-w-[200px]">Descrição</th>
+                          <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group whitespace-nowrap" onClick={() => handleSort('emissao')}>
+                              Emissão {renderSortIcon('emissao')}
+                          </th>
+                          <th className="p-4 font-semibold border-b min-w-[200px] cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('fornecedor')}>
+                              Fornecedor / Cliente {renderSortIcon('fornecedor')}
+                          </th>
+                          <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('documento')}>
+                              Documento {renderSortIcon('documento')}
+                          </th>
+                          <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group whitespace-nowrap" onClick={() => handleSort('vencimento')}>
+                              Vencimento {renderSortIcon('vencimento')}
+                          </th>
+                          <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group whitespace-nowrap" onClick={() => handleSort('pagamento')}>
+                              Pagamento {renderSortIcon('pagamento')}
+                          </th>
+                          <th className="p-4 font-semibold border-b text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('status')}>
+                              Status {renderSortIcon('status')}
+                          </th>
+                          <th className="p-4 font-semibold border-b text-right cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('valor')}>
+                              Valor Total {renderSortIcon('valor')}
+                          </th>
+                          <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('transacao')}>
+                              Classificação {renderSortIcon('transacao')}
+                          </th>
+                          <th className="p-4 font-semibold border-b min-w-[200px] cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('descricao')}>
+                              Descrição {renderSortIcon('descricao')}
+                          </th>
                           <th className="p-4 font-semibold border-b text-center w-24">Ação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {lancamentosFiltrados.length === 0 ? <tr><td colSpan={9} className="p-12 text-center text-slate-500">Nenhum lançamento correspondente encontrado.</td></tr> : lancamentosFiltrados.map(lanc => {
+                        {lancamentosFiltrados.length === 0 ? <tr><td colSpan={10} className="p-12 text-center text-slate-500">Nenhum lançamento correspondente encontrado.</td></tr> : lancamentosFiltrados.map(lanc => {
                           const statusAtual = getComputedStatus(lanc);
                           const isAtrasado = statusAtual === 'Atrasado';
                           
                           return (
                             <tr key={lanc.id} className="hover:bg-slate-50 transition-colors group">
                               
+                              <td className="p-4 text-sm align-top whitespace-nowrap text-slate-500">
+                                {lanc.data_emissao ? new Date(lanc.data_emissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '--'}
+                              </td>
+
+                              <td className="p-4 align-top"><p className="text-sm font-bold text-slate-700">{isPagar ? (lanc.log_fornecedores?.nome_fantasia || '--') : '--'}</p></td>
+
                               <td className="p-4 align-top whitespace-nowrap">
                                 <div className="space-y-1.5">
                                     {lanc.documento_origem ? (
@@ -874,8 +1049,6 @@ export default function Financeiro() {
                                     </div>
                                 </div>
                               </td>
-
-                              <td className="p-4 align-top"><p className="text-sm font-bold text-slate-700">{isPagar ? (lanc.log_fornecedores?.nome_fantasia || '--') : '--'}</p></td>
 
                               <td className="p-4 text-sm font-medium align-top whitespace-nowrap">
                                 <span className={`flex items-center gap-1.5 ${isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}`}><Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) }</span>
