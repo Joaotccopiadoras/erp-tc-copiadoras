@@ -64,7 +64,7 @@ export default function Financeiro() {
   // AUTO-SAVE E FETCH DATA
   // ==========================================
   useEffect(() => {
-    const rascunho = sessionStorage.getItem("financeiro_rascunho_v4");
+    const rascunho = sessionStorage.getItem("financeiro_rascunho_v5");
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
@@ -86,7 +86,7 @@ export default function Financeiro() {
       mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, 
       fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros, sortConfig
     };
-    sessionStorage.setItem("financeiro_rascunho_v4", JSON.stringify(draft));
+    sessionStorage.setItem("financeiro_rascunho_v5", JSON.stringify(draft));
   }, [mostrarForm, editandoLancamentoId, descricao, valor, dataEmissao, dataVencimento, fornecedorId, categoriaId, contaId, centroCusto, formaPagamento, documentoOrigem, mostrarFiltros, sortConfig]);
 
   useEffect(() => {
@@ -182,8 +182,6 @@ export default function Financeiro() {
   // ==========================================
   // MOTOR DE FILTROS, ORDENAÇÃO E CÁLCULOS
   // ==========================================
-  
-  // Função auxiliar para determinar o status real (considerando atraso)
   const getComputedStatus = (lanc: any) => {
     if (lanc.status === 'Pago') return 'Pago';
     const isAtrasado = new Date(lanc.data_vencimento) < new Date(new Date().setHours(0,0,0,0));
@@ -213,24 +211,32 @@ export default function Financeiro() {
     return true;
   });
 
-  // Aplicar Ordenação
+  // Aplicar Ordenação Customizada
   if (sortConfig !== null) {
     lancamentosFiltrados.sort((a, b) => {
       let valA: any = "";
       let valB: any = "";
 
       switch (sortConfig.key) {
+        case 'emissao':
+          valA = a.data_emissao ? new Date(a.data_emissao).getTime() : 0;
+          valB = b.data_emissao ? new Date(b.data_emissao).getTime() : 0;
+          break;
+        case 'fornecedor':
+          valA = (a.log_fornecedores?.nome_fantasia || "").toLowerCase();
+          valB = (b.log_fornecedores?.nome_fantasia || "").toLowerCase();
+          break;
+        case 'documento':
+          valA = (a.documento_origem || "").toLowerCase();
+          valB = (b.documento_origem || "").toLowerCase();
+          break;
         case 'vencimento':
           valA = new Date(a.data_vencimento).getTime();
           valB = new Date(b.data_vencimento).getTime();
           break;
-        case 'descricao':
-          valA = (a.descricao || "").toLowerCase();
-          valB = (b.descricao || "").toLowerCase();
-          break;
-        case 'categoria':
-          valA = (a.fin_categorias?.nome || "").toLowerCase();
-          valB = (b.fin_categorias?.nome || "").toLowerCase();
+        case 'pagamento':
+          valA = a.data_pagamento ? new Date(a.data_pagamento).getTime() : 0;
+          valB = b.data_pagamento ? new Date(b.data_pagamento).getTime() : 0;
           break;
         case 'status':
           valA = getComputedStatus(a);
@@ -239,6 +245,14 @@ export default function Financeiro() {
         case 'valor':
           valA = Number(a.valor);
           valB = Number(b.valor);
+          break;
+        case 'classificacao':
+          valA = (a.fin_categorias?.nome || "").toLowerCase();
+          valB = (b.fin_categorias?.nome || "").toLowerCase();
+          break;
+        case 'descricao':
+          valA = (a.descricao || "").toLowerCase();
+          valB = (b.descricao || "").toLowerCase();
           break;
         default:
           break;
@@ -253,7 +267,7 @@ export default function Financeiro() {
   const handleSort = (key: string) => {
     setSortConfig(prev => {
       if (prev && prev.key === key) {
-        return prev.direction === 'asc' ? { key, direction: 'desc' } : null; // Clica a 3ª vez remove ordenação
+        return prev.direction === 'asc' ? { key, direction: 'desc' } : null; 
       }
       return { key, direction: 'asc' };
     });
@@ -294,7 +308,6 @@ export default function Financeiro() {
       const logo = await getBase64ImageFromUrl("/logo.png");
       const tituloRelatorio = isPagar ? "Relatório de Contas a Pagar" : "Relatório de Contas a Receber";
       
-      // Cabeçalho
       if (logo) doc.addImage(logo, "PNG", 14, 10, 40, 15);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
@@ -303,14 +316,19 @@ export default function Financeiro() {
       doc.setFont("helvetica", "normal");
       doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 280, 26, { align: "right" });
 
-      const tableColumn = ["Vencimento", "Descrição / Fornecedor / Cliente", "Documento", "Categoria / C. Custo", "Status", "Valor"];
+      // Ordem rigorosa: Emissão, Fornecedor, Documento, Vencimento, Pagamento, Status, Valor, Classificação, Descrição
+      const tableColumn = ["Emissão", "Fornecedor / Cliente", "Documento", "Vencimento", "Pagamento", "Status", "Valor", "Classificação", "Descrição"];
+      
       const tableRows = lancamentosFiltrados.map(l => [
-        new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
-        `${l.descricao}\n${l.log_fornecedores?.nome_fantasia || ''}`,
+        l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+        l.log_fornecedores?.nome_fantasia || '-',
         l.documento_origem || '-',
-        `${l.fin_categorias?.nome || '-'}\nC.C: ${l.centro_custo || 'Geral'}`,
+        new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
+        l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
         getComputedStatus(l).toUpperCase(),
-        `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`
+        `R$ ${Number(l.valor).toFixed(2).replace('.',',')}`,
+        `${l.fin_categorias?.nome || '-'}\nC.C: ${l.centro_custo || 'Geral'}`,
+        l.descricao || '-'
       ]);
 
       autoTable(doc, {
@@ -318,14 +336,18 @@ export default function Financeiro() {
         body: tableRows,
         startY: 35,
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 3 },
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: {
+            1: { cellWidth: 35 }, 
+            7: { cellWidth: 35 }, 
+            8: { cellWidth: 50 }
+        },
         headStyles: { fillColor: isPagar ? [190, 18, 60] : [5, 150, 105], textColor: 255 },
       });
 
-      // Resumo Final (Protegido contra tabela vazia)
       const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY : 35;
-      
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
       doc.text(`TOTAL PENDENTE: R$ ${totalPendente.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 10, { align: "right" });
       doc.text(`TOTAL ${isPagar ? 'PAGO' : 'RECEBIDO'}: R$ ${totalPago.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 280, finalY + 17, { align: "right" });
 
@@ -339,27 +361,30 @@ export default function Financeiro() {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet(isPagar ? "Contas a Pagar" : "Contas a Receber");
       
+      // Ordem rigorosa
       worksheet.columns = [
-        { header: "Vencimento", key: "venc", width: 15 },
-        { header: "Descrição", key: "desc", width: 35 },
-        { header: "Fornecedor/Cliente", key: "ent", width: 25 },
+        { header: "Data de Emissão", key: "emissao", width: 15 },
+        { header: "Fornecedor / Cliente", key: "ent", width: 30 },
         { header: "Documento", key: "doc", width: 15 },
-        { header: "Categoria", key: "cat", width: 20 },
-        { header: "Centro de Custo", key: "cc", width: 20 },
-        { header: "Status", key: "status", width: 12 },
-        { header: "Valor (R$)", key: "valor", width: 15 }
+        { header: "Vencimento", key: "venc", width: 15 },
+        { header: "Data de Pagamento", key: "pag", width: 15 },
+        { header: "Status", key: "status", width: 15 },
+        { header: "Valor (R$)", key: "valor", width: 15 },
+        { header: "Classificação", key: "cat", width: 25 },
+        { header: "Descrição", key: "desc", width: 40 }
       ];
 
       lancamentosFiltrados.forEach(l => {
         worksheet.addRow({
-          venc: new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
-          desc: l.descricao,
+          emissao: l.data_emissao ? new Date(l.data_emissao).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
           ent: l.log_fornecedores?.nome_fantasia || '-',
           doc: l.documento_origem || '-',
-          cat: l.fin_categorias?.nome || '-',
-          cc: l.centro_custo || 'Geral',
-          status: getComputedStatus(l),
-          valor: Number(l.valor)
+          venc: new Date(l.data_vencimento).toLocaleDateString('pt-BR', {timeZone:'UTC'}),
+          pag: l.data_pagamento ? new Date(l.data_pagamento).toLocaleDateString('pt-BR', {timeZone:'UTC'}) : '-',
+          status: getComputedStatus(l).toUpperCase(),
+          valor: Number(l.valor),
+          cat: `${l.fin_categorias?.nome || '-'} (C.C: ${l.centro_custo || 'Geral'})`,
+          desc: l.descricao
         });
       });
 
@@ -371,7 +396,7 @@ export default function Financeiro() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-6xl mx-auto mb-12">
+      <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
         
         {/* CABEÇALHO DINÂMICO */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
@@ -436,7 +461,6 @@ export default function Financeiro() {
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Status</label><Select value={filtroStatus} onValueChange={setFiltroStatus}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="Pendente">Pendente</SelectItem><SelectItem value="Atrasado">Atrasado</SelectItem><SelectItem value="Pago">Pago/Recebido</SelectItem></SelectContent></Select></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Centro de Custo</label><Select value={filtroCentroCusto} onValueChange={setFiltroCentroCusto}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem>{centrosDeCusto.map((cc:any) => <SelectItem key={cc} value={cc}>{cc}</SelectItem>)}</SelectContent></Select></div>
                   
-                  {/* Linha extra para Filtros que variam de acordo com a aba */}
                   {isPagar && (
                     <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase">Fornecedor</label><Select value={filtroFornecedor} onValueChange={setFiltroFornecedor}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="todos">Todos</SelectItem><SelectItem value="nenhum">Sem Fornecedor</SelectItem>{fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia || f.razao_social}</SelectItem>)}</SelectContent></Select></div>
                   )}
@@ -445,7 +469,6 @@ export default function Financeiro() {
                   )}
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Valor Mínimo (R$)</label><Input type="number" step="0.01" value={filtroValorMin} onChange={e=>setFiltroValorMin(e.target.value)} className="bg-white h-9" /></div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Valor Máximo (R$)</label><Input type="number" step="0.01" value={filtroValorMax} onChange={e=>setFiltroValorMax(e.target.value)} className="bg-white h-9" /></div>
-
               </div>
           )}
 
@@ -467,19 +490,25 @@ export default function Financeiro() {
             </div>
           )}
 
-          {/* TABELA */}
+          {/* TABELA (Com a nova ordem solicitada) */}
           <div className="overflow-x-auto min-h-[400px] relative z-0">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider">
-                  <th className="p-4 font-semibold border-b w-32 cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('vencimento')}>
+                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group whitespace-nowrap" onClick={() => handleSort('emissao')}>
+                      Emissão {renderSortIcon('emissao')}
+                  </th>
+                  <th className="p-4 font-semibold border-b min-w-[200px] cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('fornecedor')}>
+                      Fornecedor / Cliente {renderSortIcon('fornecedor')}
+                  </th>
+                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('documento')}>
+                      Documento {renderSortIcon('documento')}
+                  </th>
+                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group whitespace-nowrap" onClick={() => handleSort('vencimento')}>
                       Vencimento {renderSortIcon('vencimento')}
                   </th>
-                  <th className="p-4 font-semibold border-b min-w-[250px] cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('descricao')}>
-                      Descrição / Credor {renderSortIcon('descricao')}
-                  </th>
-                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('categoria')}>
-                      Classificação {renderSortIcon('categoria')}
+                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group whitespace-nowrap" onClick={() => handleSort('pagamento')}>
+                      Pagamento {renderSortIcon('pagamento')}
                   </th>
                   <th className="p-4 font-semibold border-b text-center cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('status')}>
                       Status {renderSortIcon('status')}
@@ -487,82 +516,103 @@ export default function Financeiro() {
                   <th className="p-4 font-semibold border-b text-right cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('valor')}>
                       Valor {renderSortIcon('valor')}
                   </th>
+                  <th className="p-4 font-semibold border-b cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('classificacao')}>
+                      Classificação {renderSortIcon('classificacao')}
+                  </th>
+                  <th className="p-4 font-semibold border-b min-w-[200px] cursor-pointer hover:bg-slate-200 transition-colors group" onClick={() => handleSort('descricao')}>
+                      Descrição {renderSortIcon('descricao')}
+                  </th>
                   <th className="p-4 font-semibold border-b text-center w-24">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {lancamentosFiltrados.length === 0 ? (
-                  <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum lançamento corresponde aos filtros aplicados.</td></tr>
-                ) : (
-                  lancamentosFiltrados.map(lanc => {
-                    const statusAtual = getComputedStatus(lanc);
-                    const isAtrasado = statusAtual === 'Atrasado';
-                    
-                    return (
-                      <tr key={lanc.id} className="hover:bg-slate-50 transition-colors group">
-                        <td className="p-4 text-sm font-medium align-top">
-                          <span className={`flex items-center gap-1.5 ${isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}`}>
-                            <Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                          </span>
-                          {isAtrasado && <span className="text-[10px] text-rose-500 uppercase mt-0.5 block ml-5">Vencido</span>}
-                        </td>
-                        
-                        <td className="p-4 align-top">
-                          <p className="font-bold text-slate-800 text-sm mb-1 leading-tight">{lanc.descricao}</p>
-                          {lanc.log_fornecedores?.nome_fantasia && (
-                              <p className="text-xs text-slate-600 flex items-center gap-1"><Building2 className="w-3 h-3 text-slate-400"/> {lanc.log_fornecedores.nome_fantasia}</p>
-                          )}
-                          <div className="flex gap-2 mt-1.5">
-                              {lanc.documento_origem && <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1"><FileText className="w-3 h-3"/> Ref: {lanc.documento_origem}</span>}
-                              {lanc.data_emissao && <span className="text-[10px] text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">Emissão: {new Date(lanc.data_emissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>}
-                          </div>
-                        </td>
+                {lancamentosFiltrados.map(lanc => {
+                  const statusAtual = getComputedStatus(lanc);
+                  const isAtrasado = statusAtual === 'Atrasado';
+                  
+                  return (
+                    <tr key={lanc.id} className="hover:bg-slate-50 transition-colors group">
+                      
+                      {/* 1. Emissão */}
+                      <td className="p-4 text-sm align-top whitespace-nowrap text-slate-500">
+                        {lanc.data_emissao ? new Date(lanc.data_emissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '--'}
+                      </td>
 
-                        <td className="p-4 align-top">
-                          <p className="text-xs font-semibold text-slate-700 mb-1">{lanc.fin_categorias?.nome || 'Sem Categoria'}</p>
-                          <p className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded inline-block mb-1 border">C. Custo: {lanc.centro_custo || 'Geral'}</p>
-                          <p className="text-[10px] text-slate-500 flex items-center gap-1"><CreditCard className="w-3 h-3"/> {lanc.forma_pagamento || 'Boleto'}</p>
-                        </td>
+                      {/* 2. Fornecedor / Cliente */}
+                      <td className="p-4 align-top">
+                        <p className="text-sm font-bold text-slate-700">
+                            {isPagar ? (lanc.log_fornecedores?.nome_fantasia || '--') : '--'}
+                        </p>
+                      </td>
 
-                        <td className="p-4 text-center align-top">
-                          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${lanc.status === 'Pago' ? 'bg-emerald-100 text-emerald-700' : isAtrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {isAtrasado ? 'Atrasado' : (lanc.status === 'Pago' ? (isPagar ? 'Pago' : 'Recebido') : lanc.status)}
-                          </span>
-                        </td>
-                        
-                        <td className="p-4 text-right align-top">
-                          <p className={`font-bold text-base ${isPagar ? 'text-rose-600' : 'text-emerald-600'}`}>
-                              R$ {Number(lanc.valor).toFixed(2).replace('.', ',')}
-                          </p>
-                          {lanc.valor_impostos > 0 && <p className="text-[10px] text-slate-400 mt-1">Inc. R$ {Number(lanc.valor_impostos).toFixed(2).replace('.',',')} Trib.</p>}
-                        </td>
-                        
-                        <td className="p-4 text-center align-top">
-                          {lanc.status === 'Pendente' ? (
-                              <div className="space-y-2">
-                                  <Button variant="outline" size="sm" onClick={() => darBaixa(lanc.id)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 text-xs h-8 shadow-sm">
-                                      {isPagar ? 'Pagar' : 'Receber'}
-                                  </Button>
-                                  <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <Button variant="ghost" size="icon" onClick={() => abrirEditarLancamento(lanc)} className="h-7 w-7 text-slate-400 hover:text-indigo-600" title="Editar Lançamento"><Edit className="w-3.5 h-3.5"/></Button>
-                                      <Button variant="ghost" size="icon" onClick={() => deletarLancamento(lanc.id)} className="h-7 w-7 text-slate-300 hover:text-red-500" title="Excluir Lançamento"><Trash2 className="w-3.5 h-3.5"/></Button>
-                                  </div>
-                              </div>
-                          ) : (
-                            <div className="flex flex-col items-center">
-                                <span className="text-[10px] text-slate-400 uppercase font-bold mb-0.5">{isPagar ? 'Pago em' : 'Recebido em'}</span>
-                                <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-100 mb-2">{new Date(lanc.data_pagamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
-                                <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="icon" onClick={() => abrirEditarLancamento(lanc)} className="h-7 w-7 text-slate-400 hover:text-indigo-600" title="Editar Lançamento"><Edit className="w-3.5 h-3.5"/></Button>
-                                    <Button variant="ghost" size="icon" onClick={() => deletarLancamento(lanc.id)} className="h-7 w-7 text-slate-300 hover:text-red-500" title="Excluir Lançamento"><Trash2 className="w-3.5 h-3.5"/></Button>
-                                </div>
+                      {/* 3. Documento */}
+                      <td className="p-4 align-top whitespace-nowrap">
+                        {lanc.documento_origem ? (
+                            <span className="text-[11px] bg-indigo-50 border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold flex items-center w-fit gap-1"><FileText className="w-3 h-3"/> {lanc.documento_origem}</span>
+                        ) : '--'}
+                      </td>
+
+                      {/* 4. Vencimento */}
+                      <td className="p-4 text-sm font-medium align-top whitespace-nowrap">
+                        <span className={`flex items-center gap-1.5 ${isAtrasado ? 'text-rose-600 font-bold' : 'text-slate-700 font-bold'}`}>
+                          <Calendar className="w-4 h-4"/> {new Date(lanc.data_vencimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                        </span>
+                        {isAtrasado && <span className="text-[10px] text-rose-500 uppercase mt-0.5 block ml-5">Vencido</span>}
+                      </td>
+
+                      {/* 5. Pagamento */}
+                      <td className="p-4 text-sm align-top whitespace-nowrap">
+                        {lanc.data_pagamento ? (
+                            <span className="text-emerald-700 font-bold">{new Date(lanc.data_pagamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        ) : '--'}
+                      </td>
+
+                      {/* 6. Status */}
+                      <td className="p-4 text-center align-top">
+                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${statusAtual === 'Pago' ? 'bg-emerald-100 text-emerald-700' : isAtrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {statusAtual}
+                        </span>
+                      </td>
+                      
+                      {/* 7. Valor */}
+                      <td className="p-4 text-right align-top whitespace-nowrap">
+                        <p className={`font-bold text-base ${isPagar ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            R$ {Number(lanc.valor).toFixed(2).replace('.', ',')}
+                        </p>
+                      </td>
+
+                      {/* 8. Classificação */}
+                      <td className="p-4 align-top">
+                        <p className="text-xs font-semibold text-slate-700 mb-1">{lanc.fin_categorias?.nome || 'Sem Categoria'}</p>
+                        <p className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded inline-block mb-1 border">C.C: {lanc.centro_custo || 'Geral'}</p>
+                        <p className="text-[10px] text-slate-500 flex items-center gap-1"><CreditCard className="w-3 h-3"/> {lanc.forma_pagamento || 'Boleto'}</p>
+                      </td>
+
+                      {/* 9. Descrição */}
+                      <td className="p-4 align-top">
+                        <p className="text-sm text-slate-800 leading-tight">{lanc.descricao}</p>
+                      </td>
+                      
+                      {/* 10. Ação */}
+                      <td className="p-4 text-center align-top">
+                        {lanc.status === 'Pendente' ? (
+                          <div className="space-y-2">
+                            <Button size="sm" onClick={() => darBaixa(lanc.id)} className="w-full text-emerald-600 border-emerald-200 hover:bg-emerald-50 text-[10px] h-7">Baixar</Button>
+                            <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => abrirEditarLancamento(lanc)} className="p-1 text-slate-400 hover:text-indigo-600"><Edit className="w-3.5 h-3.5"/></button>
+                              <button onClick={() => deletarLancamento(lanc.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
                             </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                          </div>
+                        ) : (
+                            <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity mt-2">
+                              <button onClick={() => abrirEditarLancamento(lanc)} className="p-1 text-slate-400 hover:text-indigo-600"><Edit className="w-3.5 h-3.5"/></button>
+                              <button onClick={() => deletarLancamento(lanc.id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5"/></button>
+                            </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
