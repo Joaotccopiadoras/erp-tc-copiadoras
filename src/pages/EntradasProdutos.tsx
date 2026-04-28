@@ -272,8 +272,7 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
     formData.append("file", file);
 
     try {
-      // ATENÇÃO: Garanta que esta URL é a URL de TESTE ou PRODUÇÃO correta do seu n8n
-      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs", {
+      const resposta = await fetch("[https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs](https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs)", {
         method: "POST",
         body: formData
       });
@@ -283,32 +282,37 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
       const jsonStr = await resposta.text();
       const n8nResponse = JSON.parse(jsonStr);
 
-      // 1. Caça o texto do GPT dentro da resposta aninhada do n8n
-      let gptText = "";
-      if (n8nResponse.output?.[0]?.content?.[0]?.text) {
-          gptText = n8nResponse.output[0].content[0].text;
-      } else if (Array.isArray(n8nResponse) && n8nResponse[0]?.output?.[0]?.content?.[0]?.text) {
-          gptText = n8nResponse[0].output[0].content[0].text;
-      } else if (n8nResponse.message?.content) {
-          gptText = n8nResponse.message.content;
-      } else if (Array.isArray(n8nResponse) && n8nResponse[0]?.message?.content) {
-          gptText = n8nResponse[0].message.content;
-      } else if (n8nResponse.text) {
-          gptText = n8nResponse.text;
-      } else {
-          gptText = typeof n8nResponse === 'string' ? n8nResponse : JSON.stringify(n8nResponse);
-      }
+      // 1. Encontra o Payload (Onde o n8n guardou a resposta da IA)
+      let payload = n8nResponse;
+      if (Array.isArray(n8nResponse)) payload = n8nResponse[0];
+      
+      if (payload.message?.content) payload = payload.message.content;
+      else if (payload.output?.[0]?.content?.[0]?.text) payload = payload.output[0].content[0].text;
+      else if (payload.text) payload = payload.text;
 
-      // 2. Limpa a formatação markdown que a IA adora colocar
-      const cleanedJson = gptText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const dadosExtraidos = JSON.parse(cleanedJson);
+      // 2. Transforma em JSON real (Aceita Objeto direto do n8n ou String bruta)
+      let dadosExtraidos;
+      if (typeof payload === 'string') {
+          const cleanedJson = payload.replace(/```json/g, '').replace(/```/g, '').trim();
+          dadosExtraidos = JSON.parse(cleanedJson);
+      } else if (typeof payload === 'object') {
+          dadosExtraidos = payload;
+      } else {
+          throw new Error("Formato de resposta irreconhecível.");
+      }
 
       // 3. Mapeamento Flexível (Entende variações da IA)
       const numDoc = dadosExtraidos.numero_nf || dadosExtraidos.numero_do_pedido || dadosExtraidos.numero || "";
-      const dataEmi = dadosExtraidos.data_emissao || dadosExtraidos.data || "";
+      let dataEmi = dadosExtraidos.data_emissao || dadosExtraidos.data || "";
       const nomeFornecedor = dadosExtraidos.fornecedor || dadosExtraidos.loja || dadosExtraidos.vendedor || "";
       const arrayParcelas = dadosExtraidos.faturas || dadosExtraidos.parcelas || [];
       const arrayItens = dadosExtraidos.itens || [];
+
+      // Conversão de data (Caso a IA mande DD/MM/YYYY em vez de YYYY-MM-DD)
+      if (dataEmi && dataEmi.includes('/')) {
+          const [dia, mes, ano] = dataEmi.split('/');
+          dataEmi = `${ano}-${mes}-${dia}`;
+      }
 
       setDocumento(String(numDoc));
       setDataEmissao(dataEmi);
@@ -337,11 +341,15 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
       // Mapeamento Financeiro (Faturas/Parcelas)
       if (arrayParcelas.length > 0) {
           setGerarFinanceiro(true);
-          const faturasFormatadas: FaturaXML[] = arrayParcelas.map((f: any, idx: number) => ({
-              numero: f.numero || String(idx + 1),
-              vencimento: f.vencimento || f.data_vencimento || "",
-              valor: parseFloat(f.valor) || 0
-          }));
+          const faturasFormatadas: FaturaXML[] = arrayParcelas.map((f: any, idx: number) => {
+              let venc = f.vencimento || f.data_vencimento || "";
+              if (venc.includes('/')) { const [d, m, a] = venc.split('/'); venc = `${a}-${m}-${d}`; }
+              return {
+                  numero: f.numero || String(idx + 1),
+                  vencimento: venc,
+                  valor: parseFloat(f.valor) || 0
+              };
+          });
           setFaturas(faturasFormatadas);
       } else {
           setGerarFinanceiro(false); setFaturas([]);
