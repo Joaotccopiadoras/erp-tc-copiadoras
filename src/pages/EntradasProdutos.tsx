@@ -4,7 +4,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt, Pencil, Eraser, Landmark, Calendar } from "lucide-react";
+import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt, Pencil, Eraser, Landmark, Calendar, Bot } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ItemEntrada = {
@@ -78,7 +78,10 @@ export default function Entradas() {
   const [serialInput, setSerialInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados de Carregamento
   const [salvando, setSalvando] = useState(false);
+  const [carregandoLeituraDoc, setCarregandoLeituraDoc] = useState(false); // NOVO: Loader da IA
 
   const [historicoDocs, setHistoricoDocs] = useState<any[]>([]);
   const [buscaHistorico, setBuscaHistorico] = useState("");
@@ -260,78 +263,105 @@ export default function Entradas() {
 
   const cancelarEdicao = () => { limparFormulario(); setAbaAtiva("historico"); };
 
-  const processarXML = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // ==========================================
+  // NOVA FUNÇÃO: LEITURA DE DOCUMENTO VIA IA (N8N + GPT-4o-mini)
+  // ==========================================
+  const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(text, "text/xml");
+    setCarregandoLeituraDoc(true);
+    
+    // Mostra um aviso rápido caso demore (visão computacional de PDFs/Imagens pode levar uns segundos)
+    const formData = new FormData();
+    formData.append("file", file);
 
-      const emitente = xmlDoc.querySelector("emit xNome")?.textContent || "";
-      const cnpjEmitente = xmlDoc.querySelector("emit CNPJ")?.textContent || "";
-      const nNf = xmlDoc.querySelector("ide nNF")?.textContent || "";
-      const natOp = xmlDoc.querySelector("ide natOp")?.textContent || ""; 
-      const chAcesso = xmlDoc.querySelector("protNFe chNFe")?.textContent || xmlDoc.querySelector("infNFe")?.getAttribute("Id")?.replace("NFe", "") || "";
-      const dhEmi = xmlDoc.querySelector("ide dhEmi")?.textContent?.split("T")[0] || "";
-      const modFreteTag = xmlDoc.querySelector("transp modFrete")?.textContent || "0"; 
-
-      const dupNodes = xmlDoc.querySelectorAll("cobr dup");
-      const novasFaturas: FaturaXML[] = [];
+    try {
+      // Endpoint do seu n8n. IMPORTANTE: O n8n deve estar configurado para receber o Multipart Form e repassar ao OpenAI.
+      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook-test/vision-docs", {
+        method: "POST",
+        body: formData
+      });
       
-      if (dupNodes.length > 0) {
-          dupNodes.forEach(dup => {
-              const nDup = dup.querySelector("nDup")?.textContent || "";
-              const dVenc = dup.querySelector("dVenc")?.textContent || "";
-              const vDup = parseFloat(dup.querySelector("vDup")?.textContent || "0");
-              if (dVenc && vDup > 0) novasFaturas.push({ numero: nDup, vencimento: dVenc, valor: vDup });
-          });
+      if (!resposta.ok) throw new Error("Falha na comunicação com a API de IA.");
+
+      // O GPT-4o-mini deve retornar este JSON estrito configurado no prompt
+      const jsonStr = await resposta.text();
+      // Remove marcações de código markdown do GPT caso ele teime em enviar
+      const cleanedJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+      const dadosExtraidos = JSON.parse(cleanedJson);
+
+      // --- MAPEAMENTO AUTOMÁTICO PARA A TELA ---
+
+      setDocumento(dadosExtraidos.numero_nf || "");
+      setDataEmissao(dadosExtraidos.data_emissao || "");
+      
+      setValorFrete(parseFloat(dadosExtraidos.valor_frete) || 0);
+      setValorIcms(parseFloat(dadosExtraidos.valor_icms) || 0);
+      setValorIcmsSt(parseFloat(dadosExtraidos.valor_icms_st) || 0);
+      setValorIpi(parseFloat(dadosExtraidos.valor_ipi) || 0);
+      setValorPis(parseFloat(dadosExtraidos.valor_pis) || 0);
+      setValorCofins(parseFloat(dadosExtraidos.valor_cofins) || 0);
+      setValorOutros(parseFloat(dadosExtraidos.valor_outros) || 0);
+
+      // Mapeamento de Fornecedor
+      if (dadosExtraidos.cnpj || dadosExtraidos.fornecedor) {
+          const cnpjFormatado = (dadosExtraidos.cnpj || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+          const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === dadosExtraidos.cnpj);
+          if (fornMatch) { 
+              setFornecedorId(fornMatch.id); 
+              setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`); 
+          } else { 
+              setFornecedorId(null); 
+              setFornecedorBusca(dadosExtraidos.fornecedor || ""); 
+          }
       }
 
-      if (novasFaturas.length > 0) { setGerarFinanceiro(true); setFaturas(novasFaturas); } 
-      else { setFaturas([]); }
+      // Mapeamento Financeiro (Faturas)
+      if (dadosExtraidos.faturas && dadosExtraidos.faturas.length > 0) {
+          setGerarFinanceiro(true);
+          const faturasFormatadas: FaturaXML[] = dadosExtraidos.faturas.map((f: any) => ({
+              numero: f.numero || "1",
+              vencimento: f.vencimento || "",
+              valor: parseFloat(f.valor) || 0
+          }));
+          setFaturas(faturasFormatadas);
+      } else {
+          setGerarFinanceiro(false); setFaturas([]);
+      }
 
-      const vFrete = parseFloat(xmlDoc.querySelector("total ICMSTot vFrete")?.textContent || "0");
-      const vICMS = parseFloat(xmlDoc.querySelector("total ICMSTot vICMS")?.textContent || "0");
-      const vST = parseFloat(xmlDoc.querySelector("total ICMSTot vST")?.textContent || "0");
-      const vIPI = parseFloat(xmlDoc.querySelector("total ICMSTot vIPI")?.textContent || "0");
-      const vPIS = parseFloat(xmlDoc.querySelector("total ICMSTot vPIS")?.textContent || "0");
-      const vCOFINS = parseFloat(xmlDoc.querySelector("total ICMSTot vCOFINS")?.textContent || "0");
-      const vTotTrib = parseFloat(xmlDoc.querySelector("total ICMSTot vTotTrib")?.textContent || "0");
+      // Mapeamento de Itens
+      if (dadosExtraidos.itens && dadosExtraidos.itens.length > 0) {
+          const novosItens: ItemEntrada[] = [];
+          
+          dadosExtraidos.itens.forEach((item: any) => {
+              const qCom = parseFloat(item.quantidade) || 0;
+              const vUnCom = parseFloat(item.valor_unitario) || 0;
+              const match = produtosBD.find(p => p.sku === item.sku);
 
-      setDocumento(nNf); setCfop(natOp); setChaveAcesso(chAcesso); setDataEmissao(dhEmi);
-      setValorFrete(vFrete); setValorIcms(vICMS); setValorIcmsSt(vST); setValorIpi(vIPI); setValorPis(vPIS); setValorCofins(vCOFINS); setValorOutros(vTotTrib);
+              if (match) {
+                  novosItens.push({ 
+                      produtoId: match.id, sku: match.sku, nome: match.nome, rastreiaSerie: match.rastreia_serie, 
+                      quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: match.fator_conversao || 1, 
+                      custo: vUnCom, custoEmbalagem: vUnCom, series: [] 
+                  });
+              } else {
+                  novosItens.push({ 
+                      produtoId: "", sku: item.sku || "", nome: "", rastreiaSerie: false, 
+                      quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: 1, 
+                      custo: vUnCom, custoEmbalagem: vUnCom, series: [], precisaMapeamento: true, nomeOriginalXML: item.nome 
+                  });
+              }
+          });
+          setItens(prev => [...prev, ...novosItens]);
+      }
 
-      if (modFreteTag === "0") setModalidadeFrete("0 - CIF");
-      else if (modFreteTag === "1") setModalidadeFrete("1 - FOB");
-      else if (modFreteTag === "2") setModalidadeFrete("2 - Terceiros");
-      else setModalidadeFrete("9 - Sem Frete");
-
-      const cnpjFormatado = cnpjEmitente.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-      const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === cnpjEmitente);
-      if (fornMatch) { setFornecedorId(fornMatch.id); setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`); } 
-      else { setFornecedorId(null); setFornecedorBusca(emitente); }
-
-      const detNodes = xmlDoc.querySelectorAll("det");
-      const novosItens: ItemEntrada[] = [];
-
-      detNodes.forEach(det => {
-        const cProd = det.querySelector("prod cProd")?.textContent || ""; 
-        const xProd = det.querySelector("prod xProd")?.textContent || ""; 
-        const qCom = parseFloat(det.querySelector("prod qCom")?.textContent || "0"); 
-        const vUnCom = parseFloat(det.querySelector("prod vUnCom")?.textContent || "0"); 
-
-        const match = produtosBD.find(p => p.sku === cProd);
-        if (match) novosItens.push({ produtoId: match.id, sku: match.sku, nome: match.nome, rastreiaSerie: match.rastreia_serie, quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: match.fator_conversao || 1, custo: vUnCom, custoEmbalagem: vUnCom, series: [] });
-        else novosItens.push({ produtoId: "", sku: cProd, nome: "", rastreiaSerie: false, quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: 1, custo: vUnCom, custoEmbalagem: vUnCom, series: [], precisaMapeamento: true, nomeOriginalXML: xProd });
-      });
-
-      setItens(prev => [...prev, ...novosItens]);
-    };
-    reader.readAsText(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error: any) {
+        alert("Erro na interpretação da IA: Verifique se o arquivo é legível ou se a API do n8n está respondendo corretamente. Detalhe: " + error.message);
+    } finally {
+        setCarregandoLeituraDoc(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const vincularProdutoXML = (index: number, buscaValor: string) => {
@@ -395,7 +425,7 @@ export default function Entradas() {
 
     try {
       const cabecalho = {
-        tipo_documento: 'NF-e', cfop, chave_acesso: chaveAcesso || null, documento, data_emissao: dataEmissao || null, 
+        tipo_documento: 'NF-e / Recibo', cfop, chave_acesso: chaveAcesso || null, documento, data_emissao: dataEmissao || null, 
         fornecedor_id: fornecedorId, fornecedor_texto: fornecedorBusca, modalidade_frete: modalidadeFrete, 
         transportadora_id: transportadoraId, transportadora: transportadoraBusca, valor_frete: valorFrete, 
         valor_icms: valorIcms, valor_icms_st: valorIcmsSt, valor_ipi: valorIpi, valor_pis: valorPis, 
@@ -427,11 +457,12 @@ export default function Entradas() {
       }
 
       if (gerarFinanceiro) {
-          const obsFin = `Referência: Lançamento de NF-e Nr. ${documento} | CFOP/Operação: ${cfop || 'N/A'}`;
+          const obsFin = `Referência: Lançamento Nr. ${documento} | CFOP/Operação: ${cfop || 'N/A'}`;
           const payloadFin = faturas.map((fat, idx) => ({
               tipo: 'Despesa',
-              descricao: `NF-e ${documento} (Parc. ${fat.numero || idx+1}) - ${fornecedorBusca.split(']')[1]?.trim() || fornecedorBusca}`,
+              descricao: `NF/Doc ${documento} (Parc. ${fat.numero || idx+1}) - ${fornecedorBusca.split(']')[1]?.trim() || fornecedorBusca}`,
               valor: fat.valor,
+              valor_bruto: fat.valor,
               data_emissao: dataEmissao || null,
               data_vencimento: fat.vencimento,
               status: 'Pendente',
@@ -452,7 +483,6 @@ export default function Entradas() {
       }
 
       for (const item of itens) {
-        // Agora carimba o usuário e o centro de custo no banco de log_movimentacoes
         await supabase.from('log_movimentacoes').insert({ 
             produto_id: item.produtoId, 
             tipo: 'Entrada', 
@@ -490,9 +520,18 @@ export default function Entradas() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-6xl mx-auto mb-12">
+      <div className="space-y-6 max-w-6xl mx-auto mb-12 relative">
         <datalist id="lista-produtos-bd">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
-        <input type="file" accept=".xml" ref={fileInputRef} style={{ display: "none" }} onChange={processarXML} />
+        <input type="file" accept=".xml,.pdf,image/*" ref={fileInputRef} style={{ display: "none" }} onChange={processarDocumentoComIA} />
+
+        {/* LOADING OVERLAY DA IA */}
+        {carregandoLeituraDoc && (
+          <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm text-white">
+            <Bot className="w-16 h-16 animate-bounce text-indigo-400 mb-4" />
+            <h2 className="text-xl font-bold">A Inteligência Artificial está lendo o documento...</h2>
+            <p className="text-slate-300 mt-2">Isso pode levar alguns segundos. Extraindo dados, valores e faturas.</p>
+          </div>
+        )}
 
         <div className="flex border-b border-slate-200">
           <button onClick={() => { setAbaAtiva("receber"); setModo("formulario"); }} className={`px-6 py-3 font-semibold text-sm transition-colors border-b-2 ${abaAtiva === "receber" ? "border-emerald-600 text-emerald-700" : "border-transparent text-slate-500"}`}>
@@ -509,13 +548,17 @@ export default function Entradas() {
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">{editandoId ? "Modo Edição" : "Lançamento de Mercadorias"}</h1>
-                <p className="text-slate-500">Importe XML ou lance manualmente para alimentar Estoque e Financeiro.</p>
+                <p className="text-slate-500">Importe XML ou Documentos PDF/Imagem para alimentar Estoque e Financeiro com IA.</p>
               </div>
               {modo === "formulario" ? (
                 <div className="flex items-center gap-3">
                   {!editandoId && <Button variant="outline" onClick={limparFormulario} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm"><Eraser className="w-4 h-4" /> Limpar Tela</Button>}
                   {editandoId && <Button variant="outline" onClick={cancelarEdicao} className="gap-2 text-slate-600 hover:text-red-600 hover:bg-red-50 border-slate-200 shadow-sm"><X className="w-4 h-4" /> Cancelar Edição</Button>}
-                  <Button onClick={() => fileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm"><FileCode2 className="w-4 h-4" /> Importar XML</Button>
+                  
+                  {/* NOVO BOTÃO DE IA */}
+                  <Button onClick={() => fileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm font-bold">
+                    <Bot className="w-4 h-4" /> Leitura Inteligente (XML/PDF/Img)
+                  </Button>
                 </div>
               ) : (<Button variant="outline" onClick={() => setModo("formulario")} className="gap-2"><ArrowLeft className="w-4 h-4"/> Voltar</Button>)}
             </div>
@@ -524,7 +567,7 @@ export default function Entradas() {
               <div className="space-y-6">
                 <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b pb-2">
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600"/> Dados da Nota Fiscal</h3>
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600"/> Dados da Nota Fiscal / Documento</h3>
                   </div>
                   
                   {/* CABEÇALHO BÁSICO */}
@@ -547,9 +590,9 @@ export default function Entradas() {
                         <Button variant="outline" onClick={() => window.open('/fornecedores', '_blank')} className="shrink-0 gap-1 text-indigo-700 border-indigo-200 hover:bg-indigo-50"><Plus className="w-4 h-4" /> Novo</Button>
                       </div>
                     </div>
-                    <div className="space-y-2"><label className="text-sm font-semibold text-slate-700">Nº da NF</label><Input value={documento} onChange={e => setDocumento(e.target.value)} /></div>
+                    <div className="space-y-2"><label className="text-sm font-semibold text-slate-700">Nº do Doc.</label><Input value={documento} onChange={e => setDocumento(e.target.value)} /></div>
                     <div className="space-y-2"><label className="text-sm font-semibold text-slate-700">Data Emissão</label><Input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} /></div>
-                    <div className="space-y-2"><label className="text-sm font-semibold text-slate-700">CFOP</label><Input value={cfop} onChange={e => setCfop(e.target.value)} /></div>
+                    <div className="space-y-2"><label className="text-sm font-semibold text-slate-700">CFOP/Nat.Op</label><Input value={cfop} onChange={e => setCfop(e.target.value)} /></div>
                   </div>
 
                   <div className="pt-4 mt-2 border-t border-slate-100">
@@ -560,7 +603,7 @@ export default function Entradas() {
                       <div className="space-y-1"><label className="text-xs font-medium text-slate-500">Valor IPI</label><Input type="number" step="0.01" value={valorIpi} onChange={e => setValorIpi(parseFloat(e.target.value)||0)} className="h-8 text-sm bg-slate-50" /></div>
                       <div className="space-y-1"><label className="text-xs font-medium text-slate-500">Valor PIS</label><Input type="number" step="0.01" value={valorPis} onChange={e => setValorPis(parseFloat(e.target.value)||0)} className="h-8 text-sm" /></div>
                       <div className="space-y-1"><label className="text-xs font-medium text-slate-500">COFINS</label><Input type="number" step="0.01" value={valorCofins} onChange={e => setValorCofins(parseFloat(e.target.value)||0)} className="h-8 text-sm" /></div>
-                      <div className="space-y-1"><label className="text-xs font-medium text-slate-500">Trib. Aprox.</label><Input type="number" step="0.01" value={valorOutros} onChange={e => setValorOutros(parseFloat(e.target.value)||0)} className="h-8 text-sm bg-slate-100" /></div>
+                      <div className="space-y-1"><label className="text-xs font-medium text-slate-500">Outros Val.</label><Input type="number" step="0.01" value={valorOutros} onChange={e => setValorOutros(parseFloat(e.target.value)||0)} className="h-8 text-sm bg-slate-100" /></div>
                     </div>
                   </div>
 
@@ -662,7 +705,7 @@ export default function Entradas() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {itens.length === 0 ? (
-                          <tr><td colSpan={9} className="p-8 text-center text-slate-400">Nenhum item na nota. Importe um XML ou insira manualmente.</td></tr>
+                          <tr><td colSpan={9} className="p-8 text-center text-slate-400">Nenhum item na nota. Importe via IA ou insira manualmente.</td></tr>
                         ) : (
                           itens.map((item, index) => (
                             <tr key={index} className={item.precisaMapeamento ? 'bg-amber-50/50 text-sm' : 'hover:bg-slate-50 text-sm'}>
@@ -670,7 +713,7 @@ export default function Entradas() {
                                 {!item.precisaMapeamento ? (
                                   <><p className="font-semibold text-slate-800 text-sm">{item.nome}</p><p className="text-[10px] text-slate-500 font-mono">SKU: {item.sku}</p></>
                                 ) : (
-                                  <div className="space-y-2"><p className="text-xs text-amber-700 font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> XML: {item.nomeOriginalXML}</p><Input list="lista-produtos-bd" placeholder="Vincule ao Catálogo..." className="h-8 text-xs border-amber-300" onChange={(e) => vincularProdutoXML(index, e.target.value)} /></div>
+                                  <div className="space-y-2"><p className="text-xs text-amber-700 font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Original: {item.nomeOriginalXML}</p><Input list="lista-produtos-bd" placeholder="Vincule ao Catálogo..." className="h-8 text-xs border-amber-300" onChange={(e) => vincularProdutoXML(index, e.target.value)} /></div>
                                 )}
                               </td>
                               <td className="p-3 text-center">
