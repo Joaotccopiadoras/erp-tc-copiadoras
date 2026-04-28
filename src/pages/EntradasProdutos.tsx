@@ -277,41 +277,67 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
         body: formData
       });
       
-      if (!resposta.ok) throw new Error("Falha na comunicação com a API de IA do n8n.");
+      if (!resposta.ok) throw new Error("Falha HTTP na comunicação com o n8n. Status: " + resposta.status);
 
       const jsonStr = await resposta.text();
-      const n8nResponse = JSON.parse(jsonStr);
-
-      // 1. Encontra o Payload (Onde o n8n guardou a resposta da IA)
-      let payload = n8nResponse;
-      if (Array.isArray(n8nResponse)) payload = n8nResponse[0];
+      let n8nResponse;
       
-      if (payload.message?.content) payload = payload.message.content;
-      else if (payload.output?.[0]?.content?.[0]?.text) payload = payload.output[0].content[0].text;
-      else if (payload.text) payload = payload.text;
-
-      // 2. Transforma em JSON real (Aceita Objeto direto do n8n ou String bruta)
-      let dadosExtraidos;
-      if (typeof payload === 'string') {
-          const cleanedJson = payload.replace(/```json/g, '').replace(/```/g, '').trim();
-          dadosExtraidos = JSON.parse(cleanedJson);
-      } else if (typeof payload === 'object') {
-          dadosExtraidos = payload;
-      } else {
-          throw new Error("Formato de resposta irreconhecível.");
+      try {
+          n8nResponse = JSON.parse(jsonStr);
+      } catch (e) {
+          throw new Error("O n8n não retornou um JSON válido. Retorno: " + jsonStr.substring(0, 100));
       }
 
-      // 3. Mapeamento Flexível (Entende variações da IA)
+      console.log("Resposta bruta recebida do n8n:", n8nResponse);
+
+      // Trava de segurança 1: Webhook configurado errado no n8n
+      if (n8nResponse.message === "Workflow got started.") {
+          throw new Error("⚠️ O Webhook do n8n está configurado errado! Mude a opção 'Respond' para 'When Last Node Finishes'.");
+      }
+
+      // Função CAÇA-TESOURO: Procura o JSON da nota em qualquer lugar da resposta
+      const extrairPayload = (obj: any): any => {
+          if (!obj) return null;
+          
+          // Se for texto, tenta limpar markdown e fazer o parse
+          if (typeof obj === 'string') {
+              try {
+                  const cleaned = obj.replace(/```json/g, '').replace(/```/g, '').trim();
+                  const parsed = JSON.parse(cleaned);
+                  if (parsed && (parsed.numero_nf || parsed.numero_do_pedido || parsed.fornecedor || parsed.vendedor || parsed.itens)) return parsed;
+              } catch(e) {}
+              return null;
+          }
+
+          // Se for objeto, verifica se contém as chaves ou procura nos "filhos"
+          if (typeof obj === 'object') {
+              if (obj.numero_nf || obj.numero_do_pedido || obj.fornecedor || obj.vendedor || obj.itens) return obj;
+              
+              for (const key in obj) {
+                  const result = extrairPayload(obj[key]);
+                  if (result) return result;
+              }
+          }
+          return null;
+      };
+
+      const dadosExtraidos = extrairPayload(n8nResponse);
+
+      if (!dadosExtraidos) {
+          throw new Error("A IA processou, mas não encontrei os dados da nota. Abra o console do navegador (F12) para ver a resposta.");
+      }
+
+      // 3. Mapeamento Flexível
       const numDoc = dadosExtraidos.numero_nf || dadosExtraidos.numero_do_pedido || dadosExtraidos.numero || "";
       let dataEmi = dadosExtraidos.data_emissao || dadosExtraidos.data || "";
       const nomeFornecedor = dadosExtraidos.fornecedor || dadosExtraidos.loja || dadosExtraidos.vendedor || "";
       const arrayParcelas = dadosExtraidos.faturas || dadosExtraidos.parcelas || [];
       const arrayItens = dadosExtraidos.itens || [];
 
-      // Conversão de data (Caso a IA mande DD/MM/YYYY em vez de YYYY-MM-DD)
+      // Conversão de data (DD/MM/YYYY para YYYY-MM-DD)
       if (dataEmi && dataEmi.includes('/')) {
-          const [dia, mes, ano] = dataEmi.split('/');
-          dataEmi = `${ano}-${mes}-${dia}`;
+          const partes = dataEmi.split('/');
+          if (partes.length === 3) dataEmi = `${partes[2]}-${partes[1]}-${partes[0]}`;
       }
 
       setDocumento(String(numDoc));
@@ -343,7 +369,10 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
           setGerarFinanceiro(true);
           const faturasFormatadas: FaturaXML[] = arrayParcelas.map((f: any, idx: number) => {
               let venc = f.vencimento || f.data_vencimento || "";
-              if (venc.includes('/')) { const [d, m, a] = venc.split('/'); venc = `${a}-${m}-${d}`; }
+              if (venc.includes('/')) { 
+                  const partes = venc.split('/'); 
+                  if(partes.length===3) venc = `${partes[2]}-${partes[1]}-${partes[0]}`; 
+              }
               return {
                   numero: f.numero || String(idx + 1),
                   vencimento: venc,
@@ -361,7 +390,7 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
           
           arrayItens.forEach((item: any) => {
               const qCom = parseFloat(item.quantidade) || 0;
-              const vUnCom = parseFloat(item.valor_unitario) || 0;
+              const vUnCom = parseFloat(item.valor_unitario) || parseFloat(item.preco) || 0;
               const match = produtosBD.find(p => p.sku === item.sku || p.sku === item.codigo);
 
               if (match) {
@@ -382,7 +411,7 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
       }
 
     } catch (error: any) {
-        alert("Erro na interpretação da IA: Verifique se o arquivo é legível ou se a API do n8n está respondendo. Detalhe: " + error.message);
+        alert(error.message);
     } finally {
         setCarregandoLeituraDoc(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
