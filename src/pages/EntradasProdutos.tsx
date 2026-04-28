@@ -273,7 +273,7 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
 
     try {
       // ATENÇÃO: Garanta que esta URL é a URL de TESTE ou PRODUÇÃO correta do seu n8n
-      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs", {
+      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook-test/vision-docs", {
         method: "POST",
         body: formData
       });
