@@ -263,38 +263,55 @@ export default function Entradas() {
 
   const cancelarEdicao = () => { limparFormulario(); setAbaAtiva("historico"); };
 
-  // ==========================================
-  // NOVA FUNÇÃO: LEITURA DE DOCUMENTO VIA IA (N8N + GPT-4o-mini)
-  // ==========================================
-  const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement>) => {
+const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setCarregandoLeituraDoc(true);
-    
-    // Mostra um aviso rápido caso demore (visão computacional de PDFs/Imagens pode levar uns segundos)
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      // Endpoint do seu n8n. IMPORTANTE: O n8n deve estar configurado para receber o Multipart Form e repassar ao OpenAI.
-      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook-test/vision-docs", {
+      // ATENÇÃO: Garanta que esta URL é a URL de TESTE ou PRODUÇÃO correta do seu n8n
+      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs", {
         method: "POST",
         body: formData
       });
       
-      if (!resposta.ok) throw new Error("Falha na comunicação com a API de IA.");
+      if (!resposta.ok) throw new Error("Falha na comunicação com a API de IA do n8n.");
 
-      // O GPT-4o-mini deve retornar este JSON estrito configurado no prompt
       const jsonStr = await resposta.text();
-      // Remove marcações de código markdown do GPT caso ele teime em enviar
-      const cleanedJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+      const n8nResponse = JSON.parse(jsonStr);
+
+      // 1. Caça o texto do GPT dentro da resposta aninhada do n8n
+      let gptText = "";
+      if (n8nResponse.output?.[0]?.content?.[0]?.text) {
+          gptText = n8nResponse.output[0].content[0].text;
+      } else if (Array.isArray(n8nResponse) && n8nResponse[0]?.output?.[0]?.content?.[0]?.text) {
+          gptText = n8nResponse[0].output[0].content[0].text;
+      } else if (n8nResponse.message?.content) {
+          gptText = n8nResponse.message.content;
+      } else if (Array.isArray(n8nResponse) && n8nResponse[0]?.message?.content) {
+          gptText = n8nResponse[0].message.content;
+      } else if (n8nResponse.text) {
+          gptText = n8nResponse.text;
+      } else {
+          gptText = typeof n8nResponse === 'string' ? n8nResponse : JSON.stringify(n8nResponse);
+      }
+
+      // 2. Limpa a formatação markdown que a IA adora colocar
+      const cleanedJson = gptText.replace(/```json/g, '').replace(/```/g, '').trim();
       const dadosExtraidos = JSON.parse(cleanedJson);
 
-      // --- MAPEAMENTO AUTOMÁTICO PARA A TELA ---
+      // 3. Mapeamento Flexível (Entende variações da IA)
+      const numDoc = dadosExtraidos.numero_nf || dadosExtraidos.numero_do_pedido || dadosExtraidos.numero || "";
+      const dataEmi = dadosExtraidos.data_emissao || dadosExtraidos.data || "";
+      const nomeFornecedor = dadosExtraidos.fornecedor || dadosExtraidos.loja || dadosExtraidos.vendedor || "";
+      const arrayParcelas = dadosExtraidos.faturas || dadosExtraidos.parcelas || [];
+      const arrayItens = dadosExtraidos.itens || [];
 
-      setDocumento(dadosExtraidos.numero_nf || "");
-      setDataEmissao(dadosExtraidos.data_emissao || "");
+      setDocumento(String(numDoc));
+      setDataEmissao(dataEmi);
       
       setValorFrete(parseFloat(dadosExtraidos.valor_frete) || 0);
       setValorIcms(parseFloat(dadosExtraidos.valor_icms) || 0);
@@ -305,24 +322,24 @@ export default function Entradas() {
       setValorOutros(parseFloat(dadosExtraidos.valor_outros) || 0);
 
       // Mapeamento de Fornecedor
-      if (dadosExtraidos.cnpj || dadosExtraidos.fornecedor) {
+      if (dadosExtraidos.cnpj || nomeFornecedor) {
           const cnpjFormatado = (dadosExtraidos.cnpj || "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-          const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === dadosExtraidos.cnpj);
+          const fornMatch = fornecedoresBD.find(f => f.cnpj_cpf === cnpjFormatado || f.cnpj_cpf === dadosExtraidos.cnpj || (f.nome_fantasia && f.nome_fantasia.toLowerCase() === nomeFornecedor.toLowerCase()));
           if (fornMatch) { 
               setFornecedorId(fornMatch.id); 
               setFornecedorBusca(`[${fornMatch.codigo_sequencial}] ${fornMatch.nome_fantasia || fornMatch.razao_social}`); 
           } else { 
               setFornecedorId(null); 
-              setFornecedorBusca(dadosExtraidos.fornecedor || ""); 
+              setFornecedorBusca(nomeFornecedor); 
           }
       }
 
-      // Mapeamento Financeiro (Faturas)
-      if (dadosExtraidos.faturas && dadosExtraidos.faturas.length > 0) {
+      // Mapeamento Financeiro (Faturas/Parcelas)
+      if (arrayParcelas.length > 0) {
           setGerarFinanceiro(true);
-          const faturasFormatadas: FaturaXML[] = dadosExtraidos.faturas.map((f: any) => ({
-              numero: f.numero || "1",
-              vencimento: f.vencimento || "",
+          const faturasFormatadas: FaturaXML[] = arrayParcelas.map((f: any, idx: number) => ({
+              numero: f.numero || String(idx + 1),
+              vencimento: f.vencimento || f.data_vencimento || "",
               valor: parseFloat(f.valor) || 0
           }));
           setFaturas(faturasFormatadas);
@@ -331,13 +348,13 @@ export default function Entradas() {
       }
 
       // Mapeamento de Itens
-      if (dadosExtraidos.itens && dadosExtraidos.itens.length > 0) {
+      if (arrayItens.length > 0) {
           const novosItens: ItemEntrada[] = [];
           
-          dadosExtraidos.itens.forEach((item: any) => {
+          arrayItens.forEach((item: any) => {
               const qCom = parseFloat(item.quantidade) || 0;
               const vUnCom = parseFloat(item.valor_unitario) || 0;
-              const match = produtosBD.find(p => p.sku === item.sku);
+              const match = produtosBD.find(p => p.sku === item.sku || p.sku === item.codigo);
 
               if (match) {
                   novosItens.push({ 
@@ -347,9 +364,9 @@ export default function Entradas() {
                   });
               } else {
                   novosItens.push({ 
-                      produtoId: "", sku: item.sku || "", nome: "", rastreiaSerie: false, 
+                      produtoId: "", sku: item.sku || item.codigo || "", nome: "", rastreiaSerie: false, 
                       quantidade: qCom, qtdEmbalagem: qCom, fatorConversao: 1, 
-                      custo: vUnCom, custoEmbalagem: vUnCom, series: [], precisaMapeamento: true, nomeOriginalXML: item.nome 
+                      custo: vUnCom, custoEmbalagem: vUnCom, series: [], precisaMapeamento: true, nomeOriginalXML: item.nome || item.descricao 
                   });
               }
           });
@@ -357,7 +374,7 @@ export default function Entradas() {
       }
 
     } catch (error: any) {
-        alert("Erro na interpretação da IA: Verifique se o arquivo é legível ou se a API do n8n está respondendo corretamente. Detalhe: " + error.message);
+        alert("Erro na interpretação da IA: Verifique se o arquivo é legível ou se a API do n8n está respondendo. Detalhe: " + error.message);
     } finally {
         setCarregandoLeituraDoc(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
