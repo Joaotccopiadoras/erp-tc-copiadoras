@@ -272,7 +272,7 @@ const processarDocumentoComIA = async (event: React.ChangeEvent<HTMLInputElement
     formData.append("file", file);
 
     try {
-      const resposta = await fetch("[https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs](https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs)", {
+      const resposta = await fetch("https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/vision-docs", {
         method: "POST",
         body: formData
       });
