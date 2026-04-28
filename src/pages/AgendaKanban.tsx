@@ -340,8 +340,8 @@ export default function AgendaKanban() {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-indigo-600 uppercase flex items-center gap-1"><Settings className="w-3 h-3"/> Mapeamento Global</label>
                 <Select value={statusGlobalColuna} onValueChange={setStatusGlobalColuna}>
-                  <SelectTrigger><SelectValue/></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="z-[99999]"><SelectValue/></SelectTrigger>
+                  <SelectContent className="z-[99999]">
                     {STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -371,8 +371,8 @@ export default function AgendaKanban() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Coluna / Etapa Atual</label>
                   <Select value={cardForm.coluna_id} onValueChange={v => setCardForm({...cardForm, coluna_id: v})}>
-                    <SelectTrigger><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="z-[99999]"><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
+                    <SelectContent className="z-[99999]">
                       {(workflowAtivo === "global" ? colunas : colunas.filter(c => c.workflow_id === workflowAtivo)).map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.nome} {workflowAtivo === "global" && `(Mapeado: ${c.status_global})`}</SelectItem>
                       ))}
@@ -393,8 +393,8 @@ export default function AgendaKanban() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Prioridade</label>
                   <Select value={cardForm.prioridade} onValueChange={v => setCardForm({...cardForm, prioridade: v})}>
-                    <SelectTrigger><SelectValue/></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="z-[99999]"><SelectValue/></SelectTrigger>
+                    <SelectContent className="z-[99999]">
                       <SelectItem value="Baixa">Baixa</SelectItem>
                       <SelectItem value="Normal">Normal</SelectItem>
                       <SelectItem value="Alta">Alta</SelectItem>
