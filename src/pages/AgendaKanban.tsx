@@ -41,7 +41,7 @@ export default function AgendaKanban() {
 
   useEffect(() => {
     fetchQuadro();
-  }, [workflowAtivo]);
+  }, [workflowAtivo, usuarioAtual]);
 
   const fetchInitData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -51,6 +51,13 @@ export default function AgendaKanban() {
   };
 
   const fetchQuadro = async () => {
+    let currentUser = usuarioAtual;
+    if (!currentUser) {
+      const { data: { user } } = await supabase.auth.getUser();
+      currentUser = user;
+      if (user) setUsuarioAtual(user);
+    }
+
     if (workflowAtivo === "global") {
       const [colsRes, cardsRes] = await Promise.all([
         supabase.from('kanban_colunas').select('*'),
@@ -58,7 +65,7 @@ export default function AgendaKanban() {
       ]);
       if (colsRes.data) setColunas(colsRes.data);
       if (cardsRes.data) {
-        const meusCards = cardsRes.data.filter(c => c.responsavel_email === usuarioAtual?.email || !c.responsavel_email);
+        const meusCards = cardsRes.data.filter(c => c.responsavel_email === currentUser?.email || !c.responsavel_email);
         setCards(meusCards);
       }
     } else {
@@ -130,7 +137,7 @@ export default function AgendaKanban() {
   };
 
   const deletarCard = async (id: string) => {
-    if(!confirm("Excluir este card?")) return;
+    if(!window.confirm("Excluir este card?")) return;
     await supabase.from('kanban_cards').delete().eq('id', id);
     fetchQuadro();
     setModalCard(false);
