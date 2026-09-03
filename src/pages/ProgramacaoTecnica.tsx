@@ -40,7 +40,7 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
         <ChevronDown className="h-4 w-4 opacity-50" />
       </Button>
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
+        <div className="absolute z-[9999] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
           {options.length === 0 ? (
             <div className="p-2 text-sm text-slate-400 text-center italic">Nenhum dado...</div>
           ) : (
@@ -65,12 +65,12 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
   );
 }
 
-export default function TabelaPage() {
+export default function ProgramacaoTecnica() {
   const [allData, setAllData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [exportando, setExportando] = useState(false);
 
-  // Estados dos Filtros e Ordenação
+  // estados dos filtros e ordenacao
   const [filterTecnicos, setFilterTecnicos] = useState<string[]>([]);
   const [filterFabricantes, setFilterFabricantes] = useState<string[]>([]);
   const [filterModelos, setFilterModelos] = useState<string[]>([]);
@@ -87,7 +87,35 @@ export default function TabelaPage() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [page, setPage] = useState(0);
 
-  // Recuperação e Salvamento de Filtros (SessionStorage)
+  // controle dos itens selecionados (Ação em Lote)
+  const [selecionados, setSelecionados] = useState<number[]>([]);
+
+  const toggleSelecao = (id: number) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleTodos = (itensDaPagina: any[]) => {
+    setSelecionados(selecionados.length === itensDaPagina.length ? [] : itensDaPagina.map(item => item.id));
+  };
+
+  const excluirEmLote = async () => {
+    if (!window.confirm(`Tem certeza que deseja excluir ${selecionados.length} atendimentos definitivamente?`)) return;
+    
+    try {
+      setLoading(true);
+      const { error } = await supabase.from('atendimentos_tecnicos').delete().in('id', selecionados);
+      if (error) throw error;
+    
+      setAllData(prev => prev.filter(item => !selecionados.includes(item.id)));
+      setSelecionados([]);
+    } catch (error) {
+      console.error("Erro ao excluir em lote:", error);
+      alert("Erro ao excluir. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const savedFilters = sessionStorage.getItem("programacao_tecnica_filtros");
     if (savedFilters) {
@@ -221,7 +249,7 @@ export default function TabelaPage() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO PDF (Com Logo Restaurada)
+  // EXPORTAÇÃO PDF
   // ==========================================
   const exportarPDF = async () => {
     setExportando(true);
@@ -297,7 +325,7 @@ export default function TabelaPage() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO EXCEL (Com Logo Restaurada)
+  // EXPORTAÇÃO EXCEL
   // ==========================================
   const exportarExcel = async () => {
     setExportando(true);
@@ -388,6 +416,19 @@ export default function TabelaPage() {
 
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto min-h-[400px]">
+
+            {selecionados.length > 0 && (
+              <div className="bg-red-50 border-b border-red-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2 mb-4 rounded-lg m-4">
+                <span className="text-red-800 font-semibold">{selecionados.length} atendimento(s) selecionado(s)</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSelecionados([])} className="text-red-700 hover:bg-red-100">Desmarcar Todos</Button>
+                  <Button size="sm" onClick={excluirEmLote} className="bg-red-600 hover:bg-red-700 text-white gap-2">
+                    <Trash2 className="w-4 h-4" /> Excluir Selecionados
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Table>
               <TableHeader className="bg-slate-100">
                 <TableRow className="text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-100">
@@ -402,10 +443,23 @@ export default function TabelaPage() {
                   <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
                   <TableHead className="font-semibold p-4">Resumo</TableHead>
                   <TableHead className="font-semibold text-center p-4">Ação</TableHead>
+                  <TableHead className="w-10 text-center">
+                    <input 
+                      type="checkbox"
+                      checked={paginated.length > 0 && selecionados.length === paginated.length}
+                      onChange={() => toggleTodos(paginated)}
+                      className="rounded border-slate-300 w-4 h-4 cursor-pointer"
+                    />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-slate-100">
-                {loading ? <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow> : paginated.length === 0 ? <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow> : paginated.map(a => (
+                {loading ? (
+                  <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow>
+                ) : paginated.length === 0 ? (
+                  <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow>
+                ) : (
+                  paginated.map(a => (
                     <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
                       <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.data_previsao)}</TableCell>
@@ -414,18 +468,42 @@ export default function TabelaPage() {
                       <TableCell className="text-xs text-slate-500 font-medium p-4">{a.fabricante || "—"}</TableCell>
                       <TableCell className="text-xs text-slate-500 font-medium p-4">{a.modelo || "—"}</TableCell>
                       <TableCell className="text-xs font-bold text-indigo-700 p-4">{a.tecnico || "—"}</TableCell>
-                      <TableCell className="text-center p-4"><span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : a.status === 'waiting' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{formatarStatus(a.status)}</span></TableCell>
+                      <TableCell className="text-center p-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : a.status === 'waiting' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {formatarStatus(a.status)}
+                        </span>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
-                      <TableCell className="text-center p-4"><Button variant="ghost" size="icon" onClick={() => excluirAtendimento(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="h-4 w-4" /></Button></TableCell>
+                      <TableCell className="text-center p-4">
+                        <Button variant="ghost" size="icon" onClick={() => excluirAtendimento(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <input 
+                          type="checkbox"
+                          checked={selecionados.includes(a.id)}
+                          onChange={() => toggleSelecao(a.id)}
+                          className="rounded border-slate-300 w-4 h-4 cursor-pointer"
+                        />
+                      </TableCell>
                     </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </div>
+        
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm bg-white p-3 rounded-xl border border-slate-200 shadow-sm"><span className="text-slate-500 font-medium pl-2">Página <strong className="text-slate-800">{page + 1}</strong> de {totalPages}</span><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="font-semibold text-slate-600">Anterior</Button><Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="font-semibold text-slate-600">Próxima</Button></div></div>
+          <div className="flex items-center justify-between text-sm bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-slate-500 font-medium pl-2">Página <strong className="text-slate-800">{page + 1}</strong> de {totalPages}</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="font-semibold text-slate-600">Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="font-semibold text-slate-600">Próxima</Button>
+            </div>
+          </div>
         )}
       </div>
     </AppLayout>
