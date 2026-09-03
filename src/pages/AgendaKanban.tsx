@@ -6,8 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   FileText,
   KanbanSquare, 
-  Plus, MoreVertical, Clock, AlertTriangle, Calendar as CalendarIcon, User, Search, Settings, Layers, FolderKanban, Trash2, X } from "lucide-react";
+  Plus, MoreVertical, Clock, AlertTriangle, Calendar as CalendarIcon, User, Search, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 type Workflow = { id: string; nome: string; descricao: string };
 type Coluna = { id: string; workflow_id: string; nome: string; ordem: number; status_global: string };
@@ -21,6 +26,7 @@ export default function AgendaKanban() {
   const [colunas, setColunas] = useState<Coluna[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [workflowAtivo, setWorkflowAtivo] = useState<string>("global");
+  const [exportando, setExportando] = useState(false);
   
   // Modais
   const [modalWF, setModalWF] = useState(false);
@@ -158,9 +164,8 @@ export default function AgendaKanban() {
 
     let novaColunaId = dropTargetId;
 
-    // Magia da Visão Global: Se estou soltando no "Concluído" global, preciso achar a coluna do workflow original que equivale a "Concluído"
     if (isGlobal) {
-      const statusGlobalAlvo = dropTargetId; // Neste caso, o dropTargetId é o nome do status global
+      const statusGlobalAlvo = dropTargetId;
       const colunaEquivalente = colunas.find(c => c.workflow_id === cardMovido.workflow_id && c.status_global === statusGlobalAlvo);
       
       if (!colunaEquivalente) {
@@ -171,14 +176,10 @@ export default function AgendaKanban() {
 
     if (cardMovido.coluna_id === novaColunaId) return;
 
-    // Atualização otimista na UI
     setCards(prev => prev.map(c => c.id === cardId ? { ...c, coluna_id: novaColunaId, kanban_colunas: { ...c.kanban_colunas, status_global: isGlobal ? dropTargetId : (colunas.find(x => x.id === novaColunaId)?.status_global || 'Backlog') } as any } : c));
-
-    // Atualização no banco
     await supabase.from('kanban_cards').update({ coluna_id: novaColunaId, atualizado_em: new Date().toISOString() }).eq('id', cardId);
   };
 
-  // --- RENDERIZAÇÃO DAS COLUNAS (GLOBAL OU ESPECÍFICA) ---
   const getColunasRenderizacao = () => {
     if (workflowAtivo === "global") {
       return STATUS_GLOBAIS.map(status => ({
@@ -192,6 +193,149 @@ export default function AgendaKanban() {
   };
 
   const colunasAtivas = getColunasRenderizacao();
+
+  // ==========================================
+  // EXPORTAÇÕES (NOVO)
+  // ==========================================
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
+    try {
+      const res = await fetch(imageUrl);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const formatarData = (dataStr: string) => {
+    if (!dataStr) return "—";
+    return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
+  };
+
+  const getExportData = () => {
+    const exportData: any[] = [];
+    colunasAtivas.forEach(col => {
+      col.cards.forEach(card => {
+        exportData.push({
+          etapa: col.nome,
+          titulo: card.titulo,
+          responsavel: card.responsavel_nome || "-",
+          prioridade: card.prioridade,
+          vencimento: formatarData(card.data_vencimento),
+          workflow: card.kanban_workflows?.nome || "-",
+          status_global: card.kanban_colunas?.status_global || "-",
+          descricao: card.descricao || "-"
+        });
+      });
+    });
+    return exportData;
+  };
+
+  const exportarPDF = async () => {
+    setExportando(true);
+    try {
+      const doc = new jsPDF("landscape"); 
+      const logoBase64 = await getBase64ImageFromUrl("/logo.png");[cite: 1]
+      
+      const dadosExportacao = getExportData();
+      const tableColumn = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global"];
+      const tableRows = dadosExportacao.map(item => [
+        item.etapa, item.titulo, item.responsavel, item.prioridade, item.vencimento, item.workflow, item.status_global
+      ]);
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 35, 
+        margin: { bottom: 35 }, 
+        theme: 'grid', 
+        styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        
+        didDrawPage: function () {
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+
+          if (logoBase64) {
+            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);[cite: 1]
+          }
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(16);
+          doc.setTextColor(0, 0, 0);
+          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });[cite: 1]
+          
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.5);
+          doc.line(14, 28, pageWidth - 14, 28);[cite: 1]
+
+          doc.setFillColor(235, 235, 235);
+          doc.rect(0, pageHeight - 25, pageWidth, 25, "F");[cite: 1]
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6.5);
+          doc.setTextColor(100, 100, 100);
+          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";[cite: 1]
+          doc.text(col1Text, 14, pageHeight - 20);
+
+          doc.setTextColor(59, 130, 246);
+          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";[cite: 1]
+          doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
+
+          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";[cite: 1]
+          doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
+        }
+      });
+      doc.save("Agenda_Kanban_TC_Copiadoras.pdf");[cite: 1]
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Kanban Cards");[cite: 1]
+      const logoBase64 = await getBase64ImageFromUrl("/logo.png");[cite: 1]
+      
+      let startRow = 1;
+      
+      if (logoBase64) {
+        const imageId = workbook.addImage({ base64: logoBase64, extension: "png" });[cite: 1]
+        worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });[cite: 1]
+        startRow = 5; 
+      }
+      
+      worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];[cite: 1]
+      worksheet.getRow(startRow).font = { bold: true };
+      
+      const dadosExportacao = getExportData();
+      dadosExportacao.forEach((item) => {
+        worksheet.addRow([
+          item.etapa, item.titulo, item.responsavel, item.prioridade, item.vencimento, item.workflow, item.status_global, item.descricao
+        ]);
+      });
+      
+      worksheet.columns.forEach(column => { column.width = 20; });
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");[cite: 1]
+    } catch (error) { 
+      console.error("Erro ao gerar Excel:", error); 
+      alert("Erro ao gerar Excel."); 
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -229,7 +373,7 @@ export default function AgendaKanban() {
         {/* ÁREA DO KANBAN */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header do Quadro */}
-          <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10">
+          <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-800">
                 {workflowAtivo === "global" ? "Programação da Semana" : workflows.find(w => w.id === workflowAtivo)?.nome}
@@ -238,11 +382,22 @@ export default function AgendaKanban() {
                 {workflowAtivo === "global" ? "Visão unificada mapeada por status global. Mostrando suas tarefas." : "Gerencie as etapas e cards deste processo."}
               </p>
             </div>
-            <div className="flex gap-2">
+            
+            {/* BOTÕES DE EXPORTAÇÃO AQUI */}
+            <div className="flex gap-2 items-center flex-wrap">
+              <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || cards.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+                {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || cards.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+                {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} PDF
+              </Button>
+              
+              <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
+              
               {workflowAtivo !== "global" && (
-                <Button onClick={() => setModalColuna(true)} variant="outline" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Coluna</Button>
+                <Button onClick={() => setModalColuna(true)} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Coluna</Button>
               )}
-              <Button onClick={() => abrirModalCard()} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Novo Card</Button>
+              <Button onClick={() => abrirModalCard()} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Novo Card</Button>
             </div>
           </div>
 
