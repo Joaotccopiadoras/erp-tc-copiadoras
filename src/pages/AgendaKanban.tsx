@@ -241,7 +241,7 @@ export default function AgendaKanban() {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape"); 
-      const logoBase64 = await getBase64ImageFromUrl("/logo.png");[cite: 1]
+      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
       
       const dadosExportacao = getExportData();
       const tableColumn = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global"];
@@ -264,35 +264,35 @@ export default function AgendaKanban() {
           const pageHeight = doc.internal.pageSize.getHeight();
 
           if (logoBase64) {
-            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);[cite: 1]
+            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);
           }
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });[cite: 1]
+          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });
           
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
-          doc.line(14, 28, pageWidth - 14, 28);[cite: 1]
+          doc.line(14, 28, pageWidth - 14, 28);
 
           doc.setFillColor(235, 235, 235);
-          doc.rect(0, pageHeight - 25, pageWidth, 25, "F");[cite: 1]
+          doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
           doc.setFont("helvetica", "normal");
           doc.setFontSize(6.5);
           doc.setTextColor(100, 100, 100);
-          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";[cite: 1]
+          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";
           doc.text(col1Text, 14, pageHeight - 20);
 
           doc.setTextColor(59, 130, 246);
-          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";[cite: 1]
+          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
           doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
 
-          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";[cite: 1]
+          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
           doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
         }
       });
-      doc.save("Agenda_Kanban_TC_Copiadoras.pdf");[cite: 1]
+      doc.save("Agenda_Kanban_TC_Copiadoras.pdf");
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF.");
@@ -305,18 +305,18 @@ export default function AgendaKanban() {
     setExportando(true);
     try {
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Kanban Cards");[cite: 1]
-      const logoBase64 = await getBase64ImageFromUrl("/logo.png");[cite: 1]
+      const worksheet = workbook.addWorksheet("Kanban Cards");
+      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
       
       let startRow = 1;
       
       if (logoBase64) {
-        const imageId = workbook.addImage({ base64: logoBase64, extension: "png" });[cite: 1]
-        worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });[cite: 1]
+        const imageId = workbook.addImage({ base64: logoBase64, extension: "png" });
+        worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });
         startRow = 5; 
       }
       
-      worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];[cite: 1]
+      worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
       worksheet.getRow(startRow).font = { bold: true };
       
       const dadosExportacao = getExportData();
@@ -328,7 +328,7 @@ export default function AgendaKanban() {
       
       worksheet.columns.forEach(column => { column.width = 20; });
       const buffer = await workbook.xlsx.writeBuffer();
-      saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");[cite: 1]
+      saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");
     } catch (error) { 
       console.error("Erro ao gerar Excel:", error); 
       alert("Erro ao gerar Excel."); 
