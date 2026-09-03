@@ -87,7 +87,6 @@ export default function ProgramacaoTecnica() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [page, setPage] = useState(0);
 
-  // controle dos itens selecionados (Ação em Lote)
   const [selecionados, setSelecionados] = useState<number[]>([]);
 
   const toggleSelecao = (id: number) => {
@@ -248,9 +247,6 @@ export default function ProgramacaoTecnica() {
     }
   };
 
-  // ==========================================
-  // EXPORTAÇÃO PDF
-  // ==========================================
   const exportarPDF = async () => {
     setExportando(true);
     try {
@@ -324,9 +320,6 @@ export default function ProgramacaoTecnica() {
     } finally { setExportando(false); }
   };
 
-  // ==========================================
-  // EXPORTAÇÃO EXCEL
-  // ==========================================
   const exportarExcel = async () => {
     setExportando(true);
     try {
