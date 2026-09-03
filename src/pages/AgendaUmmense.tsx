@@ -52,7 +52,7 @@ function MultiSelectDropdown({ title, options, selected, onChange }: { title: st
         <ChevronDown className="h-4 w-4 opacity-50" />
       </Button>
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
+        <div className="absolute z-[9999] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
           {options.length === 0 ? (
             <div className="p-2 text-sm text-slate-400 text-center italic">Nenhum dado...</div>
           ) : (
@@ -90,6 +90,32 @@ export default function DashboardPage() {
   
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [page, setPage] = useState(0);
+
+  const [selecionados, setSelecionados] = useState<number[]>([]);
+  const toggleSelecao = (id: number) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+  const toggleTodos = (itensDaPagina: any[]) => {
+    setSelecionados(selecionados.length === itensDaPagina.length ? [] : itensDaPagina.map(item => item.id));
+  };
+  const excluirEmLote = async () => {
+    if (!window.confirm(`Tem certeza que deseja excluir ${selecionados.length} projetos definitivamente?`)) return;
+    
+    try {
+      setLoading(true);
+      const { error } = await supabase.from('programacao_tc').delete().in('id', selecionados);
+      if (error) throw error;
+    
+      setAllData(prev => prev.filter(item => !selecionados.includes(item.id)));
+      setSelecionados([]);
+    } catch (error) {
+      console.error("Erro ao excluir em lote:", error);
+      alert("Erro ao excluir. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // autosave
   useEffect(() => {
@@ -447,6 +473,19 @@ export default function DashboardPage() {
 
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto min-h-[400px]">
+
+            {selecionados.length > 0 && (
+              <div className="bg-red-50 border-b border-red-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2 mb-4 rounded-lg m-4">
+                <span className="text-red-800 font-semibold">{selecionados.length} projeto(s) selecionado(s)</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSelecionados([])} className="text-red-700 hover:bg-red-100">Desmarcar Todos</Button>
+                  <Button size="sm" onClick={excluirEmLote} className="bg-red-600 hover:bg-red-700 text-white gap-2">
+                    <Trash2 className="w-4 h-4" /> Excluir Selecionados
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Table>
               <TableHeader className="bg-slate-100">
                 <TableRow className="text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-100">
@@ -461,10 +500,18 @@ export default function DashboardPage() {
                   <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
                   <TableHead className="font-semibold p-4">Resumo</TableHead>
                   <TableHead className="font-semibold text-center p-4">Ação</TableHead>
+                  <TableHead className="w-10 text-center">
+                    <input 
+                      type="checkbox"
+                      checked={paginated.length > 0 && selecionados.length === paginated.length}
+                      onChange={() => toggleTodos(paginated)}
+                      className="rounded border-slate-300 w-4 h-4 cursor-pointer"
+                    />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-slate-100">
-                {loading ? <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow> : paginated.length === 0 ? <TableRow><TableCell colSpan={11} className="text-center text-slate-400 font-medium py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow> : paginated.map(a => (
+                {loading ? <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow> : paginated.length === 0 ? <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow> : paginated.map(a => (
                     <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
                       <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.previsao_prazo)}</TableCell>
@@ -477,6 +524,14 @@ export default function DashboardPage() {
                       <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
                       <TableCell className="text-center p-4"><Button variant="ghost" size="icon" onClick={() => excluirRegistro(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="h-4 w-4" /></Button></TableCell>
+                      <TableCell className="text-center">
+                        <input 
+                          type="checkbox"
+                          checked={selecionados.includes(a.id)}
+                          onChange={() => toggleSelecao(a.id)}
+                          className="rounded border-slate-300 w-4 h-4 cursor-pointer"
+                        />
+                      </TableCell>
                     </TableRow>
                 ))}
               </TableBody>
