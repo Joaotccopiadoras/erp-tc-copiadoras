@@ -453,11 +453,6 @@ const renderSortIcon = (key: string) => {
     } finally { setExportando(false); }
   };
 
-  const renderSortIcon = (key: string) => {
-    if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;
-    return null;
-  };
-
   return (
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
