@@ -388,6 +388,11 @@ const exportarPDF = async () => {
     }
   };
 
+  const renderSortIcon = (key: string) => {
+    if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;
+    return null;
+  };
+
 //exportar excel
 
   const exportarExcel = async () => {
