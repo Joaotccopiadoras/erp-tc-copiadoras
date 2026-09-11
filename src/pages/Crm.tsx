@@ -266,7 +266,7 @@ export default function CrmGlobal() {
                                 <label className="text-xs font-bold text-slate-500 uppercase">Status no CRM</label>
                                 <Select value={novoCliStatus} onValueChange={setNovoCliStatus}>
                                     <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                                    <SelectContent><SelectItem value="Lead">Lead</SelectItem><SelectItem value="Prospecção">Prospecção</SelectItem><SelectItem value="Negociação">Negociação</SelectItem><SelectItem value="Cliente Ativo">Cliente Ativo</SelectItem></SelectContent>
+                                    <SelectContent className="bg-white z-[9999]"><SelectItem value="Lead">Lead</SelectItem><SelectItem value="Prospecção">Prospecção</SelectItem><SelectItem value="Negociação">Negociação</SelectItem><SelectItem value="Cliente Ativo">Cliente Ativo</SelectItem></SelectContent>
                                 </Select>
                             </div>
                         </div>
@@ -352,7 +352,7 @@ export default function CrmGlobal() {
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-2">Status CRM:</span>
                         <Select value={clienteSelecionado.status_funil || 'Lead'} onValueChange={atualizarStatusFunil}>
                             <SelectTrigger className="w-40 bg-white font-bold text-indigo-700 border-indigo-200"><SelectValue/></SelectTrigger>
-                            <SelectContent><SelectItem value="Lead">Lead</SelectItem><SelectItem value="Prospecção">Prospecção</SelectItem><SelectItem value="Negociação">Negociação</SelectItem><SelectItem value="Cliente Ativo">Cliente Ativo</SelectItem><SelectItem value="Inativo">Inativo</SelectItem></SelectContent>
+                            <SelectContent className="bg-white z-[9999]"><SelectItem value="Lead">Lead</SelectItem><SelectItem value="Prospecção">Prospecção</SelectItem><SelectItem value="Negociação">Negociação</SelectItem><SelectItem value="Cliente Ativo">Cliente Ativo</SelectItem><SelectItem value="Inativo">Inativo</SelectItem></SelectContent>
                         </Select>
                     </div>
                 </div>
@@ -375,7 +375,7 @@ export default function CrmGlobal() {
                                 <h3 className="font-bold text-slate-800 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-indigo-500"/> Registrar Interação</h3>
                                 <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Canal</label><Select value={interacaoTipo} onValueChange={setInteracaoTipo}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="WhatsApp">WhatsApp</SelectItem><SelectItem value="Ligação">Ligação</SelectItem><SelectItem value="Email">E-mail</SelectItem><SelectItem value="Visita">Visita</SelectItem></SelectContent></Select></div>
+                                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Canal</label><Select value={interacaoTipo} onValueChange={setInteracaoTipo}><SelectTrigger className="bg-white h-9"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="WhatsApp">WhatsApp</SelectItem><SelectItem value="Ligação">Ligação</SelectItem><SelectItem value="Email">E-mail</SelectItem><SelectItem value="Visita">Visita</SelectItem></SelectContent></Select></div>
                                         <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Data Retorno</label><Input type="date" value={interacaoDataAgend} onChange={e => setInteracaoDataAgend(e.target.value)} className="bg-white h-9" /></div>
                                     </div>
                                     <div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Resumo da Conversa *</label><textarea value={interacaoDesc} onChange={e => setInteracaoDesc(e.target.value)} className="w-full h-24 p-2 border rounded bg-white text-sm resize-none"></textarea></div>

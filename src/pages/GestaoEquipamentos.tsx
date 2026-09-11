@@ -351,13 +351,13 @@ export default function GestaoEquipamentos() {
                         <label className="text-xs font-bold text-slate-600 uppercase">Modelo do Equipamento (Catálogo de Produtos) *</label>
                         <Select value={form.produto_id} onValueChange={handleProdutoChange}>
                             <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione do Catálogo..."/></SelectTrigger>
-                            <SelectContent className="max-h-60 overflow-y-auto">{produtosBD.map(p => <SelectItem key={p.id} value={p.id}>{p.sku} - {p.nome}</SelectItem>)}</SelectContent>
+                            <SelectContent className="bg-white z-[9999] max-h-60 overflow-y-auto">{produtosBD.map(p => <SelectItem key={p.id} value={p.id}>{p.sku} - {p.nome}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                     {/* Infos puxadas/editadas do Produto */}
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fabricante</label><Input value={specs.fabricante} onChange={e => setSpecs({...specs, fabricante: e.target.value})} className="bg-white" /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Família / Categoria</label><Input value={specs.familia} onChange={e => setSpecs({...specs, familia: e.target.value})} className="bg-white" placeholder="Ex: Laser, Jato de Tinta..." /></div>
-                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Tamanho Max. Papel</label><Select value={specs.formato} onValueChange={v => setSpecs({...specs, formato: v})}><SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="A4">A4</SelectItem><SelectItem value="A3">A3</SelectItem><SelectItem value="A0">A0 (Plotter)</SelectItem><SelectItem value="SuperA3">Super A3</SelectItem></SelectContent></Select></div>
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Tamanho Max. Papel</label><Select value={specs.formato} onValueChange={v => setSpecs({...specs, formato: v})}><SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="A4">A4</SelectItem><SelectItem value="A3">A3</SelectItem><SelectItem value="A0">A0 (Plotter)</SelectItem><SelectItem value="SuperA3">Super A3</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">PPM (Pág. por Minuto)</label><Input type="number" value={specs.ppm} onChange={e => setSpecs({...specs, ppm: e.target.value})} className="bg-white" /></div>
                 </div>
                 
@@ -368,14 +368,14 @@ export default function GestaoEquipamentos() {
                         <label className="text-xs font-bold text-slate-600 uppercase">Propriedade do Equipamento *</label>
                         <Select value={form.proprietario} onValueChange={v => setForm({...form, proprietario: v})}>
                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                            <SelectContent><SelectItem value="TC Copiadoras">TC Copiadoras (Ativo Próprio)</SelectItem><SelectItem value="Cliente">Cliente (Terceiros)</SelectItem></SelectContent>
+                            <SelectContent className="bg-white z-[9999]"><SelectItem value="TC Copiadoras">TC Copiadoras (Ativo Próprio)</SelectItem><SelectItem value="Cliente">Cliente (Terceiros)</SelectItem></SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Status Inicial / Atual</label>
                         <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
                             <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                            <SelectContent><SelectItem value="Ativo">Ativo / Operacional</SelectItem><SelectItem value="Inativo">Inativo / Estoque</SelectItem><SelectItem value="Em Manutenção">Em Manutenção</SelectItem></SelectContent>
+                            <SelectContent className="bg-white z-[9999]"><SelectItem value="Ativo">Ativo / Operacional</SelectItem><SelectItem value="Inativo">Inativo / Estoque</SelectItem><SelectItem value="Em Manutenção">Em Manutenção</SelectItem></SelectContent>
                         </Select>
                     </div>
                 </div>
@@ -389,14 +389,14 @@ export default function GestaoEquipamentos() {
                         <label className="text-xs font-bold text-slate-600 uppercase">Cliente Vinculado</label>
                         <Select value={form.cliente_id} onValueChange={v => setForm({...form, cliente_id: v})}>
                             <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
-                            <SelectContent className="max-h-60 overflow-y-auto"><SelectItem value="nenhum">Nenhum (Fica na TC)</SelectItem>{clientesBD.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_fantasia}</SelectItem>)}</SelectContent>
+                            <SelectContent className="bg-white z-[9999] max-h-60 overflow-y-auto"><SelectItem value="nenhum">Nenhum (Fica na TC)</SelectItem>{clientesBD.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_fantasia}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Contrato Vinculado</label>
                         <Select value={form.contrato_id} onValueChange={v => setForm({...form, contrato_id: v})} disabled={form.cliente_id === "nenhum"}>
                             <SelectTrigger className="bg-white"><SelectValue placeholder={form.cliente_id === "nenhum" ? "Selecione o cliente primeiro" : "Selecione..."}/></SelectTrigger>
-                            <SelectContent><SelectItem value="nenhum">Sem contrato (Avulso)</SelectItem>{contratosBD.filter(c => c.cliente_id === form.cliente_id).map(c => <SelectItem key={c.id} value={c.id}>{c.titulo}</SelectItem>)}</SelectContent>
+                            <SelectContent className="bg-white z-[9999]"><SelectItem value="nenhum">Sem contrato (Avulso)</SelectItem>{contratosBD.filter(c => c.cliente_id === form.cliente_id).map(c => <SelectItem key={c.id} value={c.id}>{c.titulo}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-600 uppercase">Endereço Exato de Instalação (Andar, Setor)</label><Input value={form.endereco_instalacao} onChange={e => setForm({...form, endereco_instalacao: e.target.value})} className="bg-white" /></div>
@@ -424,7 +424,7 @@ export default function GestaoEquipamentos() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Foi vendido pela TC?</label>
-                        <Select value={form.vendido_por_tc} onValueChange={v => setForm({...form, vendido_por_tc: v})}><SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select>
+                        <Select value={form.vendido_por_tc} onValueChange={v => setForm({...form, vendido_por_tc: v})}><SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select>
                     </div>
                     {form.vendido_por_tc === "Sim" && (
                         <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-600 uppercase">Vendedor</label><Input value={form.vendedor} onChange={e => setForm({...form, vendedor: e.target.value})} className="bg-white" /></div>
@@ -433,7 +433,7 @@ export default function GestaoEquipamentos() {
                         <label className="text-xs font-bold text-slate-600 uppercase">Fornecedor da Garantia</label>
                         <Select value={form.garantia_fornecedor_id} onValueChange={v => setForm({...form, garantia_fornecedor_id: v})}>
                             <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
-                            <SelectContent><SelectItem value="nenhum">Sem Garantia</SelectItem>{fornecedoresBD.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia}</SelectItem>)}</SelectContent>
+                            <SelectContent className="bg-white z-[9999]"><SelectItem value="nenhum">Sem Garantia</SelectItem>{fornecedoresBD.map(f => <SelectItem key={f.id} value={f.id}>{f.nome_fantasia}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase">NF de Compra</label><Input value={form.garantia_nf_compra} onChange={e => setForm({...form, garantia_nf_compra: e.target.value})} className="bg-white" /></div>
@@ -451,7 +451,7 @@ export default function GestaoEquipamentos() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: PRONTUÁRIO DO EQUIPAMENTO (DOSSIÊ 360) */}
+        {/* prontu */}
         {/* ========================================================================= */}
         {abaAtiva === "dossie" && equipSelecionado && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
