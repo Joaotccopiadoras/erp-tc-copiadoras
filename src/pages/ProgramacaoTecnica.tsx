@@ -253,7 +253,7 @@ const exportarPDF = async () => {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape");
-      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
+      const logoData = await getBase64ImageFromUrl("/logo.png");
       
       const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
 
@@ -318,8 +318,8 @@ const exportarPDF = async () => {
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 35,
-        margin: { top: 35, bottom: 45 },
+        startY: 40,
+        margin: { top: 40, bottom: 45, left: 14, right: 14 },
         theme: 'grid', 
         styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
         columnStyles: { 0: { cellWidth: 16, halign: 'center' }, 1: { cellWidth: 16, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' }, 3: { cellWidth: 35 }, 4: { cellWidth: 25 }, 5: { cellWidth: 20 }, 6: { cellWidth: 20 }, 7: { cellWidth: 22, halign: 'center' }, 8: { cellWidth: 'auto', halign: 'left' } },
@@ -330,12 +330,13 @@ const exportarPDF = async () => {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
 
-          // --- CABEÇALHO ---
           doc.setFillColor(255, 255, 255);
-          doc.rect(0, 0, pageWidth, 35, "F");
+          doc.rect(0, 0, pageWidth, 38, "F");
+          doc.rect(0, pageHeight - 40, pageWidth, 40, "F");
 
-          if (logoBase64) {
-            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);
+          // --- CABEÇALHO ---
+          if (logoData) {
+            doc.addImage(logoData, "PNG", 14, 10, 40, 15);
           }
           
           doc.setFont("helvetica", "bold");
@@ -343,7 +344,7 @@ const exportarPDF = async () => {
           doc.setTextColor(0, 0, 0);
           doc.text("Programação/Produtividade Técnica", pageWidth / 2, 20, { align: "center" });
 
-          // --- DATA FORMATO TIMBRADO ---
+          // --- DATA ---
           const today = new Date();
           const dia = String(today.getDate()).padStart(2, '0');
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -352,9 +353,9 @@ const exportarPDF = async () => {
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(80, 80, 80);
-          doc.text(textoData, pageWidth - 14, 27, { align: "right" });
+          doc.text(textoData, pageWidth - 14, 28, { align: "right" });
 
-          // --- NOVO RODAPÉ (FORMATO TIMBRADO) ---
+          // --- RODAPÉ TIMBRADO ---
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
           doc.setTextColor(80, 80, 80); 
