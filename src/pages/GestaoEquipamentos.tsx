@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser } from "lucide-react";
+import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function GestaoEquipamentos() {
@@ -43,6 +43,22 @@ export default function GestaoEquipamentos() {
   const [specs, setSpecs] = useState({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
   const [contadoresSelecionados, setContadoresSelecionados] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
+
+  // Estados Customizados para a Pesquisa de Catálogo
+  const [buscaCatalogo, setBuscaCatalogo] = useState("");
+  const [dropdownCatalogoAberto, setDropdownCatalogoAberto] = useState(false);
+  const dropdownCatalogoRef = useRef<HTMLDivElement>(null);
+
+  // Fechar o dropdown de pesquisa ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownCatalogoRef.current && !dropdownCatalogoRef.current.contains(event.target as Node)) {
+        setDropdownCatalogoAberto(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // ==========================================
   // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
@@ -114,6 +130,8 @@ export default function GestaoEquipamentos() {
         try { if (prod.especificacoes) parsedSpecs = typeof prod.especificacoes === 'string' ? JSON.parse(prod.especificacoes) : prod.especificacoes; } catch(e){}
         setSpecs({ formato: parsedSpecs.formato || "A4", ppm: parsedSpecs.ppm || "", ano: parsedSpecs.ano || "", fabricante: prod.fabricante || "", familia: prod.familia || "" });
     }
+    setDropdownCatalogoAberto(false);
+    setBuscaCatalogo("");
   };
 
   const toggleContador = (tipo: string) => {
@@ -347,13 +365,58 @@ export default function GestaoEquipamentos() {
             <div className="space-y-4">
                 <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> 1. Identificação e Modelo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    
+                    {/* CUSTOM DROPDOWN COM PESQUISA PARA O CATÁLOGO */}
                     <div className="space-y-2 md:col-span-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Modelo do Equipamento (Catálogo de Produtos) *</label>
-                        <Select value={form.produto_id} onValueChange={handleProdutoChange}>
-                            <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione do Catálogo..."/></SelectTrigger>
-                            <SelectContent className="bg-white z-[9999] max-h-60 overflow-y-auto">{produtosBD.map(p => <SelectItem key={p.id} value={p.id}>{p.sku} - {p.nome}</SelectItem>)}</SelectContent>
-                        </Select>
+                        <div className="relative" ref={dropdownCatalogoRef}>
+                            <div 
+                                className="flex items-center justify-between w-full h-10 px-3 py-2 text-sm bg-white border border-slate-200 rounded-md cursor-pointer hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-colors shadow-sm"
+                                onClick={() => setDropdownCatalogoAberto(!dropdownCatalogoAberto)}
+                            >
+                                <span className="truncate text-slate-700 font-medium">
+                                    {form.produto_id 
+                                        ? (() => { const p = produtosBD.find(x => x.id === form.produto_id); return p ? `${p.sku} - ${p.nome}` : "Selecione do Catálogo..."; })()
+                                        : "Selecione do Catálogo..."}
+                                </span>
+                                <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                            </div>
+
+                            {dropdownCatalogoAberto && (
+                                <div className="absolute z-[9999] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                            <Input
+                                                autoFocus
+                                                placeholder="Buscar por Modelo, SKU ou Nome..."
+                                                className="pl-9 h-9 text-sm bg-white border-slate-200 focus-visible:ring-indigo-500"
+                                                value={buscaCatalogo}
+                                                onChange={(e) => setBuscaCatalogo(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                        {produtosBD.filter(p => `${p.sku} ${p.nome}`.toLowerCase().includes(buscaCatalogo.toLowerCase())).length === 0 ? (
+                                            <div className="p-4 text-sm text-slate-400 text-center italic">Nenhum modelo encontrado.</div>
+                                        ) : (
+                                            produtosBD.filter(p => `${p.sku} ${p.nome}`.toLowerCase().includes(buscaCatalogo.toLowerCase())).map(p => (
+                                                <div
+                                                    key={p.id}
+                                                    className={`px-3 py-2.5 text-sm cursor-pointer rounded-md transition-colors ${form.produto_id === p.id ? "bg-indigo-50 font-bold text-indigo-700" : "text-slate-700 hover:bg-slate-100"}`}
+                                                    onClick={() => handleProdutoChange(p.id)}
+                                                >
+                                                    <span className="font-mono text-xs text-slate-400 mr-2">{p.sku}</span> 
+                                                    <span className="font-semibold">{p.nome}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
+
                     {/* Infos puxadas/editadas do Produto */}
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fabricante</label><Input value={specs.fabricante} onChange={e => setSpecs({...specs, fabricante: e.target.value})} className="bg-white" /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Família / Categoria</label><Input value={specs.familia} onChange={e => setSpecs({...specs, familia: e.target.value})} className="bg-white" placeholder="Ex: Laser, Jato de Tinta..." /></div>
@@ -451,7 +514,7 @@ export default function GestaoEquipamentos() {
         )}
 
         {/* ========================================================================= */}
-        {/* prontu */}
+        {/* ABA: PRONTUÁRIO DO EQUIPAMENTO (DOSSIÊ 360) */}
         {/* ========================================================================= */}
         {abaAtiva === "dossie" && equipSelecionado && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
