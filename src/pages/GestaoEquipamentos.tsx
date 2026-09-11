@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser, ChevronDown } from "lucide-react";
+import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser, ChevronDown, Loader2, Phone, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function GestaoEquipamentos() {
@@ -33,13 +33,19 @@ export default function GestaoEquipamentos() {
   // ESTADOS: FORMULÁRIO (NOVO E EDIÇÃO)
   // ==========================================
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
   const [form, setForm] = useState({
     produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
-    numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
+    numero_serie: "", patrimonio: "", status: "Ativo", 
+    // ENDEREÇO DISCRIMINADO
+    cep_instalacao: "", rua_instalacao: "", numero_instalacao: "", complemento_instalacao: "", bairro_instalacao: "", cidade_instalacao: "", uf_instalacao: "",
+    // CONTATO RESPONSÁVEL
+    contato_nome: "", contato_telefone: "", contato_email: "", tecnico_responsavel: "",
     vendido_por_tc: "Não", vendedor: "", garantia_fornecedor_id: "nenhum", garantia_nf_compra: "", garantia_inicio: "", garantia_fim: ""
   });
 
-  // Especificações Dinâmicas (que vem do produto ou são criadas na hora)
+  // Especificações Dinâmicas
   const [specs, setSpecs] = useState({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
   const [contadoresSelecionados, setContadoresSelecionados] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -49,7 +55,6 @@ export default function GestaoEquipamentos() {
   const [dropdownCatalogoAberto, setDropdownCatalogoAberto] = useState(false);
   const dropdownCatalogoRef = useRef<HTMLDivElement>(null);
 
-  // Fechar o dropdown de pesquisa ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownCatalogoRef.current && !dropdownCatalogoRef.current.contains(event.target as Node)) {
@@ -90,7 +95,9 @@ export default function GestaoEquipamentos() {
     setEditandoId(null);
     setForm({
       produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
-      numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
+      numero_serie: "", patrimonio: "", status: "Ativo", 
+      cep_instalacao: "", rua_instalacao: "", numero_instalacao: "", complemento_instalacao: "", bairro_instalacao: "", cidade_instalacao: "", uf_instalacao: "",
+      contato_nome: "", contato_telefone: "", contato_email: "", tecnico_responsavel: "",
       vendido_por_tc: "Não", vendedor: "", garantia_fornecedor_id: "nenhum", garantia_nf_compra: "", garantia_inicio: "", garantia_fim: ""
     });
     setSpecs({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
@@ -105,7 +112,8 @@ export default function GestaoEquipamentos() {
   const fetchDadosBase = async () => {
     const [prodRes, cliRes, contRes, fornRes] = await Promise.all([
       supabase.from('log_produtos').select('*').order('nome'),
-      supabase.from('log_clientes').select('id, razao_social, nome_fantasia'),
+      // Buscamos todos os dados relevantes do cliente (endereço, telefone)
+      supabase.from('log_clientes').select('*').order('nome_fantasia'),
       supabase.from('crm_contratos').select('id, titulo, cliente_id').eq('status', 'Ativo'),
       supabase.from('log_fornecedores').select('id, nome_fantasia')
     ]);
@@ -134,6 +142,48 @@ export default function GestaoEquipamentos() {
     setBuscaCatalogo("");
   };
 
+  // --- BUSCA ENDEREÇO DO CLIENTE (Auto-Fill) ---
+  const handleClienteChange = (clienteId: string) => {
+      let dadosSincronizados = { ...form, cliente_id: clienteId, contrato_id: "nenhum" };
+
+      if (clienteId !== "nenhum") {
+          const cli = clientesBD.find(c => c.id === clienteId);
+          if (cli) {
+              // Exemplo de endereço no DB: "Rua X, 123 - Bairro, Cidade - UF, CEP: 00000"
+              // Como os endereços da base podem não estar divididos perfeitamente, colocamos o endereço bruto na Rua e deixamos o usuário ajustar.
+              dadosSincronizados.rua_instalacao = cli.endereco || ""; 
+              dadosSincronizados.contato_telefone = cli.telefone || "";
+              dadosSincronizados.contato_email = cli.email || "";
+          }
+      }
+      setForm(dadosSincronizados);
+  };
+
+  // --- BUSCA CEP (BrasilAPI) ---
+  const buscarCep = async () => {
+      const cepLimpo = form.cep_instalacao.replace(/\D/g, "");
+      if (cepLimpo.length !== 8) return alert("CEP inválido.");
+      
+      setBuscandoCep(true);
+      try {
+          const res = await fetch(`https://brasilapi.com.br/api/cep/v1/${cepLimpo}`);
+          if (!res.ok) throw new Error("CEP não encontrado");
+          const dados = await res.json();
+          
+          setForm({
+              ...form,
+              rua_instalacao: dados.street || "",
+              bairro_instalacao: dados.neighborhood || "",
+              cidade_instalacao: dados.city || "",
+              uf_instalacao: dados.state || ""
+          });
+      } catch (e) {
+          alert("Não foi possível buscar o CEP.");
+      } finally {
+          setBuscandoCep(false);
+      }
+  };
+
   const toggleContador = (tipo: string) => {
     setContadoresSelecionados(prev => prev.includes(tipo) ? prev.filter(t => t !== tipo) : [...prev, tipo]);
   };
@@ -141,6 +191,10 @@ export default function GestaoEquipamentos() {
   // --- CARREGAR DADOS PARA EDIÇÃO ---
   const abrirEditarEquipamento = (eq: any) => {
     setEditandoId(eq.id);
+    
+    // Tenta desmembrar o endereço legado (se estiver tudo no campo 'endereco_instalacao') ou usar os campos novos
+    let endStr = eq.endereco_instalacao || "";
+    
     setForm({
       produto_id: eq.produto_id || "",
       proprietario: eq.proprietario || "TC Copiadoras",
@@ -150,9 +204,22 @@ export default function GestaoEquipamentos() {
       numero_serie: eq.numero_serie || "",
       patrimonio: eq.patrimonio || "",
       status: eq.status || "Ativo",
-      endereco_instalacao: eq.endereco_instalacao || "",
-      contato_responsavel: eq.contato_responsavel || "",
+      
+      // Endereço
+      cep_instalacao: eq.cep_instalacao || "",
+      rua_instalacao: eq.rua_instalacao || endStr, // Fallback para compatibilidade
+      numero_instalacao: eq.numero_instalacao || "",
+      complemento_instalacao: eq.complemento_instalacao || "",
+      bairro_instalacao: eq.bairro_instalacao || "",
+      cidade_instalacao: eq.cidade_instalacao || "",
+      uf_instalacao: eq.uf_instalacao || "",
+
+      // Contato
+      contato_nome: eq.contato_responsavel || "", // Fallback
+      contato_telefone: eq.contato_telefone || "",
+      contato_email: eq.contato_email || "",
       tecnico_responsavel: eq.tecnico_responsavel || "",
+      
       vendido_por_tc: eq.vendido_por_tc ? "Sim" : "Não",
       vendedor: eq.vendedor || "",
       garantia_fornecedor_id: eq.garantia_fornecedor_id || "nenhum",
@@ -177,7 +244,7 @@ export default function GestaoEquipamentos() {
     setSpecs(parsedSpecs);
     setContadoresSelecionados(eq.tipos_contadores || []);
     
-    setEquipSelecionado(null); // Fecha o dossiê se estiver aberto
+    setEquipSelecionado(null); 
     setAbaAtiva("novo");
   };
 
@@ -186,11 +253,12 @@ export default function GestaoEquipamentos() {
     setSalvando(true);
 
     try {
-      // 1. Atualiza as especificações no Cadastro do Produto na Logística (se mudaram)
       const produtoSpecs = { formato: specs.formato, ppm: specs.ppm, ano: specs.ano };
       await supabase.from('log_produtos').update({ is_equipamento: true, fabricante: specs.fabricante, familia: specs.familia, especificacoes: produtoSpecs }).eq('id', form.produto_id);
 
-      // 2. Monta o Payload do Equipamento
+      // Concatena o endereço para o campo legado, mantendo a compatibilidade do sistema
+      const enderecoCompleto = `${form.rua_instalacao}, ${form.numero_instalacao} ${form.complemento_instalacao ? '- '+form.complemento_instalacao : ''}, ${form.bairro_instalacao}, ${form.cidade_instalacao} - ${form.uf_instalacao}`;
+
       const payload = {
           ...form,
           cliente_id: form.cliente_id === "nenhum" ? null : form.cliente_id,
@@ -200,10 +268,12 @@ export default function GestaoEquipamentos() {
           garantia_inicio: form.garantia_inicio || null,
           garantia_fim: form.garantia_fim || null,
           vendido_por_tc: form.vendido_por_tc === "Sim",
-          tipos_contadores: contadoresSelecionados
+          tipos_contadores: contadoresSelecionados,
+          // Garante a compatibilidade com a tabela
+          endereco_instalacao: enderecoCompleto,
+          contato_responsavel: form.contato_nome
       };
 
-      // 3. Verifica se é Edição ou Novo
       if (editandoId) {
           const { error } = await supabase.from('srv_equipamentos').update(payload).eq('id', editandoId);
           if (error) throw error;
@@ -212,7 +282,6 @@ export default function GestaoEquipamentos() {
           const { data: newEq, error } = await supabase.from('srv_equipamentos').insert([payload]).select().single();
           if (error) throw error;
 
-          // Se foi instalado em cliente e é um equipamento novo, gera o histórico inicial de Movimentação
           if (payload.cliente_id) {
               await supabase.from('srv_equipamentos_movimentacao').insert([{
                   equipamento_id: newEq.id, tipo: 'Instalação', cliente_id: payload.cliente_id, 
@@ -227,7 +296,9 @@ export default function GestaoEquipamentos() {
       setEditandoId(null);
       setForm({
         produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
-        numero_serie: "", patrimonio: "", status: "Ativo", endereco_instalacao: "", contato_responsavel: "", tecnico_responsavel: "",
+        numero_serie: "", patrimonio: "", status: "Ativo", 
+        cep_instalacao: "", rua_instalacao: "", numero_instalacao: "", complemento_instalacao: "", bairro_instalacao: "", cidade_instalacao: "", uf_instalacao: "",
+        contato_nome: "", contato_telefone: "", contato_email: "", tecnico_responsavel: "",
         vendido_por_tc: "Não", vendedor: "", garantia_fornecedor_id: "nenhum", garantia_nf_compra: "", garantia_inicio: "", garantia_fim: ""
       });
       setSpecs({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
@@ -282,7 +353,6 @@ export default function GestaoEquipamentos() {
     (e.patrimonio?.toLowerCase() || "").includes(busca.toLowerCase())
   );
 
-  // Filtramos os produtos do banco de dados que sejam da Categoria "Equipamento"
   const modelosEquipamentoFiltrados = produtosBD.filter(p => 
     (p.categoria === "Equipamento" || p.is_equipamento === true) && 
     `${p.sku} ${p.nome}`.toLowerCase().includes(buscaCatalogo.toLowerCase())
@@ -372,7 +442,6 @@ export default function GestaoEquipamentos() {
                 <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> 1. Identificação e Modelo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     
-                    {/* CUSTOM DROPDOWN COM PESQUISA PARA O CATÁLOGO (FILTRADO SÓ EQUIPAMENTO) */}
                     <div className="space-y-2 md:col-span-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Modelo do Equipamento (Catálogo de Produtos) *</label>
                         <div className="relative" ref={dropdownCatalogoRef}>
@@ -423,7 +492,6 @@ export default function GestaoEquipamentos() {
                         </div>
                     </div>
 
-                    {/* Infos puxadas/editadas do Produto */}
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fabricante</label><Input value={specs.fabricante} onChange={e => setSpecs({...specs, fabricante: e.target.value})} className="bg-white" /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Família / Categoria</label><Input value={specs.familia} onChange={e => setSpecs({...specs, familia: e.target.value})} className="bg-white" placeholder="Ex: Laser, Jato de Tinta..." /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Tamanho Max. Papel</label><Select value={specs.formato} onValueChange={v => setSpecs({...specs, formato: v})}><SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="A4">A4</SelectItem><SelectItem value="A3">A3</SelectItem><SelectItem value="A0">A0 (Plotter)</SelectItem><SelectItem value="SuperA3">Super A3</SelectItem></SelectContent></Select></div>
@@ -450,26 +518,56 @@ export default function GestaoEquipamentos() {
                 </div>
             </div>
 
-            {/* SEÇÃO 2: LOCALIZAÇÃO E CONTRATO */}
+            {/* SEÇÃO 2: LOCALIZAÇÃO E CONTRATO (AGORA COM ENDEREÇO DISCRIMINADO) */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-                <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> 2. Alocação Atual (Instalação)</h3>
+                <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> 2. Alocação Atual e Endereço de Instalação</h3>
+                
+                <div className="bg-emerald-50/30 p-4 rounded-xl border border-emerald-100 space-y-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-600 uppercase">Cliente Vinculado</label>
+                            <Select value={form.cliente_id} onValueChange={handleClienteChange}>
+                                <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                                <SelectContent className="bg-white z-[9999] max-h-60 overflow-y-auto"><SelectItem value="nenhum">Nenhum (Fica na TC)</SelectItem>{clientesBD.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_fantasia}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-600 uppercase">Contrato Vinculado</label>
+                            <Select value={form.contrato_id} onValueChange={v => setForm({...form, contrato_id: v})} disabled={form.cliente_id === "nenhum"}>
+                                <SelectTrigger className="bg-white"><SelectValue placeholder={form.cliente_id === "nenhum" ? "Selecione o cliente primeiro" : "Selecione..."}/></SelectTrigger>
+                                <SelectContent className="bg-white z-[9999]"><SelectItem value="nenhum">Sem contrato (Avulso)</SelectItem>{contratosBD.filter(c => c.cliente_id === form.cliente_id).map(c => <SelectItem key={c.id} value={c.id}>{c.titulo}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div className="space-y-2 md:col-span-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase">CEP</label>
+                        <div className="flex gap-2">
+                            <Input value={form.cep_instalacao} onChange={e => setForm({...form, cep_instalacao: e.target.value})} className="bg-white" placeholder="00000-000" />
+                            <Button onClick={buscarCep} disabled={buscandoCep} variant="outline" className="bg-white shrink-0 text-emerald-600 border-emerald-200">
+                                {buscandoCep ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4"/>}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Rua / Logradouro</label><Input value={form.rua_instalacao} onChange={e => setForm({...form, rua_instalacao: e.target.value})} className="bg-white" /></div>
+                    <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Número</label><Input value={form.numero_instalacao} onChange={e => setForm({...form, numero_instalacao: e.target.value})} className="bg-white" /></div>
+                    
+                    <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Bairro</label><Input value={form.bairro_instalacao} onChange={e => setForm({...form, bairro_instalacao: e.target.value})} className="bg-white" /></div>
+                    <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Cidade</label><Input value={form.cidade_instalacao} onChange={e => setForm({...form, cidade_instalacao: e.target.value})} className="bg-white" /></div>
+                    <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">UF</label><Input value={form.uf_instalacao} onChange={e => setForm({...form, uf_instalacao: e.target.value})} className="bg-white" /></div>
+                    <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Complemento / Setor</label><Input value={form.complemento_instalacao} onChange={e => setForm({...form, complemento_instalacao: e.target.value})} placeholder="Andar, Sala..." className="bg-white" /></div>
+                </div>
+
+                {/* CONTATOS */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1"><User className="w-3 h-3 text-slate-400"/> Nome do Responsável</label><Input value={form.contato_nome} onChange={e => setForm({...form, contato_nome: e.target.value})} className="bg-white" placeholder="Opcional" /></div>
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1"><Phone className="w-3 h-3 text-slate-400"/> Telefone Responsável</label><Input value={form.contato_telefone} onChange={e => setForm({...form, contato_telefone: e.target.value})} className="bg-white" placeholder="(91) 99999-9999" /></div>
+                    <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400"/> E-mail Responsável</label><Input value={form.contato_email} onChange={e => setForm({...form, contato_email: e.target.value})} className="bg-white" placeholder="Opcional" /></div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-600 uppercase">Cliente Vinculado</label>
-                        <Select value={form.cliente_id} onValueChange={v => setForm({...form, cliente_id: v})}>
-                            <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
-                            <SelectContent className="bg-white z-[9999] max-h-60 overflow-y-auto"><SelectItem value="nenhum">Nenhum (Fica na TC)</SelectItem>{clientesBD.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_fantasia}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-600 uppercase">Contrato Vinculado</label>
-                        <Select value={form.contrato_id} onValueChange={v => setForm({...form, contrato_id: v})} disabled={form.cliente_id === "nenhum"}>
-                            <SelectTrigger className="bg-white"><SelectValue placeholder={form.cliente_id === "nenhum" ? "Selecione o cliente primeiro" : "Selecione..."}/></SelectTrigger>
-                            <SelectContent className="bg-white z-[9999]"><SelectItem value="nenhum">Sem contrato (Avulso)</SelectItem>{contratosBD.filter(c => c.cliente_id === form.cliente_id).map(c => <SelectItem key={c.id} value={c.id}>{c.titulo}</SelectItem>)}</SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-600 uppercase">Endereço Exato de Instalação (Andar, Setor)</label><Input value={form.endereco_instalacao} onChange={e => setForm({...form, endereco_instalacao: e.target.value})} className="bg-white" /></div>
-                    <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1"><User className="w-3 h-3"/> Contato do Responsável no Cliente</label><Input value={form.contato_responsavel} onChange={e => setForm({...form, contato_responsavel: e.target.value})} className="bg-white" placeholder="Nome e Telefone..." /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase">Técnico TC Responsável (Território)</label><Input value={form.tecnico_responsavel} onChange={e => setForm({...form, tecnico_responsavel: e.target.value})} className="bg-white" /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase">Data de Instalação</label><Input type="date" value={form.data_instalacao} onChange={e => setForm({...form, data_instalacao: e.target.value})} className="bg-white" /></div>
                 </div>
@@ -607,10 +705,11 @@ export default function GestaoEquipamentos() {
                                 <div className="space-y-3">
                                     <div><p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Cliente Local</p><p className="font-bold text-emerald-950">{equipSelecionado.log_clientes?.nome_fantasia || 'Estoque TC'}</p></div>
                                     <div><p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Contrato Vinculado</p><p className="font-bold text-emerald-950">{equipSelecionado.crm_contratos?.titulo || 'Avulso'}</p></div>
-                                    <div><p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Endereço Exato</p><p className="font-medium text-emerald-900">{equipSelecionado.endereco_instalacao || 'Não informado'}</p></div>
+                                    <div><p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Endereço Completo</p><p className="font-medium text-emerald-900">{equipSelecionado.endereco_instalacao || 'Não informado'}</p></div>
                                     <div className="border-t border-emerald-200 pt-3 mt-3">
                                         <p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Contatos</p>
                                         <p className="text-sm font-medium text-emerald-900 mt-1">Responsável: {equipSelecionado.contato_responsavel || 'N/A'}</p>
+                                        <p className="text-sm font-medium text-emerald-900 mt-1">Telefone: {equipSelecionado.contato_telefone || 'N/A'}</p>
                                         <p className="text-sm font-medium text-emerald-900">Técnico N1: {equipSelecionado.tecnico_responsavel || 'N/A'}</p>
                                     </div>
                                 </div>
