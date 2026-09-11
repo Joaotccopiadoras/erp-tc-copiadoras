@@ -248,7 +248,7 @@ export default function GestaoEquipamentos() {
     setAbaAtiva("novo");
   };
 
-  const salvarEquipamento = async () => {
+const salvarEquipamento = async () => {
     if (!form.produto_id || !form.numero_serie) return alert("Produto e Número de Série são obrigatórios.");
     setSalvando(true);
 
@@ -260,18 +260,38 @@ export default function GestaoEquipamentos() {
       const enderecoCompleto = `${form.rua_instalacao}, ${form.numero_instalacao} ${form.complemento_instalacao ? '- '+form.complemento_instalacao : ''}, ${form.bairro_instalacao}, ${form.cidade_instalacao} - ${form.uf_instalacao}`;
 
       const payload = {
-          ...form,
+          // Desestruturação do Form ignorando o contato_nome solto
+          produto_id: form.produto_id,
+          proprietario: form.proprietario,
           cliente_id: form.cliente_id === "nenhum" ? null : form.cliente_id,
           contrato_id: form.contrato_id === "nenhum" ? null : form.contrato_id,
-          garantia_fornecedor_id: form.garantia_fornecedor_id === "nenhum" ? null : form.garantia_fornecedor_id,
           data_instalacao: form.data_instalacao || null,
+          numero_serie: form.numero_serie,
+          patrimonio: form.patrimonio,
+          status: form.status,
+          
+          cep_instalacao: form.cep_instalacao,
+          rua_instalacao: form.rua_instalacao,
+          numero_instalacao: form.numero_instalacao,
+          complemento_instalacao: form.complemento_instalacao,
+          bairro_instalacao: form.bairro_instalacao,
+          cidade_instalacao: form.cidade_instalacao,
+          uf_instalacao: form.uf_instalacao,
+          
+          // O NOME DO CONTATO É ENVIADO PARA A COLUNA CORRETA DO SUPABASE
+          contato_responsavel: form.contato_nome, 
+          contato_telefone: form.contato_telefone,
+          contato_email: form.contato_email,
+          tecnico_responsavel: form.tecnico_responsavel,
+          
+          vendido_por_tc: form.vendido_por_tc === "Sim",
+          vendedor: form.vendedor,
+          garantia_fornecedor_id: form.garantia_fornecedor_id === "nenhum" ? null : form.garantia_fornecedor_id,
+          garantia_nf_compra: form.garantia_nf_compra,
           garantia_inicio: form.garantia_inicio || null,
           garantia_fim: form.garantia_fim || null,
-          vendido_por_tc: form.vendido_por_tc === "Sim",
           tipos_contadores: contadoresSelecionados,
-          // Garante a compatibilidade com a tabela
-          endereco_instalacao: enderecoCompleto,
-          contato_responsavel: form.contato_nome
+          endereco_instalacao: enderecoCompleto
       };
 
       if (editandoId) {
