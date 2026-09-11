@@ -519,19 +519,20 @@ const exportarPDF = async () => {
                   <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Nenhum atendimento corresponde aos filtros aplicados.</TableCell></TableRow>
                 ) : (
                   paginated.map(a => (
-                    <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
-                      <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.data_previsao)}</TableCell>
-                      <TableCell className="font-bold text-sm text-slate-800 p-4">{a.cliente_os_modelo_numero || "—"}</TableCell>
-                      <TableCell className="text-xs font-semibold text-slate-700 p-4">{a.tipo_atividade || "—"}</TableCell>
-                      <TableCell className="text-xs text-slate-500 font-medium p-4">{a.fabricante || "—"}</TableCell>
-                      <TableCell className="text-xs text-slate-500 font-medium p-4">{a.modelo || "—"}</TableCell>
-                      <TableCell className="text-xs font-bold text-indigo-700 p-4">{a.tecnico || "—"}</TableCell>
-                      <TableCell className="text-center p-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : a.status === 'waiting' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {formatarStatus(a.status)}
-                        </span>
-                      </TableCell>
+                   <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
+  <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
+  <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.data_previsao)}</TableCell>
+  <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
+  <TableCell className="font-bold text-sm text-slate-800 p-4">{a.cliente_os_modelo_numero || "—"}</TableCell>
+  <TableCell className="text-xs font-semibold text-slate-700 p-4">{a.tipo_atividade || "—"}</TableCell>
+  <TableCell className="text-xs text-slate-500 font-medium p-4">{a.fabricante || "—"}</TableCell>
+  <TableCell className="text-xs font-medium text-slate-600 p-4">{a.modelo || "—"}</TableCell>
+  <TableCell className="whitespace-nowrap text-xs font-bold text-indigo-700 p-4">{a.tecnico || "—"}</TableCell>
+  <TableCell className="text-center whitespace-nowrap p-4">
+    <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : a.status === 'waiting' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{formatarStatus(a.status)}</span>
+  </TableCell>
+  <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
+  <TableCell className="text-center p-4"><Button variant="ghost" size="icon" onClick={() => excluirAtendimento(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="h-4 w-4" /></Button></TableCell>
                       <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_obs}>{a.resumo_obs || "—"}</TableCell>
                       <TableCell className="text-center p-4">
