@@ -318,12 +318,12 @@ const exportarPDF = async () => {
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 40,
-        margin: { top: 40, bottom: 45, left: 14, right: 14 },
+        startY: 45,
+        margin: { top: 45, bottom: 40, left: 14, right: 14 },
         theme: 'grid', 
         styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
         columnStyles: { 0: { cellWidth: 16, halign: 'center' }, 1: { cellWidth: 16, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' }, 3: { cellWidth: 35 }, 4: { cellWidth: 25 }, 5: { cellWidth: 20 }, 6: { cellWidth: 20 }, 7: { cellWidth: 22, halign: 'center' }, 8: { cellWidth: 'auto', halign: 'left' } },
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // Cabeçalho da tabela combinando com a identidade visual preta
         alternateRowStyles: { fillColor: [248, 250, 252] },
         
         didDrawPage: function (data) {
@@ -331,43 +331,52 @@ const exportarPDF = async () => {
           const pageHeight = doc.internal.pageSize.getHeight();
 
           doc.setFillColor(255, 255, 255);
-          doc.rect(0, 0, pageWidth, 38, "F");
-          doc.rect(0, pageHeight - 40, pageWidth, 40, "F");
+          doc.rect(0, 0, pageWidth, 42, "F");
+          doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-          // --- CABEÇALHO ---
+          // ==========================================
+          // CABEÇALHO (Barra Preta + Logo)
+          // ==========================================
+          doc.setFillColor(0, 0, 0);
+          doc.rect(0, 0, pageWidth, 15, "F");
+
           if (logoData) {
-            doc.addImage(logoData, "PNG", 14, 10, 40, 15);
+            doc.addImage(logoData, "PNG", 14, 18, 40, 15);
           }
           
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          doc.text("Programação/Produtividade Técnica", pageWidth / 2, 20, { align: "center" });
+          doc.text("Programação/Produtividade Técnica", pageWidth / 2, 28, { align: "center" });
 
-          // --- DATA ---
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.5);
+          doc.line(14, 38, pageWidth - 14, 38);
+
           const today = new Date();
           const dia = String(today.getDate()).padStart(2, '0');
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
           const textoData = `Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
-          
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(80, 80, 80);
-          doc.text(textoData, pageWidth - 14, 28, { align: "right" });
+          doc.text(textoData, pageWidth - 14, 35, { align: "right" });
 
-          // --- RODAPÉ TIMBRADO ---
+          // ==========================================
+          // RODAPÉ (Barra Preta)
+          // ==========================================
+          doc.setFillColor(0, 0, 0);
+          doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
+
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
-          doc.setTextColor(80, 80, 80); 
+          doc.setTextColor(255, 255, 255);
 
-          const textoRodapeCol1 = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50  //  I.E.: 15.250.057-0";
-          doc.text(textoRodapeCol1, 14, pageHeight - 32);
+          const infoEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
+          doc.text(infoEsq, 14, pageHeight - 16);
 
-          const textoRodapeCol2 = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
-          doc.text(textoRodapeCol2, pageWidth / 2 - 40, pageHeight - 32);
-
-          const textoRodapeCol3 = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
-          doc.text(textoRodapeCol3, pageWidth / 2 + 40, pageHeight - 32);
+          const infoDir = "(91) 98156-6556\n(91) 3366-5100\nsuportetecnico@tccopiadoras.com.br";
+          doc.text(infoDir, pageWidth - 14, pageHeight - 16, { align: "right" });
         },
         
         didParseCell: function (data) {
