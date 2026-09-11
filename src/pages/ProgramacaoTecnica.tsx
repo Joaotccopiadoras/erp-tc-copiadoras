@@ -262,39 +262,22 @@ export default function ProgramacaoTecnica() {
       doc.text("Programação/Produtividade Técnica", logoData ? 60 : 14, 20); 
       doc.setFont("helvetica", "normal");
       
-      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
-      const dadosOrdenados = [...filtered].sort((a, b) => {
-        const tecA = a.tecnico || "Sem Técnico";
-        const tecB = b.tecnico || "Sem Técnico";
-        if (tecA < tecB) return -1;
-        if (tecA > tecB) return 1;
-        const stA = formatarStatus(a.status);
-        const stB = formatarStatus(b.status);
-        const ordemA = pesoStatus[stA] || 99; 
-        const ordemB = pesoStatus[stB] || 99;
-        if (ordemA !== ordemB) return ordemA - ordemB;
-        return new Date(a.data_entrada || 0).getTime() - new Date(b.data_entrada || 0).getTime();
-      });
-
-      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Cliente/OS", "Atividade", "Fabricante", "Modelo", "Status", "Resumo/Obs"];
-      const tableRows: any[] = [];
-      let tecnicoAtual = null;
-
-      dadosOrdenados.forEach(item => {
-        const tecItem = item.tecnico || "Sem Técnico";
-        if (tecItem !== tecnicoAtual) {
-          tableRows.push([{
-            content: `Técnico: ${tecItem}`, colSpan: 9, 
-            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
-          }]);
-          tecnicoAtual = tecItem;
-        }
-        tableRows.push([
-          formatarData(item.data_entrada), formatarData(item.data_previsao), formatarData(item.data_conclusao),
-          item.cliente_os_modelo_numero || "-", item.tipo_atividade || "-", item.fabricante || "-",
-          item.modelo || "-", formatarStatus(item.status), item.resumo_obs || "-"
-        ]);
-      });
+      // Colocamos o 'Técnico' de volta na grade normal de colunas
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Cliente/OS", "Atividade", "Fabricante", "Modelo", "Técnico", "Status", "Resumo/Obs"];
+      
+      // Utiliza o array 'filtered' diretamente para manter a ordenação exata (e filtros) visíveis na tela
+      const tableRows = filtered.map(item => [
+        formatarData(item.data_entrada), 
+        formatarData(item.data_previsao), 
+        formatarData(item.data_conclusao),
+        item.cliente_os_modelo_numero || "-", 
+        item.tipo_atividade || "-", 
+        item.fabricante || "-",
+        item.modelo || "-", 
+        item.tecnico || "-", 
+        formatarStatus(item.status), 
+        item.resumo_obs || "-"
+      ]);
 
       autoTable(doc, {
         head: [tableColumn],
@@ -302,11 +285,16 @@ export default function ProgramacaoTecnica() {
         startY: 30,
         theme: 'grid', 
         styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: { 0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { cellWidth: 50, halign: 'left' } },
+        columnStyles: { 
+          0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 
+          8: { halign: 'center' }, // Índice do Status
+          9: { cellWidth: 50, halign: 'left' } 
+        },
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         didParseCell: function (data) {
-          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
+          // Ajustado para índice 8 (Status)
+          if (data.section === 'body' && data.column.index === 8 && data.cell.raw) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
@@ -317,8 +305,12 @@ export default function ProgramacaoTecnica() {
       doc.save("Programacao_Produtividade_Tecnica.pdf");
     } catch (error) {
       alert("Erro ao gerar PDF.");
-    } finally { setExportando(false); }
+    } finally { 
+      setExportando(false); 
+    }
   };
+
+//exportar excel
 
   const exportarExcel = async () => {
     setExportando(true);

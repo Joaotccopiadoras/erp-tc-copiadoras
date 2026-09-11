@@ -257,55 +257,28 @@ export default function DashboardPage() {
     }
   };
 
-  // ==========================================
-  // EXPORTAÇÃO DE PDF
-  // ==========================================
-  const exportarPDF = async () => {
+const exportarPDF = async () => {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape"); 
       const logoBase64 = await getBase64ImageFromUrl("/logo.png");
       
-      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
-
-      const dadosOrdenados = [...filtered].sort((a, b) => {
-        const liderA = a.lider_card || "Sem Responsável";
-        const liderB = b.lider_card || "Sem Responsável";
-        if (liderA < liderB) return -1;
-        if (liderA > liderB) return 1;
-        
-        const stA = formatarStatus(a.status);
-        const stB = formatarStatus(b.status);
-        const ordemA = pesoStatus[stA] || 99; 
-        const ordemB = pesoStatus[stB] || 99;
-        if (ordemA !== ordemB) return ordemA - ordemB;
-
-        const dataA = new Date(a.data_entrada || 0).getTime();
-        const dataB = new Date(b.data_entrada || 0).getTime();
-        return dataA - dataB;
-      });
-
-      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Solicitante", "Projeto/Processo", "Depto", "Tarefa Atual", "Status", "Resumo/Obs"];
-      const tableRows: any[] = [];
+      // Adicionamos a coluna "Líder" de volta na tabela
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Líder", "Solicitante", "Projeto/Processo", "Depto", "Tarefa Atual", "Status", "Resumo/Obs"];
       
-      let liderAtual: string | null = null; 
-
-      dadosOrdenados.forEach(item => {
-        const liderItem = item.lider_card || "Sem Responsável";
-        if (liderItem !== liderAtual) {
-          tableRows.push([{
-            content: `Responsável: ${liderItem}`, colSpan: 9, 
-            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
-          }]);
-          liderAtual = liderItem;
-        }
-
-        tableRows.push([
-          formatarData(item.data_entrada), formatarData(item.previsao_prazo), formatarData(item.data_conclusao),
-          item.solicitante || "-", item.processo_projeto || "-", item.departamento || "-",
-          item.tarefa_atual || "-", formatarStatus(item.status), item.resumo_observacoes || "-"
-        ]);
-      });
+      // Utiliza o array 'filtered' diretamente para espelhar a ordenação e os filtros da tela
+      const tableRows = filtered.map(item => [
+        formatarData(item.data_entrada), 
+        formatarData(item.previsao_prazo), 
+        formatarData(item.data_conclusao),
+        item.lider_card || "-", 
+        item.solicitante || "-", 
+        item.processo_projeto || "-", 
+        item.departamento || "-",
+        item.tarefa_atual || "-", 
+        formatarStatus(item.status), 
+        item.resumo_observacoes || "-"
+      ]);
 
       autoTable(doc, {
         head: [tableColumn],
@@ -316,8 +289,8 @@ export default function DashboardPage() {
         styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
         columnStyles: {
           0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-          5: { halign: 'center' }, 7: { halign: 'center' },
-          8: { cellWidth: 40, halign: 'left' } 
+          8: { halign: 'center' }, // Índice atualizado para Status
+          9: { cellWidth: 40, halign: 'left' } // Índice atualizado para Resumo
         },
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -358,7 +331,8 @@ export default function DashboardPage() {
           doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
         },
         didParseCell: function (data) {
-          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
+          // Índice 8 agora é a coluna de Status
+          if (data.section === 'body' && data.column.index === 8 && data.cell.raw) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
