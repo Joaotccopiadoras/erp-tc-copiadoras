@@ -342,7 +342,7 @@ const exportarPDF = async () => {
           // --- DATA FORMATO TIMBRADO ---
           const now = new Date();
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-          const dataTimbrado = `Belém, ${now.getDate().toString().padStart(2, '0')} de ${meses[now.getMonth()]} de ${now.getFullYear()}.`;[cite: 1]
+          const dataTimbrado = `Belém, ${now.getDate().toString().padStart(2, '0')} de ${meses[now.getMonth()]} de ${now.getFullYear()}.`;
           
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
