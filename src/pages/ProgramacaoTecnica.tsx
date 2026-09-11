@@ -247,54 +247,128 @@ export default function ProgramacaoTecnica() {
     }
   };
 
-  const exportarPDF = async () => {
+//exportpdf
+
+const exportarPDF = async () => {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape"); 
       const logoData = await getBase64ImageFromUrl("/logo.png");
 
-      if (logoData) {
-        doc.addImage(logoData, "PNG", 14, 10, 40, 15);
-      }
+      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
       
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("Programação/Produtividade Técnica", logoData ? 60 : 14, 20); 
-      doc.setFont("helvetica", "normal");
+      const dadosOrdenados = [...filtered].sort((a, b) => {
+        const tecA = a.tecnico || "Sem Técnico";
+        const tecB = b.tecnico || "Sem Técnico";
+        if (tecA < tecB) return -1;
+        if (tecA > tecB) return 1;
+        
+        const stA = formatarStatus(a.status);
+        const stB = formatarStatus(b.status);
+        const ordemA = pesoStatus[stA] || 99; 
+        const ordemB = pesoStatus[stB] || 99;
+        if (ordemA !== ordemB) return ordemA - ordemB;
+        
+        return new Date(a.data_entrada || 0).getTime() - new Date(b.data_entrada || 0).getTime();
+      });
+
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Cliente/OS", "Atividade", "Fabricante", "Modelo", "Status", "Resumo/Obs"];
+      const tableRows: any[] = [];
       
-      // Colocamos o 'Técnico' de volta na grade normal de colunas
-      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Cliente/OS", "Atividade", "Fabricante", "Modelo", "Técnico", "Status", "Resumo/Obs"];
-      
-      // Utiliza o array 'filtered' diretamente para manter a ordenação exata (e filtros) visíveis na tela
-      const tableRows = filtered.map(item => [
-        formatarData(item.data_entrada), 
-        formatarData(item.data_previsao), 
-        formatarData(item.data_conclusao),
-        item.cliente_os_modelo_numero || "-", 
-        item.tipo_atividade || "-", 
-        item.fabricante || "-",
-        item.modelo || "-", 
-        item.tecnico || "-", 
-        formatarStatus(item.status), 
-        item.resumo_obs || "-"
-      ]);
+      let tecnicoAtual: string | null = null;
+
+      dadosOrdenados.forEach(item => {
+        const tecItem = item.tecnico || "Sem Técnico";
+        if (tecItem !== tecnicoAtual) {
+          // separacao por tecnico
+          tableRows.push([{
+            content: `Responsável Técnico: ${tecItem}`, colSpan: 9, 
+            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
+          }]);
+          tecnicoAtual = tecItem;
+        }
+
+        tableRows.push([
+          formatarData(item.data_entrada), 
+          formatarData(item.data_previsao), 
+          formatarData(item.data_conclusao),
+          item.cliente_os_modelo_numero || "-", 
+          item.tipo_atividade || "-", 
+          item.fabricante || "-",
+          item.modelo || "-", 
+          formatarStatus(item.status), 
+          item.resumo_obs || "-"
+        ]);
+      });
 
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 30,
+        startY: 40,
+        margin: { bottom: 35 },
         theme: 'grid', 
-        styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
         columnStyles: { 
-          0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' }, 
-          8: { halign: 'center' }, // Índice do Status
-          9: { cellWidth: 50, halign: 'left' } 
+          0: { cellWidth: 16, halign: 'center' }, 
+          1: { cellWidth: 16, halign: 'center' }, 
+          2: { cellWidth: 16, halign: 'center' }, 
+          3: { cellWidth: 35 }, 
+          4: { cellWidth: 25 }, 
+          5: { cellWidth: 20 }, 
+          6: { cellWidth: 20 }, 
+          7: { cellWidth: 22, halign: 'center' }, 
+          8: { cellWidth: 'auto', halign: 'left' } 
         },
         headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
+        
+        didDrawPage: function () {
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+
+          // --- CABEÇALHO ---
+          if (logoData) {
+            doc.addImage(logoData, "PNG", 14, 10, 40, 15);
+          }
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(16);
+          doc.setTextColor(0, 0, 0);
+          doc.text("Programação/Produtividade Técnica", pageWidth / 2, 20, { align: "center" });
+          
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.5);
+          doc.line(14, 28, pageWidth - 14, 28);
+
+          // --- DATA FORMATO TIMBRADO ---
+          const now = new Date();
+          const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+          const dataTimbrado = `Belém, ${now.getDate().toString().padStart(2, '0')} de ${meses[now.getMonth()]} de ${now.getFullYear()}.`;[cite: 1]
+          
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(9);
+          doc.setTextColor(100, 100, 100);
+          doc.text(dataTimbrado, pageWidth - 14, 35, { align: "right" });
+
+          // --- RODAPÉ ---
+          doc.setFillColor(235, 235, 235);
+          doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6.5);
+          doc.setTextColor(100, 100, 100);
+          
+          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";
+          doc.text(col1Text, 14, pageHeight - 20);
+
+          doc.setTextColor(59, 130, 246);
+          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
+          doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
+
+          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
+          doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
+        },
         didParseCell: function (data) {
-          // Ajustado para índice 8 (Status)
-          if (data.section === 'body' && data.column.index === 8 && data.cell.raw) {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
