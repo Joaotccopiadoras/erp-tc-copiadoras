@@ -7,14 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Briefcase, CheckCircle, Fingerprint, Lock, Settings, Shield,
   ShieldAlert, Trash2, User, UserPlus, Landmark, Tags, MapPin,
-  Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness
+  Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness, Wrench
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 
 export default function ConfiguracoesPage() {
-  const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "contas" | "transacoes" | "centros" | "segmentos" | "formas" | "locais">("seguranca");
+  const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "contas" | "transacoes" | "centros" | "segmentos" | "formas" | "locais" | "tecnicos">("seguranca");
   const { toast } = useToast();
 
   // ==========================================
@@ -40,11 +40,24 @@ export default function ConfiguracoesPage() {
   const [nomeAuxiliar, setNomeAuxiliar] = useState("");
   const [tipoCategoria, setTipoCategoria] = useState("Despesa");
 
+  // ==========================================
+  // ESTADOS DA ABA: GESTÃO DE TÉCNICOS
+  // ==========================================
+  const [tecnicosBD, setTecnicosBD] = useState<any[]>([]);
+  const [mostrarFormTecnico, setMostrarFormTecnico] = useState(false);
+  const [formTecnico, setFormTecnico] = useState({
+    nome: "", cpf: "", idade: "", endereco: "", formacao: "",
+    data_admissao: "", tipo_cnh: "", valor_hora: ""
+  });
+
   useEffect(() => { verificarAcessoAdmin(); }, []);
 
   useEffect(() => {
     if (abaAtiva === "seguranca") {
         if (isCurrentUserAdmin) carregarDadosSeguranca();
+    } else if (abaAtiva === "tecnicos") {
+        fetchTecnicos();
+        limparFormTecnico();
     } else {
         fetchDadosAuxiliares();
         limparFormularioAuxiliar();
@@ -170,6 +183,67 @@ export default function ConfiguracoesPage() {
     } catch (error: any) { alert("Erro ao excluir.\n" + error.message); }
   };
 
+  // ==========================================
+  // LÓGICA: GESTÃO DE TÉCNICOS
+  // ==========================================
+  const fetchTecnicos = async () => {
+    setCarregandoAuxiliares(true);
+    try {
+      const { data } = await supabase.from("srv_tecnicos").select("*").order("nome");
+      setTecnicosBD(data || []);
+    } catch (error: any) { alert("Erro ao carregar técnicos: " + error.message); } 
+    finally { setCarregandoAuxiliares(false); }
+  };
+
+  const limparFormTecnico = () => {
+    setMostrarFormTecnico(false); setEditandoAuxiliarId(null);
+    setFormTecnico({ nome: "", cpf: "", idade: "", endereco: "", formacao: "", data_admissao: "", tipo_cnh: "", valor_hora: "" });
+  };
+
+  const editarTecnico = (t: any) => {
+    setEditandoAuxiliarId(t.id);
+    setFormTecnico({
+      nome: t.nome || "", cpf: t.cpf || "", idade: t.idade ? String(t.idade) : "", endereco: t.endereco || "",
+      formacao: t.formacao || "", data_admissao: t.data_admissao || "", tipo_cnh: t.tipo_cnh || "", valor_hora: t.valor_hora ? String(t.valor_hora) : ""
+    });
+    setMostrarFormTecnico(true);
+  };
+
+  const salvarTecnico = async () => {
+    if (!formTecnico.nome.trim()) return alert("O Nome Completo do técnico é obrigatório!");
+    setSalvandoAuxiliar(true);
+    try {
+      const payload = {
+        nome: formTecnico.nome.trim(),
+        cpf: formTecnico.cpf.trim() || null,
+        idade: formTecnico.idade ? parseInt(formTecnico.idade) : null,
+        endereco: formTecnico.endereco.trim() || null,
+        formacao: formTecnico.formacao.trim() || null,
+        data_admissao: formTecnico.data_admissao || null,
+        tipo_cnh: formTecnico.tipo_cnh || null,
+        valor_hora: formTecnico.valor_hora ? parseFloat(formTecnico.valor_hora.replace(',', '.')) : null
+      };
+
+      if (editandoAuxiliarId) {
+        await supabase.from("srv_tecnicos").update(payload).eq("id", editandoAuxiliarId);
+      } else {
+        await supabase.from("srv_tecnicos").insert([payload]);
+      }
+      toast({ title: "Sucesso", description: "Ficha do técnico salva com sucesso!" });
+      limparFormTecnico(); fetchTecnicos();
+    } catch (error: any) { alert("Erro ao salvar técnico: " + error.message); } 
+    finally { setSalvandoAuxiliar(false); }
+  };
+
+  const excluirTecnico = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este técnico da base de dados?")) return;
+    try {
+      await supabase.from("srv_tecnicos").delete().eq("id", id);
+      toast({ title: "Excluído", description: "Técnico removido com sucesso." }); fetchTecnicos();
+    } catch (error: any) { alert("Erro ao excluir.\n" + error.message); }
+  };
+
+
   if (isCurrentUserAdmin === false) {
     return (
     <AppLayout>
@@ -184,7 +258,8 @@ export default function ConfiguracoesPage() {
 
   const tituloTabelaAtual = {
       contas: "Contas Bancárias", transacoes: "Transações Financeiras", centros: "Centros de Custo",
-      segmentos: "Segmentos de Negócio", formas: "Formas de Pagamento", locais: "Locais de Estoque"
+      segmentos: "Segmentos de Negócio", formas: "Formas de Pagamento", locais: "Locais de Estoque",
+      tecnicos: "Técnicos (Assistência Técnica)"
   };
 
   return (
@@ -202,6 +277,9 @@ export default function ConfiguracoesPage() {
             <button onClick={() => setAbaAtiva("seguranca")} className={`flex items-center justify-between p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "seguranca" ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
               <span className="flex items-center gap-3"><Lock className="w-4 h-4" /> Usuários e Perfis</span>
             </button>
+
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2 mt-4 mb-1">Equipe e Operação</h3>
+            <button onClick={() => setAbaAtiva("tecnicos")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "tecnicos" ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}><Wrench className="w-4 h-4 mr-3" /> Gestão de Técnicos</button>
 
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2 mt-4 mb-1">Tabelas Financeiras</h3>
             <button onClick={() => setAbaAtiva("contas")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "contas" ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}><Landmark className="w-4 h-4 mr-3" /> Contas Bancárias</button>
@@ -315,11 +393,116 @@ export default function ConfiguracoesPage() {
                 </div>
             )}
 
-            {/* ABA: TABELAS AUXILIARES */}
-            {abaAtiva !== "seguranca" && (
+            {/* ABA: TÉCNICOS (NOVA) */}
+            {abaAtiva === "tecnicos" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
-                    <h2 className="font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide text-sm">Gerenciar {tituloTabelaAtual[abaAtiva]}</h2>
+                        <h2 className="font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide text-sm">Gerenciar Técnicos Operacionais</h2>
+                        <Button onClick={() => { limparFormTecnico(); setMostrarFormTecnico(true); }} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-9 shadow-sm"><Plus className="w-4 h-4" /> Novo Técnico</Button>
+                    </div>
+
+                    {/* FORMULÁRIO TÉCNICO */}
+                    {mostrarFormTecnico && (
+                    <div className="p-6 bg-blue-50/40 border-b border-blue-100 space-y-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-blue-900">{editandoAuxiliarId ? "Editar Ficha do Técnico" : "Cadastrar Novo Técnico"}</h3>
+                            <Button variant="ghost" size="sm" onClick={limparFormTecnico} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-4 h-4"/></Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Nome Completo *</label>
+                                <Input value={formTecnico.nome} onChange={(e) => setFormTecnico({...formTecnico, nome: e.target.value})} placeholder="Nome do técnico" className="bg-white border-blue-200" />
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">CPF</label>
+                                <Input value={formTecnico.cpf} onChange={(e) => setFormTecnico({...formTecnico, cpf: e.target.value})} placeholder="000.000.000-00" className="bg-white" />
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Idade</label>
+                                <Input type="number" value={formTecnico.idade} onChange={(e) => setFormTecnico({...formTecnico, idade: e.target.value})} className="bg-white" />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Endereço Completo</label>
+                                <Input value={formTecnico.endereco} onChange={(e) => setFormTecnico({...formTecnico, endereco: e.target.value})} placeholder="Rua, Número, Bairro..." className="bg-white" />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Formação / Especialidade</label>
+                                <Input value={formTecnico.formacao} onChange={(e) => setFormTecnico({...formTecnico, formacao: e.target.value})} placeholder="Ex: Técnico em Eletrônica" className="bg-white" />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Data de Admissão</label>
+                                <Input type="date" value={formTecnico.data_admissao} onChange={(e) => setFormTecnico({...formTecnico, data_admissao: e.target.value})} className="bg-white" />
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Tipo CNH</label>
+                                <Select value={formTecnico.tipo_cnh} onValueChange={v => setFormTecnico({...formTecnico, tipo_cnh: v})}>
+                                    <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
+                                    <SelectContent className="z-[99999]">
+                                        <SelectItem value="A">A (Moto)</SelectItem><SelectItem value="B">B (Carro)</SelectItem>
+                                        <SelectItem value="AB">AB (Moto e Carro)</SelectItem><SelectItem value="C">C</SelectItem>
+                                        <SelectItem value="D">D</SelectItem><SelectItem value="Nenhuma">Nenhuma</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Valor Hora Técnica (R$)</label>
+                                <Input value={formTecnico.valor_hora} onChange={(e) => setFormTecnico({...formTecnico, valor_hora: e.target.value})} placeholder="Ex: 50,00" className="bg-white" />
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-2 border-t border-blue-100 mt-4">
+                            <Button onClick={salvarTecnico} disabled={salvandoAuxiliar} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">{salvandoAuxiliar ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} Salvar Ficha do Técnico</Button>
+                        </div>
+                    </div>
+                    )}
+
+                    {/* TABELA DE TÉCNICOS */}
+                    <div className="overflow-x-auto min-h-[300px]">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                        <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider border-b border-slate-200">
+                            <th className="p-4 font-semibold">Nome do Técnico</th>
+                            <th className="p-4 font-semibold">Formação</th>
+                            <th className="p-4 font-semibold text-center">Admissão</th>
+                            <th className="p-4 font-semibold text-center w-24 border-l border-slate-200">Ações</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                        {carregandoAuxiliares ? (
+                            <tr><td colSpan={4} className="p-12 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                        ) : tecnicosBD.length === 0 ? (
+                            <tr><td colSpan={4} className="p-12 text-center text-slate-500">Nenhum técnico cadastrado.</td></tr>
+                        ) : (
+                            tecnicosBD.map((item) => (
+                            <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="p-4">
+                                    <p className="font-semibold text-slate-800 text-sm">{item.nome}</p>
+                                    {item.cpf && <p className="text-xs text-slate-400 font-mono mt-0.5">CPF: {item.cpf}</p>}
+                                </td>
+                                <td className="p-4 text-xs text-slate-600 font-medium">{item.formacao || '-'}</td>
+                                <td className="p-4 text-center text-xs text-slate-500">{item.data_admissao ? new Date(item.data_admissao).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '-'}</td>
+                                <td className="p-4 text-center border-l border-slate-100">
+                                <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="icon" onClick={() => editarTecnico(item)} className="h-8 w-8 text-slate-400 hover:text-blue-600"><Edit className="w-4 h-4"/></Button>
+                                    <Button variant="ghost" size="icon" onClick={() => excluirTecnico(item.id)} className="h-8 w-8 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></Button>
+                                </div>
+                                </td>
+                            </tr>
+                            ))
+                        )}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ABA: TABELAS AUXILIARES PADRÃO (Contas, Transacoes, etc) */}
+            {abaAtiva !== "seguranca" && abaAtiva !== "tecnicos" && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+                    <h2 className="font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide text-sm">Gerenciar {tituloTabelaAtual[abaAtiva as keyof typeof tituloTabelaAtual]}</h2>
                     <Button onClick={() => { limparFormularioAuxiliar(); setMostrarFormAuxiliar(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-9 shadow-sm"><Plus className="w-4 h-4" /> Novo Registro</Button>
                     </div>
 
@@ -394,6 +577,7 @@ export default function ConfiguracoesPage() {
                     </div>
                 </div>
             )}
+
           </div>
         </div>
       </div>

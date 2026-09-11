@@ -9,19 +9,14 @@ import { supabase } from "@/integrations/supabase/client";
 export default function GestaoEquipamentos() {
   const [abaAtiva, setAbaAtiva] = useState<"lista" | "novo" | "dossie">("lista");
 
-  // ==========================================
-  // ESTADOS: DADOS BASE
-  // ==========================================
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [clientesBD, setClientesBD] = useState<any[]>([]);
   const [contratosBD, setContratosBD] = useState<any[]>([]);
   const [fornecedoresBD, setFornecedoresBD] = useState<any[]>([]);
+  const [tecnicosBD, setTecnicosBD] = useState<any[]>([]);
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
 
-  // ==========================================
-  // ESTADOS: DOSSIÊ DO EQUIPAMENTO
-  // ==========================================
   const [equipSelecionado, setEquipSelecionado] = useState<any | null>(null);
   const [abaDossie, setAbaDossie] = useState<"geral" | "movimentacao" | "os" | "contadores" | "financeiro">("geral");
   const [historicoMov, setHistoricoMov] = useState<any[]>([]);
@@ -29,28 +24,21 @@ export default function GestaoEquipamentos() {
   const [historicoPecas, setHistoricoPecas] = useState<any[]>([]);
   const [leituras, setLeituras] = useState<any[]>([]);
   
-  // ==========================================
-  // ESTADOS: FORMULÁRIO (NOVO E EDIÇÃO)
-  // ==========================================
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [buscandoCep, setBuscandoCep] = useState(false);
 
   const [form, setForm] = useState({
     produto_id: "", proprietario: "TC Copiadoras", cliente_id: "nenhum", contrato_id: "nenhum", data_instalacao: "",
     numero_serie: "", patrimonio: "", status: "Ativo", 
-    // ENDEREÇO DISCRIMINADO
     cep_instalacao: "", rua_instalacao: "", numero_instalacao: "", complemento_instalacao: "", bairro_instalacao: "", cidade_instalacao: "", uf_instalacao: "",
-    // CONTATO RESPONSÁVEL
     contato_nome: "", contato_telefone: "", contato_email: "", tecnico_responsavel: "",
     vendido_por_tc: "Não", vendedor: "", garantia_fornecedor_id: "nenhum", garantia_nf_compra: "", garantia_inicio: "", garantia_fim: ""
   });
 
-  // Especificações Dinâmicas
   const [specs, setSpecs] = useState({ formato: "A4", ppm: "", ano: "", fabricante: "", familia: "" });
   const [contadoresSelecionados, setContadoresSelecionados] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  // Estados Customizados para a Pesquisa de Catálogo
   const [buscaCatalogo, setBuscaCatalogo] = useState("");
   const [dropdownCatalogoAberto, setDropdownCatalogoAberto] = useState(false);
   const dropdownCatalogoRef = useRef<HTMLDivElement>(null);
@@ -65,9 +53,6 @@ export default function GestaoEquipamentos() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ==========================================
-  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
-  // ==========================================
   useEffect(() => {
     const rascunho = sessionStorage.getItem("equipamentos_rascunho");
     if (rascunho) {
@@ -105,22 +90,21 @@ export default function GestaoEquipamentos() {
     setAbaAtiva("lista");
   };
 
-  // ==========================================
-
   useEffect(() => { fetchDadosBase(); fetchEquipamentos(); }, []);
 
   const fetchDadosBase = async () => {
-    const [prodRes, cliRes, contRes, fornRes] = await Promise.all([
+    const [prodRes, cliRes, contRes, fornRes, tecRes] = await Promise.all([
       supabase.from('log_produtos').select('*').order('nome'),
-      // Buscamos todos os dados relevantes do cliente (endereço, telefone)
       supabase.from('log_clientes').select('*').order('nome_fantasia'),
       supabase.from('crm_contratos').select('id, titulo, cliente_id').eq('status', 'Ativo'),
-      supabase.from('log_fornecedores').select('id, nome_fantasia')
+      supabase.from('log_fornecedores').select('id, nome_fantasia'),
+      supabase.from('srv_tecnicos').select('id, nome').order('nome')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (contRes.data) setContratosBD(contRes.data);
     if (fornRes.data) setFornecedoresBD(fornRes.data);
+    if (tecRes.data) setTecnicosBD(tecRes.data);
   };
 
   const fetchEquipamentos = async () => {
@@ -142,15 +126,12 @@ export default function GestaoEquipamentos() {
     setBuscaCatalogo("");
   };
 
-  // --- BUSCA ENDEREÇO DO CLIENTE (Auto-Fill) ---
   const handleClienteChange = (clienteId: string) => {
       let dadosSincronizados = { ...form, cliente_id: clienteId, contrato_id: "nenhum" };
 
       if (clienteId !== "nenhum") {
           const cli = clientesBD.find(c => c.id === clienteId);
           if (cli) {
-              // Exemplo de endereço no DB: "Rua X, 123 - Bairro, Cidade - UF, CEP: 00000"
-              // Como os endereços da base podem não estar divididos perfeitamente, colocamos o endereço bruto na Rua e deixamos o usuário ajustar.
               dadosSincronizados.rua_instalacao = cli.endereco || ""; 
               dadosSincronizados.contato_telefone = cli.telefone || "";
               dadosSincronizados.contato_email = cli.email || "";
@@ -159,7 +140,6 @@ export default function GestaoEquipamentos() {
       setForm(dadosSincronizados);
   };
 
-  // --- BUSCA CEP (BrasilAPI) ---
   const buscarCep = async () => {
       const cepLimpo = form.cep_instalacao.replace(/\D/g, "");
       if (cepLimpo.length !== 8) return alert("CEP inválido.");
@@ -188,11 +168,8 @@ export default function GestaoEquipamentos() {
     setContadoresSelecionados(prev => prev.includes(tipo) ? prev.filter(t => t !== tipo) : [...prev, tipo]);
   };
 
-  // --- CARREGAR DADOS PARA EDIÇÃO ---
   const abrirEditarEquipamento = (eq: any) => {
     setEditandoId(eq.id);
-    
-    // Tenta desmembrar o endereço legado (se estiver tudo no campo 'endereco_instalacao') ou usar os campos novos
     let endStr = eq.endereco_instalacao || "";
     
     setForm({
@@ -204,22 +181,17 @@ export default function GestaoEquipamentos() {
       numero_serie: eq.numero_serie || "",
       patrimonio: eq.patrimonio || "",
       status: eq.status || "Ativo",
-      
-      // Endereço
       cep_instalacao: eq.cep_instalacao || "",
-      rua_instalacao: eq.rua_instalacao || endStr, // Fallback para compatibilidade
+      rua_instalacao: eq.rua_instalacao || endStr, 
       numero_instalacao: eq.numero_instalacao || "",
       complemento_instalacao: eq.complemento_instalacao || "",
       bairro_instalacao: eq.bairro_instalacao || "",
       cidade_instalacao: eq.cidade_instalacao || "",
       uf_instalacao: eq.uf_instalacao || "",
-
-      // Contato
-      contato_nome: eq.contato_responsavel || "", // Fallback
+      contato_nome: eq.contato_responsavel || "", 
       contato_telefone: eq.contato_telefone || "",
       contato_email: eq.contato_email || "",
       tecnico_responsavel: eq.tecnico_responsavel || "",
-      
       vendido_por_tc: eq.vendido_por_tc ? "Sim" : "Não",
       vendedor: eq.vendedor || "",
       garantia_fornecedor_id: eq.garantia_fornecedor_id || "nenhum",
@@ -248,7 +220,7 @@ export default function GestaoEquipamentos() {
     setAbaAtiva("novo");
   };
 
-const salvarEquipamento = async () => {
+  const salvarEquipamento = async () => {
     if (!form.produto_id || !form.numero_serie) return alert("Produto e Número de Série são obrigatórios.");
     setSalvando(true);
 
@@ -256,11 +228,9 @@ const salvarEquipamento = async () => {
       const produtoSpecs = { formato: specs.formato, ppm: specs.ppm, ano: specs.ano };
       await supabase.from('log_produtos').update({ is_equipamento: true, fabricante: specs.fabricante, familia: specs.familia, especificacoes: produtoSpecs }).eq('id', form.produto_id);
 
-      // Concatena o endereço para o campo legado, mantendo a compatibilidade do sistema
       const enderecoCompleto = `${form.rua_instalacao}, ${form.numero_instalacao} ${form.complemento_instalacao ? '- '+form.complemento_instalacao : ''}, ${form.bairro_instalacao}, ${form.cidade_instalacao} - ${form.uf_instalacao}`;
 
       const payload = {
-          // Desestruturação do Form ignorando o contato_nome solto
           produto_id: form.produto_id,
           proprietario: form.proprietario,
           cliente_id: form.cliente_id === "nenhum" ? null : form.cliente_id,
@@ -269,7 +239,6 @@ const salvarEquipamento = async () => {
           numero_serie: form.numero_serie,
           patrimonio: form.patrimonio,
           status: form.status,
-          
           cep_instalacao: form.cep_instalacao,
           rua_instalacao: form.rua_instalacao,
           numero_instalacao: form.numero_instalacao,
@@ -277,13 +246,10 @@ const salvarEquipamento = async () => {
           bairro_instalacao: form.bairro_instalacao,
           cidade_instalacao: form.cidade_instalacao,
           uf_instalacao: form.uf_instalacao,
-          
-          // O NOME DO CONTATO É ENVIADO PARA A COLUNA CORRETA DO SUPABASE
           contato_responsavel: form.contato_nome, 
           contato_telefone: form.contato_telefone,
           contato_email: form.contato_email,
           tecnico_responsavel: form.tecnico_responsavel,
-          
           vendido_por_tc: form.vendido_por_tc === "Sim",
           vendedor: form.vendedor,
           garantia_fornecedor_id: form.garantia_fornecedor_id === "nenhum" ? null : form.garantia_fornecedor_id,
@@ -538,7 +504,7 @@ const salvarEquipamento = async () => {
                 </div>
             </div>
 
-            {/* SEÇÃO 2: LOCALIZAÇÃO E CONTRATO (AGORA COM ENDEREÇO DISCRIMINADO) */}
+            {/* SEÇÃO 2: LOCALIZAÇÃO E CONTRATO */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
                 <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500"/> 2. Alocação Atual e Endereço de Instalação</h3>
                 
@@ -580,7 +546,6 @@ const salvarEquipamento = async () => {
                     <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Complemento / Setor</label><Input value={form.complemento_instalacao} onChange={e => setForm({...form, complemento_instalacao: e.target.value})} placeholder="Andar, Sala..." className="bg-white" /></div>
                 </div>
 
-                {/* CONTATOS */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1"><User className="w-3 h-3 text-slate-400"/> Nome do Responsável</label><Input value={form.contato_nome} onChange={e => setForm({...form, contato_nome: e.target.value})} className="bg-white" placeholder="Opcional" /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1"><Phone className="w-3 h-3 text-slate-400"/> Telefone Responsável</label><Input value={form.contato_telefone} onChange={e => setForm({...form, contato_telefone: e.target.value})} className="bg-white" placeholder="(91) 99999-9999" /></div>
@@ -588,7 +553,16 @@ const salvarEquipamento = async () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase">Técnico TC Responsável (Território)</label><Input value={form.tecnico_responsavel} onChange={e => setForm({...form, tecnico_responsavel: e.target.value})} className="bg-white" /></div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-600 uppercase">Técnico TC Responsável (Território)</label>
+                        <Select value={form.tecnico_responsavel} onValueChange={v => setForm({...form, tecnico_responsavel: v})}>
+                            <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o técnico..."/></SelectTrigger>
+                            <SelectContent className="bg-white z-[9999] max-h-60 overflow-y-auto">
+                                <SelectItem value="nenhum">Nenhum / A definir</SelectItem>
+                                {tecnicosBD.map(t => <SelectItem key={t.id} value={t.nome}>{t.nome}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-600 uppercase">Data de Instalação</label><Input type="date" value={form.data_instalacao} onChange={e => setForm({...form, data_instalacao: e.target.value})} className="bg-white" /></div>
                 </div>
             </div>
@@ -643,7 +617,6 @@ const salvarEquipamento = async () => {
         {abaAtiva === "dossie" && equipSelecionado && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
             
-            {/* TOPO DO PRONTUÁRIO */}
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-blue-600">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
@@ -662,7 +635,6 @@ const salvarEquipamento = async () => {
                 </div>
             </div>
 
-            {/* NAVEGAÇÃO DAS ABAS DO DOSSIÊ */}
             <div className="flex bg-white rounded-lg p-1 border shadow-sm overflow-x-auto custom-scrollbar">
                 <button onClick={() => setAbaDossie("geral")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "geral" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:bg-slate-50"}`}><FileText className="w-4 h-4"/> Ficha & Garantia</button>
                 <button onClick={() => setAbaDossie("movimentacao")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "movimentacao" ? "bg-emerald-50 text-emerald-700" : "text-slate-500 hover:bg-slate-50"}`}><MapPin className="w-4 h-4"/> Local & Contrato</button>
@@ -671,7 +643,6 @@ const salvarEquipamento = async () => {
                 <button onClick={() => setAbaDossie("financeiro")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "financeiro" ? "bg-rose-50 text-rose-700" : "text-slate-500 hover:bg-slate-50"}`}><Calculator className="w-4 h-4"/> Depreciação</button>
             </div>
 
-            {/* CONTEÚDO DAS ABAS DO DOSSIÊ */}
             <div className="bg-white rounded-xl border shadow-sm p-6 min-h-[400px]">
                 
                 {abaDossie === "geral" && (
