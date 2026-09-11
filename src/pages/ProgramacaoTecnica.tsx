@@ -252,10 +252,11 @@ export default function ProgramacaoTecnica() {
 const exportarPDF = async () => {
     setExportando(true);
     try {
-      const doc = new jsPDF("landscape"); 
-      const logoData = await getBase64ImageFromUrl("/logo.png");
+      const doc = new jsPDF("landscape");
+      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
       
       const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
+
       const dadosOrdenados = [...filtered].sort((a, b) => {
         if (sortConfig) {
           let valA = a[sortConfig.key];
@@ -277,7 +278,7 @@ const exportarPDF = async () => {
         
         const stA = formatarStatus(a.status);
         const stB = formatarStatus(b.status);
-        const ordemA = pesoStatus[stA] || 99; 
+        const ordemA = pesoStatus[stA] || 99;
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
         
@@ -318,7 +319,7 @@ const exportarPDF = async () => {
         head: [tableColumn],
         body: tableRows,
         startY: 35,
-        margin: { top: 35, bottom: 40 }, 
+        margin: { top: 35, bottom: 45 },
         theme: 'grid', 
         styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
         columnStyles: { 0: { cellWidth: 16, halign: 'center' }, 1: { cellWidth: 16, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' }, 3: { cellWidth: 35 }, 4: { cellWidth: 25 }, 5: { cellWidth: 20 }, 6: { cellWidth: 20 }, 7: { cellWidth: 22, halign: 'center' }, 8: { cellWidth: 'auto', halign: 'left' } },
@@ -333,8 +334,8 @@ const exportarPDF = async () => {
           doc.setFillColor(255, 255, 255);
           doc.rect(0, 0, pageWidth, 35, "F");
 
-          if (logoData) {
-            doc.addImage(logoData, "PNG", 14, 10, 40, 15);
+          if (logoBase64) {
+            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);
           }
           
           doc.setFont("helvetica", "bold");
@@ -353,10 +354,10 @@ const exportarPDF = async () => {
           doc.setTextColor(80, 80, 80);
           doc.text(textoData, pageWidth - 14, 27, { align: "right" });
 
-          // --- NOVO RODAPÉ ---
+          // --- NOVO RODAPÉ (FORMATO TIMBRADO) ---
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
-          doc.setTextColor(80, 80, 80);
+          doc.setTextColor(80, 80, 80); 
 
           const textoRodapeCol1 = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50  //  I.E.: 15.250.057-0";
           doc.text(textoRodapeCol1, 14, pageHeight - 32);
@@ -369,7 +370,7 @@ const exportarPDF = async () => {
         },
         
         didParseCell: function (data) {
-          if (data.section === 'body' && data.column.index === 7 && data.cell.raw) {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
@@ -379,8 +380,11 @@ const exportarPDF = async () => {
       });
       doc.save("Programacao_Produtividade_Tecnica.pdf");
     } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF.");
-    } finally { setExportando(false); }
+    } finally {
+      setExportando(false);
+    }
   };
 
 //exportar excel
