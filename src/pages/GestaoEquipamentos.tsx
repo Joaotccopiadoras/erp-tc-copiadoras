@@ -282,6 +282,12 @@ export default function GestaoEquipamentos() {
     (e.patrimonio?.toLowerCase() || "").includes(busca.toLowerCase())
   );
 
+  // Filtramos os produtos do banco de dados que sejam da Categoria "Equipamento"
+  const modelosEquipamentoFiltrados = produtosBD.filter(p => 
+    (p.categoria === "Equipamento" || p.is_equipamento === true) && 
+    `${p.sku} ${p.nome}`.toLowerCase().includes(buscaCatalogo.toLowerCase())
+  );
+
   return (
     <AppLayout>
       <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
@@ -366,7 +372,7 @@ export default function GestaoEquipamentos() {
                 <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> 1. Identificação e Modelo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     
-                    {/* CUSTOM DROPDOWN COM PESQUISA PARA O CATÁLOGO */}
+                    {/* CUSTOM DROPDOWN COM PESQUISA PARA O CATÁLOGO (FILTRADO SÓ EQUIPAMENTO) */}
                     <div className="space-y-2 md:col-span-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Modelo do Equipamento (Catálogo de Produtos) *</label>
                         <div className="relative" ref={dropdownCatalogoRef}>
@@ -397,10 +403,10 @@ export default function GestaoEquipamentos() {
                                         </div>
                                     </div>
                                     <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                        {produtosBD.filter(p => `${p.sku} ${p.nome}`.toLowerCase().includes(buscaCatalogo.toLowerCase())).length === 0 ? (
-                                            <div className="p-4 text-sm text-slate-400 text-center italic">Nenhum modelo encontrado.</div>
+                                        {modelosEquipamentoFiltrados.length === 0 ? (
+                                            <div className="p-4 text-sm text-slate-400 text-center italic">Nenhum equipamento encontrado.</div>
                                         ) : (
-                                            produtosBD.filter(p => `${p.sku} ${p.nome}`.toLowerCase().includes(buscaCatalogo.toLowerCase())).map(p => (
+                                            modelosEquipamentoFiltrados.map(p => (
                                                 <div
                                                     key={p.id}
                                                     className={`px-3 py-2.5 text-sm cursor-pointer rounded-md transition-colors ${form.produto_id === p.id ? "bg-indigo-50 font-bold text-indigo-700" : "text-slate-700 hover:bg-slate-100"}`}
