@@ -47,7 +47,7 @@ export default function ConfiguracoesPage() {
   const [mostrarFormTecnico, setMostrarFormTecnico] = useState(false);
   const [formTecnico, setFormTecnico] = useState({
     nome: "", cpf: "", idade: "", endereco: "", formacao: "",
-    data_admissao: "", tipo_cnh: "", valor_hora: "", usuario_id: "nenhum"
+    data_admissao: "", tipo_cnh: "Nenhuma", valor_hora: "", usuario_id: "nenhum"
   });
 
   useEffect(() => { verificarAcessoAdmin(); }, []);
@@ -224,14 +224,16 @@ export default function ConfiguracoesPage() {
   const limparFormTecnico = () => {
     sessionStorage.removeItem("tecnicos_rascunho");
     setMostrarFormTecnico(false); setEditandoAuxiliarId(null);
-    setFormTecnico({ nome: "", cpf: "", idade: "", endereco: "", formacao: "", data_admissao: "", tipo_cnh: "", valor_hora: "", usuario_id: "nenhum" });
+    setFormTecnico({ nome: "", cpf: "", idade: "", endereco: "", formacao: "", data_admissao: "", tipo_cnh: "Nenhuma", valor_hora: "", usuario_id: "nenhum" });
   };
 
   const editarTecnico = (t: any) => {
     setEditandoAuxiliarId(t.id);
     setFormTecnico({
       nome: t.nome || "", cpf: t.cpf || "", idade: t.idade ? String(t.idade) : "", endereco: t.endereco || "",
-      formacao: t.formacao || "", data_admissao: t.data_admissao || "", tipo_cnh: t.tipo_cnh || "", valor_hora: t.valor_hora ? String(t.valor_hora) : "",
+      formacao: t.formacao || "", data_admissao: t.data_admissao || "", 
+      tipo_cnh: t.tipo_cnh || "Nenhuma", // Mapeia null de volta para a opção visual "Nenhuma"
+      valor_hora: t.valor_hora ? String(t.valor_hora) : "",
       usuario_id: t.usuario_id || "nenhum"
     });
     setMostrarFormTecnico(true);
@@ -248,7 +250,8 @@ export default function ConfiguracoesPage() {
         endereco: formTecnico.endereco.trim() || null,
         formacao: formTecnico.formacao.trim() || null,
         data_admissao: formTecnico.data_admissao || null,
-        tipo_cnh: formTecnico.tipo_cnh || null,
+        // Impede que a palavra "Nenhuma" fure o limite de VARCHAR(5) do banco de dados
+        tipo_cnh: formTecnico.tipo_cnh === "Nenhuma" ? null : (formTecnico.tipo_cnh || null),
         valor_hora: formTecnico.valor_hora ? parseFloat(formTecnico.valor_hora.replace(',', '.')) : null,
         usuario_id: formTecnico.usuario_id === "nenhum" ? null : formTecnico.usuario_id
       };
