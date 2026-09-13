@@ -3,12 +3,15 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser, ChevronDown, Loader2, Phone, Mail } from "lucide-react";
+import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser, ChevronDown, Loader2, Phone, Mail, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function GestaoEquipamentos() {
   const [abaAtiva, setAbaAtiva] = useState<"lista" | "novo" | "dossie">("lista");
 
+  // ==========================================
+  // ESTADOS: DADOS BASE
+  // ==========================================
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [clientesBD, setClientesBD] = useState<any[]>([]);
   const [contratosBD, setContratosBD] = useState<any[]>([]);
@@ -17,6 +20,9 @@ export default function GestaoEquipamentos() {
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
 
+  // ==========================================
+  // ESTADOS: DOSSIÊ DO EQUIPAMENTO
+  // ==========================================
   const [equipSelecionado, setEquipSelecionado] = useState<any | null>(null);
   const [abaDossie, setAbaDossie] = useState<"geral" | "movimentacao" | "os" | "contadores" | "financeiro">("geral");
   const [historicoMov, setHistoricoMov] = useState<any[]>([]);
@@ -24,6 +30,16 @@ export default function GestaoEquipamentos() {
   const [historicoPecas, setHistoricoPecas] = useState<any[]>([]);
   const [leituras, setLeituras] = useState<any[]>([]);
   
+  // ==========================================
+  // ESTADOS: GESTÃO DE TERRITÓRIOS (LOTE)
+  // ==========================================
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [tecnicoLote, setTecnicoLote] = useState<string>("");
+  const [isUpdatingLote, setIsUpdatingLote] = useState(false);
+
+  // ==========================================
+  // ESTADOS: FORMULÁRIO (NOVO E EDIÇÃO)
+  // ==========================================
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [buscandoCep, setBuscandoCep] = useState(false);
 
@@ -53,6 +69,9 @@ export default function GestaoEquipamentos() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ==========================================
+  // AUTO-SAVE (RECUPERAÇÃO DE RASCUNHO)
+  // ==========================================
   useEffect(() => {
     const rascunho = sessionStorage.getItem("equipamentos_rascunho");
     if (rascunho) {
@@ -114,6 +133,45 @@ export default function GestaoEquipamentos() {
     if (data) setEquipamentos(data);
   };
 
+  // ==========================================
+  // AÇÕES EM LOTE (TERRITÓRIOS)
+  // ==========================================
+  const toggleSelecao = (id: string) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleTodos = (itensDaPagina: any[]) => {
+    setSelecionados(selecionados.length === itensDaPagina.length ? [] : itensDaPagina.map(item => item.id));
+  };
+
+  const atribuirTecnicoLote = async () => {
+    if (!tecnicoLote) return alert("Por favor, selecione um técnico para atribuir aos equipamentos.");
+    if (!window.confirm(`Tem certeza que deseja atribuir o técnico selecionado a ${selecionados.length} equipamento(s)?`)) return;
+
+    setIsUpdatingLote(true);
+    try {
+      const tecnicoValor = tecnicoLote === "nenhum" ? null : tecnicoLote;
+      const { error } = await supabase
+        .from('srv_equipamentos')
+        .update({ tecnico_responsavel: tecnicoValor })
+        .in('id', selecionados);
+
+      if (error) throw error;
+
+      alert("Território atualizado com sucesso!");
+      setSelecionados([]);
+      setTecnicoLote("");
+      fetchEquipamentos();
+    } catch (e: any) {
+      alert("Erro ao atualizar técnico em lote: " + e.message);
+    } finally {
+      setIsUpdatingLote(false);
+    }
+  };
+
+  // ==========================================
+  // FUNÇÕES DE FORMULÁRIO
+  // ==========================================
   const handleProdutoChange = (prodId: string) => {
     setForm({ ...form, produto_id: prodId });
     const prod = produtosBD.find(p => p.id === prodId);
@@ -128,7 +186,6 @@ export default function GestaoEquipamentos() {
 
   const handleClienteChange = (clienteId: string) => {
       let dadosSincronizados = { ...form, cliente_id: clienteId, contrato_id: "nenhum" };
-
       if (clienteId !== "nenhum") {
           const cli = clientesBD.find(c => c.id === clienteId);
           if (cli) {
@@ -336,7 +393,8 @@ export default function GestaoEquipamentos() {
     e.numero_serie.toLowerCase().includes(busca.toLowerCase()) || 
     (e.log_produtos?.nome?.toLowerCase() || "").includes(busca.toLowerCase()) ||
     (e.log_clientes?.nome_fantasia?.toLowerCase() || "").includes(busca.toLowerCase()) ||
-    (e.patrimonio?.toLowerCase() || "").includes(busca.toLowerCase())
+    (e.patrimonio?.toLowerCase() || "").includes(busca.toLowerCase()) ||
+    (e.tecnico_responsavel?.toLowerCase() || "").includes(busca.toLowerCase())
   );
 
   const modelosEquipamentoFiltrados = produtosBD.filter(p => 
@@ -366,24 +424,67 @@ export default function GestaoEquipamentos() {
         {abaAtiva === "lista" && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex flex-wrap items-center justify-between gap-4 bg-slate-50">
-              <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por S/N, Patrimônio, Modelo ou Cliente..." className="pl-9 bg-white" /></div>
+              <div className="relative w-full max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por S/N, Patrimônio, Técnico, Modelo..." className="pl-9 bg-white" /></div>
             </div>
+
+            {/* BARRA DE AÇÕES EM LOTE PARA TERRITÓRIOS */}
+            {selecionados.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 p-3 px-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in slide-in-from-top-2 mb-4 rounded-lg mx-4 mt-4 shadow-sm">
+                <span className="text-blue-800 font-semibold flex items-center gap-2">
+                  <MapPin className="w-5 h-5"/> {selecionados.length} equipamento(s) selecionado(s)
+                </span>
+                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                  <Select value={tecnicoLote} onValueChange={setTecnicoLote}>
+                    <SelectTrigger className="bg-white w-full sm:w-64 border-blue-200">
+                      <SelectValue placeholder="Selecione o novo técnico..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white z-[99999]">
+                      <SelectItem value="nenhum">Nenhum / A definir</SelectItem>
+                      {tecnicosBD.map(t => <SelectItem key={t.id} value={t.nome}>{t.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" onClick={atribuirTecnicoLote} disabled={isUpdatingLote} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 whitespace-nowrap">
+                    {isUpdatingLote ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} Atribuir em Lote
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSelecionados([])} className="text-blue-700 hover:bg-blue-100 whitespace-nowrap">Desmarcar</Button>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto min-h-[500px]">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider">
+                    <th className="p-4 font-semibold border-b text-center w-12">
+                      <input 
+                        type="checkbox" 
+                        checked={eqFiltrados.length > 0 && selecionados.length === eqFiltrados.length} 
+                        onChange={() => toggleTodos(eqFiltrados)} 
+                        className="rounded border-slate-300 w-4 h-4 cursor-pointer" 
+                      />
+                    </th>
                     <th className="p-4 font-semibold border-b text-center w-20">Seq.</th>
                     <th className="p-4 font-semibold border-b">Modelo / S.N.</th>
                     <th className="p-4 font-semibold border-b">Alocação (Cliente)</th>
+                    <th className="p-4 font-semibold border-b">Técnico (Território)</th>
                     <th className="p-4 font-semibold border-b text-center">Propriedade</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
                     <th className="p-4 font-semibold border-b text-center w-36">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {eqFiltrados.length === 0 ? <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum equipamento no parque.</td></tr> : (
+                  {eqFiltrados.length === 0 ? <tr><td colSpan={8} className="p-12 text-center text-slate-500">Nenhum equipamento no parque.</td></tr> : (
                     eqFiltrados.map(eq => (
                       <tr key={eq.id} className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => abrirDossie(eq)}>
+                        <td className="p-4 text-center">
+                          <input 
+                            type="checkbox" 
+                            checked={selecionados.includes(eq.id)} 
+                            onChange={() => toggleSelecao(eq.id)} 
+                            className="rounded border-slate-300 w-4 h-4 cursor-pointer" 
+                            onClick={e => e.stopPropagation()} 
+                          />
+                        </td>
                         <td className="p-4 text-center font-mono font-bold text-slate-400">#{String(eq.sequencial).padStart(4,'0')}</td>
                         <td className="p-4">
                             <p className="font-bold text-slate-800 text-sm">{eq.log_produtos?.nome || 'Modelo Desconhecido'}</p>
@@ -392,6 +493,11 @@ export default function GestaoEquipamentos() {
                         <td className="p-4">
                             <p className="text-sm font-semibold text-slate-700">{eq.log_clientes?.nome_fantasia || <span className="text-slate-400 italic">Em Estoque / TC</span>}</p>
                             {eq.crm_contratos?.titulo && <p className="text-[10px] text-slate-500 bg-slate-100 border px-1.5 py-0.5 rounded inline-block mt-1 truncate max-w-[200px]">{eq.crm_contratos.titulo}</p>}
+                        </td>
+                        <td className="p-4">
+                            <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <User className="w-4 h-4 text-slate-400"/> {eq.tecnico_responsavel || <span className="text-slate-400 italic font-normal">A definir</span>}
+                            </span>
                         </td>
                         <td className="p-4 text-center"><span className={`text-[10px] font-bold px-2 py-1 rounded border ${eq.proprietario === 'TC Copiadoras' ? 'border-indigo-200 text-indigo-700 bg-indigo-50' : 'border-amber-200 text-amber-700 bg-amber-50'}`}>{eq.proprietario}</span></td>
                         <td className="p-4 text-center"><span className={`text-[10px] font-bold uppercase px-3 py-1 rounded-full shadow-sm border border-white ${eq.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : eq.status === 'Inativo' ? 'bg-slate-100 text-slate-700' : eq.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{eq.status}</span></td>
@@ -428,6 +534,7 @@ export default function GestaoEquipamentos() {
                 <h3 className="font-bold text-slate-700 uppercase tracking-wider text-xs flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400"/> 1. Identificação e Modelo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     
+                    {/* CUSTOM DROPDOWN COM PESQUISA PARA O CATÁLOGO (FILTRADO SÓ EQUIPAMENTO) */}
                     <div className="space-y-2 md:col-span-2">
                         <label className="text-xs font-bold text-slate-600 uppercase">Modelo do Equipamento (Catálogo de Produtos) *</label>
                         <div className="relative" ref={dropdownCatalogoRef}>
@@ -478,6 +585,7 @@ export default function GestaoEquipamentos() {
                         </div>
                     </div>
 
+                    {/* Infos puxadas/editadas do Produto */}
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Fabricante</label><Input value={specs.fabricante} onChange={e => setSpecs({...specs, fabricante: e.target.value})} className="bg-white" /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Família / Categoria</label><Input value={specs.familia} onChange={e => setSpecs({...specs, familia: e.target.value})} className="bg-white" placeholder="Ex: Laser, Jato de Tinta..." /></div>
                     <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Tamanho Max. Papel</label><Select value={specs.formato} onValueChange={v => setSpecs({...specs, formato: v})}><SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[9999]"><SelectItem value="A4">A4</SelectItem><SelectItem value="A3">A3</SelectItem><SelectItem value="A0">A0 (Plotter)</SelectItem><SelectItem value="SuperA3">Super A3</SelectItem></SelectContent></Select></div>
