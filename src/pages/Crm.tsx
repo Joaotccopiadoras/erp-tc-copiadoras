@@ -3,14 +3,14 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Search, UserPlus, Phone, Mail, Building2, MessageSquare, Target, Calendar as CalendarIcon, Clock, ShoppingBag, Wrench, Printer, FileSignature, ArrowLeft, Activity, Layers, Loader2, Edit } from "lucide-react";
+import { Users, Search, UserPlus, Phone, Mail, Building2, MessageSquare, Target, Calendar as CalendarIcon, Clock, ShoppingBag, Wrench, Printer, FileSignature, ArrowLeft, Activity, Layers, Loader2, Edit, Paperclip, UploadCloud, FileText, Download, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function CrmGlobal() {
   const [clientes, setClientes] = useState<any[]>([]);
   const [busca, setBusca] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any | null>(null);
-  const [abaDossie, setAbaDossie] = useState<"timeline" | "comercial" | "tecnica" | "grafica" | "contratos">("timeline");
+  const [abaDossie, setAbaDossie] = useState<"timeline" | "comercial" | "tecnica" | "grafica" | "contratos" | "anexos">("timeline");
   const [salvando, setSalvando] = useState(false);
 
   // Form Novo/Editar Cliente
@@ -19,6 +19,8 @@ export default function CrmGlobal() {
   const [novoCliRazao, setNovoCliRazao] = useState("");
   const [novoCliFantasia, setNovoCliFantasia] = useState("");
   const [novoCliCnpj, setNovoCliCnpj] = useState("");
+  const [novoCliIe, setNovoCliIe] = useState("");
+  const [novoCliRegime, setNovoCliRegime] = useState("");
   const [novoCliTelefone, setNovoCliTelefone] = useState("");
   const [novoCliEmail, setNovoCliEmail] = useState("");
   const [novoCliStatus, setNovoCliStatus] = useState("Lead");
@@ -33,6 +35,10 @@ export default function CrmGlobal() {
   const [equipamentos, setEquipamentos] = useState<any[]>([]);
   const [ordensProducao, setOrdensProducao] = useState<any[]>([]);
   const [contratos, setContratos] = useState<any[]>([]);
+  
+  // Dados de Anexos
+  const [anexosCliente, setAnexosCliente] = useState<any[]>([]);
+  const [fazendoUpload, setFazendoUpload] = useState(false);
 
   // Form Interação Timeline
   const [interacaoTipo, setInteracaoTipo] = useState("WhatsApp");
@@ -52,6 +58,8 @@ export default function CrmGlobal() {
         if (parsed.novoCliRazao) setNovoCliRazao(parsed.novoCliRazao);
         if (parsed.novoCliFantasia) setNovoCliFantasia(parsed.novoCliFantasia);
         if (parsed.novoCliCnpj) setNovoCliCnpj(parsed.novoCliCnpj);
+        if (parsed.novoCliIe) setNovoCliIe(parsed.novoCliIe);
+        if (parsed.novoCliRegime) setNovoCliRegime(parsed.novoCliRegime);
         if (parsed.novoCliTelefone) setNovoCliTelefone(parsed.novoCliTelefone);
         if (parsed.novoCliEmail) setNovoCliEmail(parsed.novoCliEmail);
         if (parsed.novoCliStatus) setNovoCliStatus(parsed.novoCliStatus);
@@ -72,9 +80,9 @@ export default function CrmGlobal() {
 
   useEffect(() => {
     if (mostrarForm || novoCliFantasia || novoCliRazao || novoCliCnpj) {
-      sessionStorage.setItem("crm_cliente_rascunho", JSON.stringify({ mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus }));
+      sessionStorage.setItem("crm_cliente_rascunho", JSON.stringify({ mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliIe, novoCliRegime, novoCliTelefone, novoCliEmail, novoCliStatus }));
     }
-  }, [mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliTelefone, novoCliEmail, novoCliStatus]);
+  }, [mostrarForm, novoCliRazao, novoCliFantasia, novoCliCnpj, novoCliIe, novoCliRegime, novoCliTelefone, novoCliEmail, novoCliStatus]);
 
   useEffect(() => {
     if (interacaoDesc || interacaoProxPasso) {
@@ -91,6 +99,11 @@ export default function CrmGlobal() {
   const fetchClientes = async () => {
     const { data } = await supabase.from('log_clientes').select('*').order('nome_fantasia');
     if (data) setClientes(data);
+  };
+
+  const carregarAnexos = async (clienteId: string) => {
+      const { data } = await supabase.storage.from('anexos_clientes').list(clienteId);
+      if (data) setAnexosCliente(data);
   };
 
   // --- FUNÇÃO DE BUSCA CNPJ (BrasilAPI) ---
@@ -125,7 +138,7 @@ export default function CrmGlobal() {
 
   const abrirNovoCliente = () => {
       setEditandoId(null);
-      setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail(""); setNovoCliStatus("Lead");
+      setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliIe(""); setNovoCliRegime(""); setNovoCliTelefone(""); setNovoCliEmail(""); setNovoCliStatus("Lead");
       setMostrarForm(true);
   };
 
@@ -134,6 +147,8 @@ export default function CrmGlobal() {
       setNovoCliRazao(cli.razao_social || "");
       setNovoCliFantasia(cli.nome_fantasia || "");
       setNovoCliCnpj(cli.cnpj_cpf || "");
+      setNovoCliIe(cli.inscricao_estadual || "");
+      setNovoCliRegime(cli.regime_tributario || "");
       setNovoCliTelefone(cli.telefone || "");
       setNovoCliEmail(cli.email || "");
       setNovoCliStatus(cli.status_funil || "Lead");
@@ -147,7 +162,9 @@ export default function CrmGlobal() {
       const payload = {
         razao_social: novoCliRazao || novoCliFantasia, 
         nome_fantasia: novoCliFantasia || novoCliRazao,
-        cnpj_cpf: novoCliCnpj, 
+        cnpj_cpf: novoCliCnpj,
+        inscricao_estadual: novoCliIe,
+        regime_tributario: novoCliRegime,
         telefone: novoCliTelefone, 
         email: novoCliEmail, 
         status_funil: novoCliStatus
@@ -163,10 +180,10 @@ export default function CrmGlobal() {
           alert("Cliente cadastrado com sucesso!");
       }
       
-      sessionStorage.removeItem("crm_cliente_rascunho"); // Limpa o rascunho após salvar
+      sessionStorage.removeItem("crm_cliente_rascunho");
       setMostrarForm(false);
       setEditandoId(null);
-      setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail("");
+      setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliIe(""); setNovoCliRegime(""); setNovoCliTelefone(""); setNovoCliEmail("");
       fetchClientes();
     } catch (e: any) { alert("Erro ao salvar: " + e.message); } finally { setSalvando(false); }
   };
@@ -190,6 +207,8 @@ export default function CrmGlobal() {
     if (eqRes.data) setEquipamentos(eqRes.data);
     if (opRes.data) setOrdensProducao(opRes.data);
     if (contRes.data) setContratos(contRes.data);
+    
+    carregarAnexos(cliente.id);
   };
 
   const atualizarStatusFunil = async (novoStatus: string) => {
@@ -208,12 +227,45 @@ export default function CrmGlobal() {
       await supabase.from('com_crm_historico').insert([payload]);
       
       alert("Interação registrada!");
-      sessionStorage.removeItem("crm_interacao_rascunho"); // Limpa o rascunho após salvar
+      sessionStorage.removeItem("crm_interacao_rascunho");
       setInteracaoDesc(""); setInteracaoProxPasso(""); setInteracaoDataAgend("");
       
       const { data } = await supabase.from('com_crm_historico').select('*').eq('cliente_id', clienteSelecionado.id).order('data_interacao', { ascending: false });
       if (data) setHistorico(data);
     } catch (e: any) { alert("Erro: " + e.message); } finally { setSalvando(false); }
+  };
+
+  const handleUploadAnexo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !clienteSelecionado) return;
+      
+      setFazendoUpload(true);
+      try {
+          const fileName = `${Math.random().toString(36).substring(7)}_${file.name.replace(/\s+/g, '_')}`;
+          const filePath = `${clienteSelecionado.id}/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage.from('anexos_clientes').upload(filePath, file);
+          if (uploadError) throw uploadError;
+
+          alert("Arquivo anexado com sucesso!");
+          carregarAnexos(clienteSelecionado.id);
+      } catch (error: any) {
+          alert("Erro ao anexar arquivo: " + error.message);
+      } finally {
+          setFazendoUpload(false);
+          e.target.value = ''; // Limpa o input
+      }
+  };
+
+  const excluirAnexo = async (fileName: string) => {
+      if (!window.confirm("Deseja realmente excluir este anexo?")) return;
+      try {
+          const { error } = await supabase.storage.from('anexos_clientes').remove([`${clienteSelecionado.id}/${fileName}`]);
+          if (error) throw error;
+          carregarAnexos(clienteSelecionado.id);
+      } catch (error: any) {
+          alert("Erro ao excluir: " + error.message);
+      }
   };
 
   const clientesFiltrados = clientes.filter(c => 
@@ -259,22 +311,40 @@ export default function CrmGlobal() {
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Razão Social</label><Input value={novoCliRazao} onChange={e => setNovoCliRazao(e.target.value)} className="bg-white" /></div>
                             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome Fantasia (Principal)</label><Input value={novoCliFantasia} onChange={e => setNovoCliFantasia(e.target.value)} className="bg-white" /></div>
+                            
                             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CNPJ / CPF</label><Input value={novoCliCnpj} onChange={e => setNovoCliCnpj(e.target.value)} className="bg-white" /></div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Telefone / WhatsApp</label><Input value={novoCliTelefone} onChange={e => setNovoCliTelefone(e.target.value)} className="bg-white" /></div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">E-mail</label><Input value={novoCliEmail} onChange={e => setNovoCliEmail(e.target.value)} className="bg-white" /></div>
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Inscrição Estadual</label><Input value={novoCliIe} onChange={e => setNovoCliIe(e.target.value)} placeholder="Isento ou Número" className="bg-white" /></div>
+                            
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Status no CRM</label>
+                                <label className="text-xs font-bold text-slate-500 uppercase">Regime Tributário</label>
+                                <Select value={novoCliRegime} onValueChange={setNovoCliRegime}>
+                                    <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent className="bg-white z-[9999]">
+                                        <SelectItem value="Simples Nacional">Simples Nacional</SelectItem>
+                                        <SelectItem value="Lucro Presumido">Lucro Presumido</SelectItem>
+                                        <SelectItem value="Lucro Real">Lucro Real</SelectItem>
+                                        <SelectItem value="MEI">MEI</SelectItem>
+                                        <SelectItem value="Pessoa Física">Pessoa Física</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            
+                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Status no CRM</label>
                                 <Select value={novoCliStatus} onValueChange={setNovoCliStatus}>
                                     <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
                                     <SelectContent className="bg-white z-[9999]"><SelectItem value="Lead">Lead</SelectItem><SelectItem value="Prospecção">Prospecção</SelectItem><SelectItem value="Negociação">Negociação</SelectItem><SelectItem value="Cliente Ativo">Cliente Ativo</SelectItem></SelectContent>
                                 </Select>
                             </div>
+
+                            <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Telefone / WhatsApp</label><Input value={novoCliTelefone} onChange={e => setNovoCliTelefone(e.target.value)} className="bg-white" /></div>
+                            <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">E-mail</label><Input value={novoCliEmail} onChange={e => setNovoCliEmail(e.target.value)} className="bg-white" /></div>
                         </div>
+                        
                         <div className="flex justify-end gap-2 pt-4 border-t border-indigo-100">
                             <Button variant="outline" onClick={() => {
                                 sessionStorage.removeItem("crm_cliente_rascunho");
                                 setMostrarForm(false); setEditandoId(null);
-                                setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliTelefone(""); setNovoCliEmail(""); setNovoCliStatus("Lead");
+                                setNovoCliRazao(""); setNovoCliFantasia(""); setNovoCliCnpj(""); setNovoCliIe(""); setNovoCliRegime(""); setNovoCliTelefone(""); setNovoCliEmail(""); setNovoCliStatus("Lead");
                             }}>Cancelar / Limpar Rascunho</Button>
                             <Button onClick={salvarCliente} disabled={salvando} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                                 {editandoId ? 'Atualizar Cliente' : 'Salvar Cliente'}
@@ -343,9 +413,13 @@ export default function CrmGlobal() {
                             <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => { setClienteSelecionado(null); abrirEditarCliente(clienteSelecionado); }} title="Editar Dados"><Edit className="w-3 h-3"/></Button>
                         </div>
                         <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 ml-12">
-                            <span className="flex items-center gap-1 font-semibold"><Building2 className="w-4 h-4 text-slate-400"/> {clienteSelecionado.cnpj_cpf}</span>
+                            <span className="flex items-center gap-1 font-semibold" title="CNPJ"><Building2 className="w-4 h-4 text-slate-400"/> {clienteSelecionado.cnpj_cpf}</span>
                             <span className="flex items-center gap-1"><Phone className="w-4 h-4 text-slate-400"/> {clienteSelecionado.telefone || 'S/ Tel'}</span>
                             <span className="flex items-center gap-1"><Mail className="w-4 h-4 text-slate-400"/> {clienteSelecionado.email || 'S/ Email'}</span>
+                        </div>
+                        <div className="flex gap-2 ml-12 mt-2">
+                            {clienteSelecionado.regime_tributario && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">{clienteSelecionado.regime_tributario}</span>}
+                            {clienteSelecionado.inscricao_estadual && <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">IE: {clienteSelecionado.inscricao_estadual}</span>}
                         </div>
                     </div>
                     <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -364,6 +438,7 @@ export default function CrmGlobal() {
                     <button onClick={() => setAbaDossie("comercial")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "comercial" ? "bg-emerald-50 text-emerald-700" : "text-slate-500 hover:bg-slate-50"}`}><ShoppingBag className="w-4 h-4"/> Comercial</button>
                     <button onClick={() => setAbaDossie("tecnica")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "tecnica" ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50"}`}><Wrench className="w-4 h-4"/> Técnica & Equip.</button>
                     <button onClick={() => setAbaDossie("grafica")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "grafica" ? "bg-purple-50 text-purple-700" : "text-slate-500 hover:bg-slate-50"}`}><Layers className="w-4 h-4"/> Gráfica (OSG)</button>
+                    <button onClick={() => setAbaDossie("anexos")} className={`flex-1 min-w-[120px] py-2.5 text-sm font-bold flex items-center justify-center gap-2 rounded-md transition-colors ${abaDossie === "anexos" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-50"}`}><Paperclip className="w-4 h-4"/> Anexos</button>
                 </div>
 
                 {/* CONTEÚDO DAS ABAS */}
@@ -398,6 +473,53 @@ export default function CrmGlobal() {
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {abaDossie === "anexos" && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2"><Paperclip className="w-5 h-5 text-slate-500"/> Anexos e Documentos do Cliente</h3>
+                                <div>
+                                    <input type="file" id="upload-anexo-cliente" className="hidden" onChange={handleUploadAnexo} />
+                                    <Button asChild className="bg-slate-800 hover:bg-slate-900 text-white gap-2 cursor-pointer shadow-sm">
+                                        <label htmlFor="upload-anexo-cliente">
+                                            {fazendoUpload ? <Loader2 className="w-4 h-4 animate-spin"/> : <UploadCloud className="w-4 h-4"/>}
+                                            Anexar Novo Arquivo
+                                        </label>
+                                    </Button>
+                                </div>
+                            </div>
+                            
+                            {anexosCliente.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-lg border border-dashed">
+                                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-50"/> 
+                                    <p>Nenhum documento anexado ainda.</p>
+                                    <p className="text-xs mt-1">Envie contratos, cartões de CNPJ ou documentos importantes.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {anexosCliente.map((arq, index) => (
+                                        <div key={index} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-slate-50 hover:border-slate-400 transition-colors">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <FileText className="w-6 h-6 text-indigo-500 flex-shrink-0" />
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-700 truncate max-w-[150px]" title={arq.name}>{arq.name}</p>
+                                                    <p className="text-[10px] text-slate-400">{(arq.metadata?.size / 1024).toFixed(1)} KB</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => window.open(supabase.storage.from('anexos_clientes').getPublicUrl(`${clienteSelecionado.id}/${arq.name}`).data.publicUrl, '_blank')} title="Baixar / Visualizar">
+                                                    <Download className="w-4 h-4" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => excluirAnexo(arq.name)} title="Excluir">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
