@@ -260,79 +260,154 @@ export default function DashboardPage() {
 const exportarPDF = async () => {
     setExportando(true);
     try {
-      const doc = new jsPDF("landscape"); 
-      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
+      const doc = new jsPDF("landscape");
+      const logoData = await getBase64ImageFromUrl("/logo.png");
       
-      // Adicionamos a coluna "Líder" de volta na tabela
-      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Líder", "Solicitante", "Projeto/Processo", "Depto", "Tarefa Atual", "Status", "Resumo/Obs"];
-      
-      // Utiliza o array 'filtered' diretamente para espelhar a ordenação e os filtros da tela
-      const tableRows = filtered.map(item => [
-        formatarData(item.data_entrada), 
-        formatarData(item.previsao_prazo), 
-        formatarData(item.data_conclusao),
-        item.lider_card || "-", 
-        item.solicitante || "-", 
-        item.processo_projeto || "-", 
-        item.departamento || "-",
-        item.tarefa_atual || "-", 
-        formatarStatus(item.status), 
-        item.resumo_observacoes || "-"
-      ]);
+      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
+
+      // ORDENAÇÃO MULTINÍVEL: Líder sempre em primeiro, depois a ordenação da tela
+      const dadosOrdenados = [...filtered].sort((a, b) => {
+        // 1. PRIMAZIA DO LÍDER (Sempre agrupa por ele primeiro)
+        const liderA = a.lider_card || "Sem Líder";
+        const liderB = b.lider_card || "Sem Líder";
+        if (liderA < liderB) return -1;
+        if (liderA > liderB) return 1;
+
+        // 2. ORDENAÇÃO DA TELA (Secundária - aplicada dentro do bloco do líder)
+        if (sortConfig) {
+          let valA = a[sortConfig.key];
+          let valB = b[sortConfig.key];
+          if (sortConfig.key === 'status') {
+            valA = formatarStatus(a.status);
+            valB = formatarStatus(b.status);
+          }
+          if (!valA) valA = "";
+          if (!valB) valB = "";
+          if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        
+        // 3. Status e Datas (Terciária, se empatar o resto)
+        const stA = formatarStatus(a.status);
+        const stB = formatarStatus(b.status);
+        const ordemA = pesoStatus[stA] || 99;
+        const ordemB = pesoStatus[stB] || 99;
+        if (ordemA !== ordemB) return ordemA - ordemB;
+        
+        return new Date(a.data_entrada || 0).getTime() - new Date(b.data_entrada || 0).getTime();
+      });
+
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Solicitante", "Projeto/Processo", "Depto", "Líder", "Tarefa Atual", "Status", "Resumo/Obs"];
+      const tableRows: any[] = [];
+      let grupoAtual = null;
+
+      dadosOrdenados.forEach(item => {
+        // BLOQUEIO: O Agrupador sempre será o Líder, independente da ordenação da tela
+        let valGrupo = item.lider_card || "Sem Líder";
+        let labelGrupo = "Líder Responsável";
+
+        if (valGrupo !== grupoAtual) {
+          tableRows.push([{
+            content: `${labelGrupo}: ${valGrupo}`, colSpan: 10, 
+            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
+          }]);
+          grupoAtual = valGrupo;
+        }
+        
+        tableRows.push([
+          formatarData(item.data_entrada), formatarData(item.previsao_prazo), formatarData(item.data_conclusao),
+          item.solicitante || "-", item.processo_projeto || "-", item.departamento || "-",
+          item.lider_card || "-", item.tarefa_atual || "-", formatarStatus(item.status), item.resumo_observacoes || "-"
+        ]);
+      });
 
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 35, 
-        margin: { bottom: 35 }, 
+        startY: 45, // Tabela desce para não bater na logo/barra preta superior
+        margin: { top: 45, bottom: 40, left: 14, right: 14 },
         theme: 'grid', 
-        styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: {
-          0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
-          8: { halign: 'center' }, // Índice atualizado para Status
-          9: { cellWidth: 40, halign: 'left' } // Índice atualizado para Resumo
+        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: { 
+          0: { cellWidth: 16, halign: 'center' }, 
+          1: { cellWidth: 16, halign: 'center' }, 
+          2: { cellWidth: 16, halign: 'center' }, 
+          3: { cellWidth: 25 }, 
+          4: { cellWidth: 35 }, 
+          5: { cellWidth: 20 }, 
+          6: { cellWidth: 20 }, 
+          7: { cellWidth: 30 }, 
+          8: { cellWidth: 22, halign: 'center' }, 
+          9: { cellWidth: 'auto', halign: 'left' } 
         },
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // Cabeçalho da tabela combinando com a identidade visual preta
         alternateRowStyles: { fillColor: [248, 250, 252] },
         
-        didDrawPage: function () {
+        didDrawPage: function (data) {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
 
-          // --- CABEÇALHO ---
-          if (logoBase64) {
-            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);
+          // ==========================================
+          // BLINDAGEM DE BACKGROUND (Limpa áreas do cabeçalho e rodapé)
+          // ==========================================
+          doc.setFillColor(255, 255, 255);
+          doc.rect(0, 0, pageWidth, 42, "F"); // Limpa o topo
+          doc.rect(0, pageHeight - 35, pageWidth, 35, "F"); // Limpa o rodapé
+
+          // ==========================================
+          // CABEÇALHO (Barra Preta + Logo)
+          // ==========================================
+          doc.setFillColor(0, 0, 0); // Preto
+          doc.rect(0, 0, pageWidth, 15, "F"); // Barra no topo absoluto
+
+          if (logoData) {
+            // A logo fica flutuando abaixo da barra preta, à esquerda
+            doc.addImage(logoData, "PNG", 14, 18, 40, 15);
           }
+          
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          doc.text("Agenda TC Copiadoras", pageWidth / 2, 20, { align: "center" });
-          
+          // Título centralizado ao lado da logo
+          doc.text("Gestão de Projetos e Processos", pageWidth / 2, 28, { align: "center" });
+
+          // Linha divisória fina
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
-          doc.line(14, 28, pageWidth - 14, 28);
+          doc.line(14, 38, pageWidth - 14, 38);
 
-          // --- RODAPÉ ---
-          doc.setFillColor(235, 235, 235);
+          // Data (Canto direito inferior do cabeçalho)
+          const today = new Date();
+          const dia = String(today.getDate()).padStart(2, '0');
+          const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+          const textoData = `Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(9);
+          doc.setTextColor(80, 80, 80);
+          doc.text(textoData, pageWidth - 14, 35, { align: "right" });
+
+          // ==========================================
+          // RODAPÉ (Barra Preta)
+          // ==========================================
+          doc.setFillColor(0, 0, 0); // Preto
           doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(6.5);
+          doc.setFontSize(7.5);
+          doc.setTextColor(255, 255, 255); // Texto branco no fundo preto
 
-          doc.setTextColor(100, 100, 100);
-          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";
-          doc.text(col1Text, 14, pageHeight - 20);
+          // Informações do Endereço (Esquerda)
+          const infoEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
+          doc.text(infoEsq, 14, pageHeight - 16);
 
-          doc.setTextColor(59, 130, 246);
-          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
-          doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
-
-          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
-          doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
+          // Contatos Telefônicos e Email (Direita)
+          const infoDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
+          doc.text(infoDir, pageWidth - 14, pageHeight - 16, { align: "right" });
         },
+        
         didParseCell: function (data) {
-          // Índice 8 agora é a coluna de Status
-          if (data.section === 'body' && data.column.index === 8 && data.cell.raw) {
+          // Índice 8 = Coluna de Status na AgendaUmmense
+          if (data.section === 'body' && data.column.index === 8 && data.cell.raw && (data.row.raw as any[]).length > 1) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
@@ -340,7 +415,7 @@ const exportarPDF = async () => {
           }
         }
       });
-      doc.save("Agenda_TC_Copiadoras.pdf");
+      doc.save("Agenda_Projetos_Processos.pdf");
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF.");
