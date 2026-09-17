@@ -195,7 +195,7 @@ export default function CrmGlobal() {
     const [histRes, pedRes, osRes, eqRes, opRes, contRes] = await Promise.all([
       supabase.from('com_crm_historico').select('*').eq('cliente_id', cliente.id).order('data_interacao', { ascending: false }),
       supabase.from('com_pedidos_venda').select('*').eq('cliente_id', cliente.id).order('data_emissao', { ascending: false }),
-      supabase.from('srv_ordens_servico').select('*').eq('cliente_id', cliente.id).order('data_abertura', { ascending: false })
+      supabase.from('srv_ordens_servico').select('*').eq('cliente_id', cliente.id).order('data_abertura', { ascending: false }),
       supabase.from('srv_equipamentos').select('*, log_produtos(nome)').eq('cliente_id', cliente.id),
       supabase.from('prd_ordens_producao').select('*').ilike('cliente_nome', `%${cliente.nome_fantasia}%`).order('data_entrada', { ascending: false }),
       supabase.from('crm_contratos').select('*').eq('cliente_id', cliente.id)
