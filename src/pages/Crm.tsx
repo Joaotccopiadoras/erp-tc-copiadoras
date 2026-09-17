@@ -606,7 +606,6 @@ export default function CrmGlobal() {
                                     ))}
                                 </div>
                             </div>
-                        </div>
                     )}
 
                     {abaDossie === "grafica" && (
