@@ -195,8 +195,8 @@ export default function CrmGlobal() {
     const [histRes, pedRes, osRes, eqRes, opRes, contRes] = await Promise.all([
       supabase.from('com_crm_historico').select('*').eq('cliente_id', cliente.id).order('data_interacao', { ascending: false }),
       supabase.from('com_pedidos_venda').select('*').eq('cliente_id', cliente.id).order('data_emissao', { ascending: false }),
-      supabase.from('srv_ordens_servico').select('*').eq('cliente_id', cliente.id).order('data_abertura', { ascending: false }),
-      supabase.from('crm_equipamentos_cliente').select('*').eq('cliente_id', cliente.id),
+      supabase.from('srv_ordens_servico').select('*').eq('cliente_id', cliente.id).order('data_abertura', { ascending: false })
+      supabase.from('srv_equipamentos').select('*, log_produtos(nome)').eq('cliente_id', cliente.id),
       supabase.from('prd_ordens_producao').select('*').ilike('cliente_nome', `%${cliente.nome_fantasia}%`).order('data_entrada', { ascending: false }),
       supabase.from('crm_contratos').select('*').eq('cliente_id', cliente.id)
     ]);
@@ -570,24 +570,27 @@ export default function CrmGlobal() {
                     )}
 
                     {abaDossie === "tecnica" && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div>
+            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Printer className="w-5 h-5 text-slate-400"/> Parque de Equipamentos</h3>
+            <div className="space-y-3">
+                {equipamentos.length === 0 ? <p className="text-sm text-slate-400 italic">Nenhum equipamento vinculado.</p> : equipamentos.map(e => (
+                    <div key={e.id} className="p-3 border border-slate-200 rounded-lg hover:border-blue-300 bg-slate-50">
+                        <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Printer className="w-5 h-5 text-slate-400"/> Parque de Equipamentos</h3>
-                                <div className="space-y-3">
-                                    {equipamentos.length === 0 ? <p className="text-sm text-slate-400 italic">Nenhum equipamento vinculado.</p> : equipamentos.map(e => (
-                                        <div key={e.id} className="p-3 border border-slate-200 rounded-lg hover:border-blue-300 bg-slate-50">
-                                            <div className="flex justify-between items-start">
-                                                <div><p className="font-bold text-slate-800">{e.equipamento}</p><p className="text-xs text-slate-500 font-mono">S/N: {e.numero_serie || 'Não informado'}</p></div>
-                                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase">{e.status}</span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 uppercase mt-2">Setor: {e.setor_instalacao || 'Geral'}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                                {/* Agora ele puxa o nome do catálogo de produtos e exibe o Patrimônio se houver */}
+                                <p className="font-bold text-slate-800">{e.log_produtos?.nome || 'Modelo Desconhecido'}</p>
+                                <p className="text-xs text-slate-500 font-mono mt-1">S/N: {e.numero_serie} {e.patrimonio && `| PAT: ${e.patrimonio}`}</p>
                             </div>
-                            <div className="border-l border-slate-100 pl-6">
-                                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Wrench className="w-5 h-5 text-blue-500"/> Últimas Ordens de Serviço</h3>
-                                <div className="space-y-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${e.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : e.status === 'Inativo' ? 'bg-slate-100 text-slate-700' : e.status === 'Em Manutenção' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{e.status}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 uppercase mt-2 font-semibold">Local/Setor: {e.complemento_instalacao || e.rua_instalacao || 'Não informado'}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+        <div className="border-l border-slate-100 pl-6">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Wrench className="w-5 h-5 text-blue-500"/> Últimas Ordens de Serviço</h3>
                                     {ordensServico.length === 0 ? <p className="text-sm text-slate-400 italic">Nenhuma OS registrada.</p> : ordensServico.map(os => (
                                         <div key={os.id} className="p-3 border border-slate-200 rounded-lg hover:border-blue-300">
                                             <div className="flex justify-between items-start mb-1">
