@@ -554,8 +554,8 @@ export default function AgendaKanban() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Prioridade</label>
                   <Select value={cardForm.prioridade} onValueChange={v => setCardForm({...cardForm, prioridade: v})}>
-                    <SelectTrigger className="z-[99999]"><SelectValue/></SelectTrigger>
-                    <SelectContent className="z-[99999]">
+                    <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                    <SelectContent className="bg-white z-[99999]">
                       <SelectItem value="Baixa">Baixa</SelectItem>
                       <SelectItem value="Normal">Normal</SelectItem>
                       <SelectItem value="Alta">Alta</SelectItem>
