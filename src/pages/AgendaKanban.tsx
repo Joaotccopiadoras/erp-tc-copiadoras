@@ -688,7 +688,6 @@ export default function AgendaKanban() {
               </div>
             </div>
           </div>
-        </div>
       )}
 
     </AppLayout>
