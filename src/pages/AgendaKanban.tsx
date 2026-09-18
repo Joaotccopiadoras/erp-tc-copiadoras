@@ -634,12 +634,11 @@ export default function AgendaKanban() {
                 <Input value={cardForm.titulo} onChange={e => setCardForm({...cardForm, titulo: e.target.value})} placeholder="Título resumido..." className="text-base font-medium h-10" autoFocus/>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-2">
+              <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Coluna / Etapa Atual</label>
                   <Select value={cardForm.coluna_id} onValueChange={v => setCardForm({...cardForm, coluna_id: v})}>
-                    <SelectTrigger className="z-[99999]"><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
-                    <SelectContent className="z-[99999]">
+                    <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                    <SelectContent className="bg-white z-[99999]">
                       {(workflowAtivo === "global" ? colunas : colunas.filter(c => c.workflow_id === workflowAtivo)).map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.nome} {workflowAtivo === "global" && `(Mapeado: ${c.status_global})`}</SelectItem>
                       ))}
