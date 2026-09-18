@@ -240,56 +240,162 @@ export default function AgendaKanban() {
   const exportarPDF = async () => {
     setExportando(true);
     try {
-      const doc = new jsPDF("landscape"); 
-      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
+      const doc = new jsPDF("landscape");
+      const logoData = await getBase64ImageFromUrl("/logo.png");
       
-      const dadosExportacao = getExportData();
-      const tableColumn = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global"];
-      const tableRows = dadosExportacao.map(item => [
-        item.etapa, item.titulo, item.responsavel, item.prioridade, item.vencimento, item.workflow, item.status_global
-      ]);
+      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3, "BACKLOG": 4 };
+
+      // ORDENAÇÃO: Respeita o clique na tela, com agrupamento primário inteligente
+      const dadosOrdenados = [...filtered].sort((a, b) => {
+        // 1. Ordenação Secundária (A que foi clicada na tela)
+        if (sortConfig) {
+          let valA = a[sortConfig.key];
+          let valB = b[sortConfig.key];
+          if (sortConfig.key === 'status_global' || sortConfig.key === 'status') {
+            valA = formatarStatus(a.status_global || a.status);
+            valB = formatarStatus(b.status_global || b.status);
+          }
+          if (!valA) valA = "";
+          if (!valB) valB = "";
+          if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+
+        // 2. Primazia do Agrupamento Padrão (Responsável)
+        const respA = a.responsavel || a.lider_card || "Sem Responsável";
+        const respB = b.responsavel || b.lider_card || "Sem Responsável";
+        if (respA < respB) return -1;
+        if (respA > respB) return 1;
+        
+        // 3. Status e Datas
+        const stA = formatarStatus(a.status_global || a.status);
+        const stB = formatarStatus(b.status_global || b.status);
+        const ordemA = pesoStatus[stA] || 99;
+        const ordemB = pesoStatus[stB] || 99;
+        if (ordemA !== ordemB) return ordemA - ordemB;
+        
+        return new Date(a.data_entrada || a.created_at || 0).getTime() - new Date(b.data_entrada || b.created_at || 0).getTime();
+      });
+
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Solicitante", "Projeto/Processo", "Responsável", "Tarefa Atual", "Status", "Resumo/Obs"];
+      const tableRows: any[] = [];
+      let grupoAtual = null;
+
+      dadosOrdenados.forEach(item => {
+        // Define o agrupador dinâmico baseado na ordenação da tela (Fallback: Responsável)
+        let valGrupo = item.responsavel || item.lider_card || "Sem Responsável";
+        let labelGrupo = "Responsável";
+
+        if (sortConfig) {
+          if (sortConfig.key === 'responsavel' || sortConfig.key === 'lider_card') { valGrupo = item.responsavel || item.lider_card || "Sem Responsável"; labelGrupo = "Responsável"; } 
+          else if (sortConfig.key === 'solicitante') { valGrupo = item.solicitante || "Sem Solicitante"; labelGrupo = "Solicitante"; } 
+          else if (sortConfig.key === 'status_global' || sortConfig.key === 'status') { valGrupo = formatarStatus(item.status_global || item.status); labelGrupo = "Status"; } 
+          else if (sortConfig.key === 'titulo' || sortConfig.key === 'projeto_processo') { valGrupo = item.titulo || item.projeto_processo || "Sem Projeto/Processo"; labelGrupo = "Projeto / Processo"; }
+        }
+
+        if (valGrupo !== grupoAtual) {
+          tableRows.push([{
+            content: `${labelGrupo}: ${valGrupo}`, colSpan: 9, 
+            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
+          }]);
+          grupoAtual = valGrupo;
+        }
+        
+        tableRows.push([
+          formatarData(item.data_entrada || item.created_at), 
+          formatarData(item.vencimento || item.previsao_prazo), 
+          formatarData(item.data_conclusao),
+          item.solicitante || "-", 
+          item.titulo || item.projeto_processo || "-", 
+          item.responsavel || item.lider_card || "-",
+          item.coluna_nome || item.tarefa_atual || item.etapa || "-", 
+          formatarStatus(item.status_global || item.status), 
+          item.descricao || item.resumo_observacoes || "-"
+        ]);
+      });
 
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 35, 
-        margin: { bottom: 35 }, 
+        startY: 40,
+        // MARGEM REFORÇADA: Limite exato de desenho para não esmagar o rodapé nem o cabeçalho
+        margin: { top: 40, bottom: 40, left: 14, right: 14 },
         theme: 'grid', 
-        styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: { 
+          0: { cellWidth: 16, halign: 'center' }, 
+          1: { cellWidth: 16, halign: 'center' }, 
+          2: { cellWidth: 16, halign: 'center' }, 
+          3: { cellWidth: 25 }, 
+          4: { cellWidth: 35 }, 
+          5: { cellWidth: 25 }, 
+          6: { cellWidth: 25 }, 
+          7: { cellWidth: 22, halign: 'center' }, 
+          8: { cellWidth: 'auto', halign: 'left' } 
+        },
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         
-        didDrawPage: function () {
+        didDrawPage: function (data) {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
 
-          if (logoBase64) {
-            doc.addImage(logoBase64, "PNG", 14, 10, 40, 15);
+          // ==========================================
+          // CAIXAS BRANCAS (Blindagem de fundo da tabela)
+          // ==========================================
+          doc.setFillColor(255, 255, 255);
+          doc.rect(0, 0, pageWidth, 38, "F"); 
+          doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
+
+          // --- CABEÇALHO ---
+          if (logoData) {
+            doc.addImage(logoData, "PNG", 14, 10, 40, 15);
           }
+          
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
           doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });
-          
+
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
           doc.line(14, 28, pageWidth - 14, 28);
 
-          doc.setFillColor(235, 235, 235);
+          // --- DATA FORMATO TIMBRADO ---
+          const today = new Date();
+          const dia = String(today.getDate()).padStart(2, '0');
+          const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+          const textoData = `Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
+          
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(9);
+          doc.setTextColor(100, 100, 100);
+          doc.text(textoData, pageWidth - 14, 25, { align: "right" });
+
+          // ==========================================
+          // RODAPÉ TIMBRADO PRETO
+          // ==========================================
+          doc.setFillColor(0, 0, 0); // Fundo Preto
           doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(6.5);
-          doc.setTextColor(100, 100, 100);
-          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";
-          doc.text(col1Text, 14, pageHeight - 20);
+          doc.setFontSize(7.5);
+          doc.setTextColor(255, 255, 255); // Texto Branco
 
-          doc.setTextColor(59, 130, 246);
-          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
-          doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
+          const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
+          doc.text(textoRodapeEsq, 14, pageHeight - 16);
 
-          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
-          doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
+          const textoRodapeDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
+          doc.text(textoRodapeDir, pageWidth - 14, pageHeight - 16, { align: "right" });
+        },
+        
+        didParseCell: function (data) {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.raw) {
+            const status = String(data.cell.raw).toUpperCase();
+            if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
+            else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
+            else if (status === 'ANDAMENTO') { data.cell.styles.textColor = [29, 78, 216]; data.cell.styles.fontStyle = 'bold'; }
+          }
         }
       });
       doc.save("Agenda_Kanban_TC_Copiadoras.pdf");
