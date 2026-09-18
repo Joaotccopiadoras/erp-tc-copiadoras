@@ -491,7 +491,6 @@ export default function AgendaKanban() {
         </div>
       )}
 
-      {/* MODAL: NOVA COLUNA */}
       {modalColuna && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
           <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
@@ -502,8 +501,8 @@ export default function AgendaKanban() {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-indigo-600 uppercase flex items-center gap-1"><Settings className="w-3 h-3"/> Mapeamento Global</label>
                 <Select value={statusGlobalColuna} onValueChange={setStatusGlobalColuna}>
-                  <SelectTrigger className="z-[99999]"><SelectValue/></SelectTrigger>
-                  <SelectContent className="z-[99999]">
+                  <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                  <SelectContent className="bg-white z-[99999]">
                     {STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
