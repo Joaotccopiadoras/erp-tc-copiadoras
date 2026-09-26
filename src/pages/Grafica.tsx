@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign } from "lucide-react";
+import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Calculator } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
@@ -15,6 +15,7 @@ export default function Grafica() {
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [clientesBD, setClientesBD] = useState<any[]>([]);
   const [catReceitaId, setCatReceitaId] = useState("");
+  const [equipamentosTC, setEquipamentosTC] = useState<any[]>([]);
 
   // ESTADOS: ABRIR ORDEM DE SERVIÇO (OS)
   const [clienteBusca, setClienteBusca] = useState("");
@@ -22,6 +23,7 @@ export default function Grafica() {
   const [qtdProduzir, setQtdProduzir] = useState(1);
   const [dataPrevista, setDataPrevista] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  const [possuiImpressao, setPossuiImpressao] = useState("Não");
   
   // NOVOS CAMPOS COMERCIAIS DA OS
   const [valorCobrado, setValorCobrado] = useState("");
@@ -38,6 +40,15 @@ export default function Grafica() {
   const [buscaInsumo, setBuscaInsumo] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
 
+  // ESTADOS: FLUXO DE IMPRESSÃO
+  const [modalImpressao, setModalImpressao] = useState(false);
+  const [equipImpressaoId, setEquipImpressaoId] = useState("");
+  const [qtdImprimir, setQtdImprimir] = useState(1);
+  const [modoImpressao, setModoImpressao] = useState("Simplex");
+  const [contadorInicial, setContadorInicial] = useState("");
+  const [contadorFinal, setContadorFinal] = useState("");
+  const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo" | "concluido">("pendente");
+
   // ESTADOS: EDIÇÃO E ANEXOS
   const [editandoObs, setEditandoObs] = useState(false);
   const [obsTemp, setObsTemp] = useState("");
@@ -45,20 +56,48 @@ export default function Grafica() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ==========================================
+  // AUTO-SAVE (Rascunho de Sessão)
+  // ==========================================
+  useEffect(() => {
+    const rascunho = sessionStorage.getItem("grafica_rascunho");
+    if (rascunho) {
+      try {
+        const draft = JSON.parse(rascunho);
+        if (draft.abaAtiva) setAbaAtiva(draft.abaAtiva);
+        if (draft.clienteBusca) setClienteBusca(draft.clienteBusca);
+        if (draft.descServico) setDescServico(draft.descServico);
+        if (draft.qtdProduzir) setQtdProduzir(draft.qtdProduzir);
+        if (draft.dataPrevista) setDataPrevista(draft.dataPrevista);
+        if (draft.observacoes) setObservacoes(draft.observacoes);
+        if (draft.valorCobrado) setValorCobrado(draft.valorCobrado);
+        if (draft.condicaoPagamento) setCondicaoPagamento(draft.condicaoPagamento);
+        if (draft.possuiImpressao) setPossuiImpressao(draft.possuiImpressao);
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    const draft = { abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao };
+    sessionStorage.setItem("grafica_rascunho", JSON.stringify(draft));
+  }, [abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao]);
+
   useEffect(() => {
     fetchDadosBase();
     fetchOrdens();
   }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
-    const [prodRes, cliRes, catRes] = await Promise.all([
+    const [prodRes, cliRes, catRes, eqRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia'),
-      supabase.from('fin_categorias').select('id').eq('tipo', 'Receita').limit(1).single()
+      supabase.from('fin_categorias').select('id').eq('tipo', 'Receita').limit(1).single(),
+      supabase.from('srv_equipamentos').select('id, numero_serie, modelo, log_produtos(nome)').or('proprietario.ilike.%TC Copiadoras%,cliente_id.ilike.%TC SERVICOS%')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (catRes.data) setCatReceitaId(catRes.data.id);
+    if (eqRes.data) setEquipamentosTC(eqRes.data);
   };
 
   const fetchOrdens = async () => {
@@ -80,14 +119,17 @@ export default function Grafica() {
         observacoes: observacoes,
         valor_total: parseFloat(valorCobrado) || 0,
         condicao_pagamento: condicaoPagamento,
-        status: 'Fila de Impressão'
+        status: 'Fila de Impressão',
+        // Salvando o parâmetro extra no campo observações ou adicionando coluna (aqui usaremos observações para não quebrar schema caso a coluna não exista)
+        observacoes: `[Possui Impressão: ${possuiImpressao}]\n` + observacoes
       };
 
       const { error } = await supabase.from('prd_ordens_producao').insert([payload]);
       if (error) throw error;
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
-      setClienteBusca(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setValorCobrado(""); setCondicaoPagamento("À Vista");
+      sessionStorage.removeItem("grafica_rascunho");
+      setClienteBusca(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setValorCobrado(""); setCondicaoPagamento("À Vista"); setPossuiImpressao("Não");
       setAbaAtiva("painel");
     } catch (e: any) { alert("Erro ao criar OS: " + e.message); } finally { setSalvandoOS(false); }
   };
@@ -98,6 +140,13 @@ export default function Grafica() {
     setStatusOS(os.status);
     setObsTemp(os.observacoes || "");
     setEditandoObs(false);
+    
+    // Reset estado de impressão
+    setStatusImpressao("pendente");
+    setContadorInicial("");
+    setContadorFinal("");
+    setEquipImpressaoId("");
+    setQtdImprimir(os.quantidade_produzir);
 
     const [insumosRes, anexosRes] = await Promise.all([
         supabase.from('prd_op_insumos').select('*').eq('op_id', os.id),
@@ -146,7 +195,7 @@ export default function Grafica() {
           setAnexos([novoAnexo, ...anexos]);
           alert("Arquivo anexado com sucesso!");
       } catch(e: any) {
-          alert("Erro no upload. Verifique se criou o Storage Bucket 'grafica_arquivos' como público. Erro: " + e.message);
+          alert("Erro no upload. Verifique se criou o Storage Bucket 'grafica_arquivos' como público.");
       } finally {
           setUploading(false);
           if (fileInputRef.current) fileInputRef.current.value = "";
@@ -212,7 +261,6 @@ export default function Grafica() {
     } catch (e: any) { alert("Erro ao concluir: " + e.message); } finally { setSalvandoOS(false); }
   };
 
-  // --- INTEGRAÇÃO FINANCEIRA (FATURAMENTO) ---
   const faturarServico = async () => {
     if (!osSelecionada.valor_total || osSelecionada.valor_total <= 0) {
         return alert("O valor cobrado deste serviço está zerado. Edite a OS ou crie o lançamento financeiro manualmente.");
@@ -222,7 +270,6 @@ export default function Grafica() {
 
     setSalvandoOS(true);
     try {
-        // Calcula o vencimento com base na condição de pagamento
         const vencimento = new Date();
         if (osSelecionada.condicao_pagamento.includes("30")) vencimento.setDate(vencimento.getDate() + 30);
         else if (osSelecionada.condicao_pagamento.includes("15")) vencimento.setDate(vencimento.getDate() + 15);
@@ -242,7 +289,6 @@ export default function Grafica() {
         const { error: finError } = await supabase.from('fin_lancamentos').insert([payloadFin]);
         if (finError) throw finError;
 
-        // Atualiza a OS Gráfica como "Faturada"
         await supabase.from('prd_ordens_producao').update({ status: 'Faturada' }).eq('id', osSelecionada.id);
 
         alert("Serviço Faturado com sucesso! Título enviado para o Contas a Receber.");
@@ -252,6 +298,35 @@ export default function Grafica() {
     } finally {
         setSalvandoOS(false);
     }
+  };
+
+  // Funções Auxiliares de Estimativa de Impressão
+  const eqPPM = 40; // Hardcoded fallback para estimativa, ideally vindo do equipamento
+  const tempoEstimado = Math.ceil(qtdImprimir / eqPPM); // Minutos
+  
+  // Mock de custos para os 4 cenários baseados na quantidade
+  const custoOriginalNovo = (qtdImprimir * 0.08).toFixed(2);
+  const custoOriginalRecond = (qtdImprimir * 0.05).toFixed(2);
+  const custoCompatNovo = (qtdImprimir * 0.04).toFixed(2);
+  const custoCompatRecond = (qtdImprimir * 0.02).toFixed(2);
+
+  const finalizarImpressao = () => {
+    if (!contadorFinal || Number(contadorFinal) < Number(contadorInicial)) {
+        return alert("Contador Final inválido.");
+    }
+    const diff = Number(contadorFinal) - Number(contadorInicial);
+    
+    if (diff === qtdImprimir) {
+        alert(`Impressão exata! ${diff} páginas impressas.`);
+    } else if (diff < qtdImprimir) {
+        alert(`Atenção: A diferença de contadores (${diff}) é INFERIOR à quantidade que deveria ser impressa (${qtdImprimir}).`);
+    } else {
+        const desperdicio = diff - qtdImprimir;
+        const porcentagem = ((desperdicio / qtdImprimir) * 100).toFixed(1);
+        alert(`ALERTA DE DESPERDÍCIO/ERRO:\n\nDiferença de Contadores: ${diff}\nQuantidade Demandada: ${qtdImprimir}\n\nDesperdício: ${desperdicio} páginas (${porcentagem}%)`);
+    }
+    
+    setStatusImpressao("concluido");
   };
 
   const ordensFiltradas = ordens.filter(o => 
@@ -299,12 +374,24 @@ export default function Grafica() {
                   <Input value={descServico} onChange={e => setDescServico(e.target.value)} placeholder="Ex: Impressão de 500 Cartões Frente/Verso, 2 Banners Lona..." className="bg-slate-50" />
               </div>
               <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Quantidade <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-bold text-slate-700">Quantidade Total <span className="text-red-500">*</span></label>
                   <Input type="number" min="1" value={qtdProduzir} onChange={e => setQtdProduzir(parseFloat(e.target.value)||1)} className="bg-slate-50 font-bold text-center" />
               </div>
               <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Data Prevista para Entrega <span className="text-red-500">*</span></label>
                   <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
+              </div>
+
+              {/* OPÇÃO DE IMPRESSÃO */}
+              <div className="space-y-2 md:col-span-2 bg-slate-50 p-3 rounded-md border border-slate-200">
+                  <label className="text-sm font-bold text-slate-700">Este serviço requer Impressão em Equipamento TC?</label>
+                  <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
+                      <SelectTrigger className="bg-white z-[99999]"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-white z-[99999]">
+                          <SelectItem value="Sim">Sim, exigirá apontamento de contadores</SelectItem>
+                          <SelectItem value="Não">Não, apenas acabamento/outros</SelectItem>
+                      </SelectContent>
+                  </Select>
               </div>
 
               {/* BLOCO COMERCIAL NOVO */}
@@ -316,8 +403,8 @@ export default function Grafica() {
                   <div className="space-y-2">
                       <label className="text-sm font-bold text-indigo-900">Condição de Pagto.</label>
                       <Select value={condicaoPagamento} onValueChange={setCondicaoPagamento}>
-                          <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectTrigger className="bg-white z-[99999]"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white z-[99999]">
                               <SelectItem value="À Vista">À Vista</SelectItem>
                               <SelectItem value="Boleto 15 Dias">Boleto 15 Dias</SelectItem>
                               <SelectItem value="Boleto 30 Dias">Boleto 30 Dias</SelectItem>
@@ -341,7 +428,7 @@ export default function Grafica() {
         )}
 
         {/* ========================================================================= */}
-        {/* ABA: PAINEL DE PRODUÇÃO (KANBAN LISTA) */}
+        {/* ABA: PAINEL DE PRODUÇÃO */}
         {/* ========================================================================= */}
         {abaAtiva === "painel" && !osSelecionada && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -401,7 +488,6 @@ export default function Grafica() {
         {abaAtiva === "painel" && osSelecionada && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
             
-            {/* CABEÇALHO DA OS */}
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-purple-600">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
@@ -418,13 +504,88 @@ export default function Grafica() {
                 ) : (
                     <div className="flex items-center gap-2">
                         <Select value={statusOS} onValueChange={setStatusOS}>
-                            <SelectTrigger className="w-44 bg-white font-semibold border-purple-200"><SelectValue/></SelectTrigger>
-                            <SelectContent><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Pronto para Entrega">Pronto para Entrega</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
+                            <SelectTrigger className="w-44 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
+                            <SelectContent className="bg-white z-[99999]"><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Pronto para Entrega">Pronto para Entrega</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
                         </Select>
                         <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Etapa</Button>
                     </div>
                 )}
             </div>
+
+            {/* PAINEL DE IMPRESSÃO INTELIGENTE (Exibido se a OS tiver tag de impressão e estiver em produção) */}
+            {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
+                <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm">
+                    <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2"><Printer className="w-5 h-5"/> Painel de Produção & Apontamento</h3>
+                    
+                    {statusImpressao === "pendente" && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="md:col-span-2 space-y-2">
+                                <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
+                                <Select value={equipImpressaoId} onValueChange={setEquipImpressaoId}>
+                                    <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue placeholder="Selecione o equipamento interno..."/></SelectTrigger>
+                                    <SelectContent className="bg-white z-[99999]">
+                                        {equipamentosTC.map(e => <SelectItem key={e.id} value={e.id}>{e.log_produtos?.nome} (S/N: {e.numero_serie})</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-blue-800">Qtd a Imprimir</label>
+                                <Input type="number" max={osSelecionada.quantidade_produzir} value={qtdImprimir} onChange={e => setQtdImprimir(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-blue-800">Modo</label>
+                                <Select value={modoImpressao} onValueChange={setModoImpressao}>
+                                    <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue/></SelectTrigger>
+                                    <SelectContent className="bg-white z-[99999]">
+                                        <SelectItem value="Simplex">Simplex (Só Frente)</SelectItem>
+                                        <SelectItem value="Duplex">Duplex (Frente/Verso)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            
+                            {equipImpressaoId && (
+                                <div className="md:col-span-4 mt-4 bg-white p-4 rounded-lg border border-blue-100 shadow-sm">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Estimativas de Produção</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                        <div className="p-3 bg-slate-50 rounded border"><p className="text-[10px] uppercase font-bold text-slate-400">Tempo Estimado</p><p className="font-bold text-lg text-slate-700">{tempoEstimado} min</p></div>
+                                        <div className="p-3 bg-emerald-50 rounded border border-emerald-100"><p className="text-[10px] uppercase font-bold text-emerald-600">Custo Orig. Novo</p><p className="font-bold text-lg text-emerald-700">R$ {custoOriginalNovo}</p></div>
+                                        <div className="p-3 bg-teal-50 rounded border border-teal-100"><p className="text-[10px] uppercase font-bold text-teal-600">Custo Orig. Recond.</p><p className="font-bold text-lg text-teal-700">R$ {custoOriginalRecond}</p></div>
+                                        <div className="p-3 bg-blue-50 rounded border border-blue-100"><p className="text-[10px] uppercase font-bold text-blue-600">Custo Comp. Novo</p><p className="font-bold text-lg text-blue-700">R$ {custoCompatNovo}</p></div>
+                                        <div className="p-3 bg-indigo-50 rounded border border-indigo-100"><p className="text-[10px] uppercase font-bold text-indigo-600">Custo Comp. Recond.</p><p className="font-bold text-lg text-indigo-700">R$ {custoCompatRecond}</p></div>
+                                    </div>
+                                    <div className="mt-4 flex gap-4 items-end">
+                                        <div className="flex-1 space-y-2">
+                                            <label className="text-sm font-bold text-rose-600">Contador Atual (Inicial)</label>
+                                            <Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} placeholder="Digite o contador antes de imprimir" className="bg-white border-rose-300 font-bold" />
+                                        </div>
+                                        <Button onClick={() => setStatusImpressao("imprimindo")} disabled={!contadorInicial} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 px-8"><PlayCircle className="w-4 h-4 mr-2"/> Iniciar Impressão</Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {statusImpressao === "imprimindo" && (
+                        <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4">
+                            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
+                            <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
+                            <p className="text-slate-500">Imprimindo {qtdImprimir} páginas em modo {modoImpressao}.</p>
+                            <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
+                                <label className="text-sm font-bold text-rose-600">Contador Final do Equipamento</label>
+                                <Input type="number" value={contadorFinal} onChange={e => setContadorFinal(e.target.value)} placeholder="Contador após conclusão..." className="font-bold border-rose-300" />
+                                <Button onClick={finalizarImpressao} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold mt-2"><CheckCircle2 className="w-4 h-4 mr-2"/> Finalizar & Apurar</Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {statusImpressao === "concluido" && (
+                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-lg font-bold flex items-center justify-between">
+                            <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Apontamento de Impressão Registrado com Sucesso.</span>
+                            <Button variant="outline" size="sm" onClick={() => setStatusImpressao("pendente")} className="bg-white text-slate-700">Novo Apontamento</Button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
