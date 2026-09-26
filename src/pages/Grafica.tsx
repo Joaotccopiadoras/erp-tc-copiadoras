@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Calculator } from "lucide-react";
+import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
@@ -41,13 +41,12 @@ export default function Grafica() {
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
 
   // ESTADOS: FLUXO DE IMPRESSÃO
-  const [modalImpressao, setModalImpressao] = useState(false);
+  const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo" | "concluido">("pendente");
   const [equipImpressaoId, setEquipImpressaoId] = useState("");
   const [qtdImprimir, setQtdImprimir] = useState(1);
   const [modoImpressao, setModoImpressao] = useState("Simplex");
   const [contadorInicial, setContadorInicial] = useState("");
   const [contadorFinal, setContadorFinal] = useState("");
-  const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo" | "concluido">("pendente");
 
   // ESTADOS: EDIÇÃO E ANEXOS
   const [editandoObs, setEditandoObs] = useState(false);
@@ -64,6 +63,7 @@ export default function Grafica() {
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
+        // Aba de Criação
         if (draft.abaAtiva) setAbaAtiva(draft.abaAtiva);
         if (draft.clienteBusca) setClienteBusca(draft.clienteBusca);
         if (draft.descServico) setDescServico(draft.descServico);
@@ -73,14 +73,33 @@ export default function Grafica() {
         if (draft.valorCobrado) setValorCobrado(draft.valorCobrado);
         if (draft.condicaoPagamento) setCondicaoPagamento(draft.condicaoPagamento);
         if (draft.possuiImpressao) setPossuiImpressao(draft.possuiImpressao);
+        
+        // Aba da Prancheta (Evita sumir a OS selecionada)
+        if (draft.osSelecionada !== undefined) setOsSelecionada(draft.osSelecionada);
+        if (draft.statusOS) setStatusOS(draft.statusOS);
+        if (draft.insumos) setInsumos(draft.insumos);
+        if (draft.statusImpressao) setStatusImpressao(draft.statusImpressao);
+        if (draft.equipImpressaoId) setEquipImpressaoId(draft.equipImpressaoId);
+        if (draft.qtdImprimir) setQtdImprimir(draft.qtdImprimir);
+        if (draft.modoImpressao) setModoImpressao(draft.modoImpressao);
+        if (draft.contadorInicial) setContadorInicial(draft.contadorInicial);
+        if (draft.contadorFinal) setContadorFinal(draft.contadorFinal);
+        if (draft.editandoObs !== undefined) setEditandoObs(draft.editandoObs);
+        if (draft.obsTemp) setObsTemp(draft.obsTemp);
       } catch (e) {}
     }
   }, []);
 
   useEffect(() => {
-    const draft = { abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao };
+    const draft = { 
+        abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao,
+        osSelecionada, statusOS, insumos, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
+    };
     sessionStorage.setItem("grafica_rascunho", JSON.stringify(draft));
-  }, [abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao]);
+  }, [
+      abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao,
+      osSelecionada, statusOS, insumos, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
+  ]);
 
   useEffect(() => {
     fetchDadosBase();
@@ -92,12 +111,22 @@ export default function Grafica() {
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia'),
       supabase.from('fin_categorias').select('id').eq('tipo', 'Receita').limit(1).single(),
-      supabase.from('srv_equipamentos').select('id, numero_serie, modelo, log_produtos(nome)').or('proprietario.ilike.%TC Copiadoras%,cliente_id.ilike.%TC SERVICOS%')
+      // Trazemos a relação completa de clientes para filtrar com segurança no JS
+      supabase.from('srv_equipamentos').select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
+    
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (catRes.data) setCatReceitaId(catRes.data.id);
-    if (eqRes.data) setEquipamentosTC(eqRes.data);
+    
+    if (eqRes.data) {
+        const tcEquips = eqRes.data.filter((e: any) => {
+            const nomeCli = (e.log_clientes?.nome_fantasia || "").toUpperCase();
+            const razaoCli = (e.log_clientes?.razao_social || "").toUpperCase();
+            return nomeCli.includes("TC SERVICOS") || razaoCli.includes("TC SERVICOS");
+        });
+        setEquipamentosTC(tcEquips);
+    }
   };
 
   const fetchOrdens = async () => {
@@ -116,19 +145,16 @@ export default function Grafica() {
         descricao_servico: descServico,
         quantidade_produzir: qtdProduzir,
         data_prevista: dataPrevista,
-        observacoes: observacoes,
         valor_total: parseFloat(valorCobrado) || 0,
         condicao_pagamento: condicaoPagamento,
         status: 'Fila de Impressão',
-        // Salvando o parâmetro extra no campo observações ou adicionando coluna (aqui usaremos observações para não quebrar schema caso a coluna não exista)
-        observacoes: `[Possui Impressão: ${possuiImpressao}]\n` + observacoes
+        observacoes: `[Possui Impressão: ${possuiImpressao}]\n${observacoes}`
       };
 
       const { error } = await supabase.from('prd_ordens_producao').insert([payload]);
       if (error) throw error;
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
-      sessionStorage.removeItem("grafica_rascunho");
       setClienteBusca(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setValorCobrado(""); setCondicaoPagamento("À Vista"); setPossuiImpressao("Não");
       setAbaAtiva("painel");
     } catch (e: any) { alert("Erro ao criar OS: " + e.message); } finally { setSalvandoOS(false); }
@@ -141,7 +167,6 @@ export default function Grafica() {
     setObsTemp(os.observacoes || "");
     setEditandoObs(false);
     
-    // Reset estado de impressão
     setStatusImpressao("pendente");
     setContadorInicial("");
     setContadorFinal("");
@@ -159,7 +184,6 @@ export default function Grafica() {
             quantidade: i.quantidade, custoUn: i.custo_unitario, estoqueAtual: 999 
         })));
     }
-    
     if (anexosRes.data) setAnexos(anexosRes.data);
   };
 
@@ -173,7 +197,7 @@ export default function Grafica() {
       } catch(e: any) { alert("Erro ao salvar observações: " + e.message); }
   };
 
-  // --- GESTÃO DE ANEXOS (UPLOAD) ---
+  // --- GESTÃO DE ANEXOS ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -194,9 +218,7 @@ export default function Grafica() {
 
           setAnexos([novoAnexo, ...anexos]);
           alert("Arquivo anexado com sucesso!");
-      } catch(e: any) {
-          alert("Erro no upload. Verifique se criou o Storage Bucket 'grafica_arquivos' como público.");
-      } finally {
+      } catch(e: any) { alert("Erro no upload. Erro: " + e.message); } finally {
           setUploading(false);
           if (fileInputRef.current) fileInputRef.current.value = "";
       }
@@ -238,12 +260,10 @@ export default function Grafica() {
   };
 
   const concluirServico = async () => {
-    if (!confirm("Atenção: Ao concluir a OS, toda a matéria-prima listada será IMEDIATAMENTE BAIXADA do estoque. Deseja confirmar a conclusão do serviço?")) return;
-    
+    if (!confirm("Atenção: Ao concluir a OS, a matéria-prima listada será baixada do estoque. Confirmar?")) return;
     setSalvandoOS(true);
     try {
       await salvarAndamento('Pronto para Entrega');
-
       for (const insumo of insumos) {
         const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', insumo.produtoId).single();
         if (prodData) {
@@ -252,68 +272,46 @@ export default function Grafica() {
         }
         await supabase.from('log_movimentacoes').insert({
             produto_id: insumo.produtoId, tipo: 'Saída', quantidade: insumo.quantidade, 
-            documento: `OSG-${osSelecionada.numero_op}`, fornecedor_cliente: osSelecionada.cliente_nome, observacoes: 'Consumo no Serviço Gráfico'
+            documento: `OSG-${osSelecionada.numero_op}`, fornecedor_cliente: osSelecionada.cliente_nome, observacoes: 'Consumo Gráfica'
         });
       }
-
-      alert("Serviço Concluído! Insumos baixados do estoque e OS movida para 'Pronto para Entrega'.");
+      alert("Serviço Concluído!");
       fetchOrdens(); setOsSelecionada(null);
     } catch (e: any) { alert("Erro ao concluir: " + e.message); } finally { setSalvandoOS(false); }
   };
 
   const faturarServico = async () => {
-    if (!osSelecionada.valor_total || osSelecionada.valor_total <= 0) {
-        return alert("O valor cobrado deste serviço está zerado. Edite a OS ou crie o lançamento financeiro manualmente.");
-    }
-    
-    if (!confirm(`Deseja Faturar este serviço no valor de R$ ${osSelecionada.valor_total.toFixed(2)}?\nIsso irá gerar uma Conta a Receber no Financeiro.`)) return;
-
+    if (!osSelecionada.valor_total || osSelecionada.valor_total <= 0) return alert("Valor cobrado zerado.");
+    if (!confirm(`Faturar R$ ${osSelecionada.valor_total.toFixed(2)}?`)) return;
     setSalvandoOS(true);
     try {
         const vencimento = new Date();
         if (osSelecionada.condicao_pagamento.includes("30")) vencimento.setDate(vencimento.getDate() + 30);
         else if (osSelecionada.condicao_pagamento.includes("15")) vencimento.setDate(vencimento.getDate() + 15);
 
-        const payloadFin = {
-            tipo: 'Receita',
-            descricao: `Serviço Gráfico OSG-${String(osSelecionada.numero_op).padStart(4,'0')} - ${osSelecionada.cliente_nome}`,
-            valor: osSelecionada.valor_total,
-            data_emissao: new Date().toISOString().split('T')[0],
-            data_vencimento: vencimento.toISOString().split('T')[0],
-            status: 'Pendente',
-            categoria_id: catReceitaId || null,
-            documento_origem: `OSG-${String(osSelecionada.numero_op).padStart(4,'0')}`,
-            observacoes: `Condição de Pagamento: ${osSelecionada.condicao_pagamento}`
-        };
-
-        const { error: finError } = await supabase.from('fin_lancamentos').insert([payloadFin]);
-        if (finError) throw finError;
+        await supabase.from('fin_lancamentos').insert([{
+            tipo: 'Receita', descricao: `Serviço Gráfico OSG-${String(osSelecionada.numero_op).padStart(4,'0')} - ${osSelecionada.cliente_nome}`,
+            valor: osSelecionada.valor_total, data_emissao: new Date().toISOString().split('T')[0],
+            data_vencimento: vencimento.toISOString().split('T')[0], status: 'Pendente', categoria_id: catReceitaId || null,
+            documento_origem: `OSG-${String(osSelecionada.numero_op).padStart(4,'0')}`, observacoes: `Condição: ${osSelecionada.condicao_pagamento}`
+        }]);
 
         await supabase.from('prd_ordens_producao').update({ status: 'Faturada' }).eq('id', osSelecionada.id);
-
-        alert("Serviço Faturado com sucesso! Título enviado para o Contas a Receber.");
+        alert("Serviço Faturado!");
         fetchOrdens(); setOsSelecionada(null);
-    } catch (e: any) {
-        alert("Erro ao faturar: " + e.message);
-    } finally {
-        setSalvandoOS(false);
-    }
+    } catch (e: any) { alert("Erro ao faturar: " + e.message); } finally { setSalvandoOS(false); }
   };
 
-  // Funções Auxiliares de Estimativa de Impressão
-  const eqPPM = 40; // Hardcoded fallback para estimativa, ideally vindo do equipamento
-  const tempoEstimado = Math.ceil(qtdImprimir / eqPPM); // Minutos
-  
-  // Mock de custos para os 4 cenários baseados na quantidade
+  // Estimativas de Impressão (Mock)
+  const eqPPM = 40;
+  const tempoEstimado = Math.ceil(qtdImprimir / eqPPM);
   const custoOriginalNovo = (qtdImprimir * 0.08).toFixed(2);
   const custoOriginalRecond = (qtdImprimir * 0.05).toFixed(2);
   const custoCompatNovo = (qtdImprimir * 0.04).toFixed(2);
   const custoCompatRecond = (qtdImprimir * 0.02).toFixed(2);
 
   const finalizarImpressao = () => {
-    if (!contadorFinal || Number(contadorFinal) < Number(contadorInicial)) {
-        return alert("Contador Final inválido.");
-    }
+    if (!contadorFinal || Number(contadorFinal) < Number(contadorInicial)) return alert("Contador Final inválido.");
     const diff = Number(contadorFinal) - Number(contadorInicial);
     
     if (diff === qtdImprimir) {
@@ -323,9 +321,8 @@ export default function Grafica() {
     } else {
         const desperdicio = diff - qtdImprimir;
         const porcentagem = ((desperdicio / qtdImprimir) * 100).toFixed(1);
-        alert(`ALERTA DE DESPERDÍCIO/ERRO:\n\nDiferença de Contadores: ${diff}\nQuantidade Demandada: ${qtdImprimir}\n\nDesperdício: ${desperdicio} páginas (${porcentagem}%)`);
+        alert(`ALERTA DE DESPERDÍCIO/ERRO:\n\nDiferença: ${diff}\nDemandada: ${qtdImprimir}\n\nDesperdício: ${desperdicio} páginas (${porcentagem}%)`);
     }
-    
     setStatusImpressao("concluido");
   };
 
@@ -341,27 +338,22 @@ export default function Grafica() {
         <datalist id="grafica-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>
         <datalist id="grafica-insumos">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
 
-        {/* CABEÇALHO E ABAS */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Layers className="w-6 h-6 text-purple-600" /> Produção Gráfica (Serviços)</h1>
             <p className="text-slate-500">Gestão de Ordens de Serviço Gráfico (OSG), insumos e faturamento.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button onClick={() => setAbaAtiva("painel")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-purple-700" : "text-slate-600"}`}><Printer className="w-4 h-4"/> Painel</button>
-            <button onClick={() => setAbaAtiva("abrir")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "abrir" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Plus className="w-4 h-4"/> Nova OS</button>
+            <button onClick={() => { setAbaAtiva("painel"); setOsSelecionada(null); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-purple-700" : "text-slate-600"}`}><Printer className="w-4 h-4"/> Painel</button>
+            <button onClick={() => { setAbaAtiva("abrir"); setOsSelecionada(null); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "abrir" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Plus className="w-4 h-4"/> Nova OS</button>
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* ABA: NOVA OS COMERCIAL */}
-        {/* ========================================================================= */}
         {abaAtiva === "abrir" && (
           <div className="bg-white p-8 rounded-xl border shadow-sm max-w-3xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="text-center border-b pb-6">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 text-purple-600 mb-3"><FileOutput className="w-6 h-6"/></div>
                 <h2 className="text-xl font-bold text-slate-800">Gerar Ordem de Serviço (OS)</h2>
-                <p className="text-slate-500 text-sm">Insira o serviço gráfico na fila de produção e defina a cobrança.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -371,20 +363,19 @@ export default function Grafica() {
               </div>
               <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-bold text-slate-700">Serviço a ser Realizado <span className="text-red-500">*</span></label>
-                  <Input value={descServico} onChange={e => setDescServico(e.target.value)} placeholder="Ex: Impressão de 500 Cartões Frente/Verso, 2 Banners Lona..." className="bg-slate-50" />
+                  <Input value={descServico} onChange={e => setDescServico(e.target.value)} placeholder="Ex: Impressão de 500 Cartões..." className="bg-slate-50" />
               </div>
               <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Quantidade Total <span className="text-red-500">*</span></label>
                   <Input type="number" min="1" value={qtdProduzir} onChange={e => setQtdProduzir(parseFloat(e.target.value)||1)} className="bg-slate-50 font-bold text-center" />
               </div>
               <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Data Prevista para Entrega <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-bold text-slate-700">Data Prevista <span className="text-red-500">*</span></label>
                   <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
               </div>
 
-              {/* OPÇÃO DE IMPRESSÃO */}
               <div className="space-y-2 md:col-span-2 bg-slate-50 p-3 rounded-md border border-slate-200">
-                  <label className="text-sm font-bold text-slate-700">Este serviço requer Impressão em Equipamento TC?</label>
+                  <label className="text-sm font-bold text-slate-700">Requer Impressão em Equipamento TC?</label>
                   <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
                       <SelectTrigger className="bg-white z-[99999]"><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-white z-[99999]">
@@ -394,7 +385,6 @@ export default function Grafica() {
                   </Select>
               </div>
 
-              {/* BLOCO COMERCIAL NOVO */}
               <div className="md:col-span-2 grid grid-cols-2 gap-5 bg-indigo-50 p-4 rounded-lg border border-indigo-100 mt-2">
                   <div className="space-y-2">
                       <label className="text-sm font-bold text-indigo-900">Valor Cobrado (R$)</label>
@@ -417,7 +407,7 @@ export default function Grafica() {
 
               <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-bold text-slate-700">Ficha Técnica e Acabamento</label>
-                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Ex: Refilar com 2mm de sangria, encadernação wire-o preto..."></textarea>
+                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Especificações..."></textarea>
               </div>
             </div>
 
@@ -427,13 +417,10 @@ export default function Grafica() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* ABA: PAINEL DE PRODUÇÃO */}
-        {/* ========================================================================= */}
         {abaAtiva === "painel" && !osSelecionada && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
-              <div className="relative w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaOS} onChange={e => setBuscaOS(e.target.value)} placeholder="Buscar OS, Cliente ou Serviço..." className="pl-9 bg-white" /></div>
+              <div className="relative w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaOS} onChange={e => setBuscaOS(e.target.value)} placeholder="Buscar OS..." className="pl-9 bg-white" /></div>
             </div>
             <div className="overflow-x-auto min-h-[400px]">
               <table className="w-full text-left border-collapse">
@@ -444,19 +431,18 @@ export default function Grafica() {
                     <th className="p-4 font-semibold border-b text-center">Entrega</th>
                     <th className="p-4 font-semibold border-b text-right">Valor Venda</th>
                     <th className="p-4 font-semibold border-b text-center">Status</th>
-                    <th className="p-4 font-semibold border-b text-center w-24">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {ordensFiltradas.length === 0 ? (
-                    <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhuma OS Gráfica na fila.</td></tr>
+                    <tr><td colSpan={5} className="p-12 text-center text-slate-500">Nenhuma OS encontrada.</td></tr>
                   ) : (
                     ordensFiltradas.map(os => {
                         const isFaturada = os.status === 'Faturada';
                         const corStatus = os.status === 'Fila de Impressão' ? 'bg-slate-100 text-slate-700' : os.status === 'Em Produção' ? 'bg-blue-100 text-blue-700' : os.status === 'Acabamento' ? 'bg-amber-100 text-amber-700' : os.status === 'Pronto para Entrega' ? 'bg-emerald-100 text-emerald-700' : isFaturada ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-green-100 text-green-800';
 
                         return (
-                        <tr key={os.id} className={`transition-colors cursor-pointer group ${isFaturada ? 'bg-slate-50 opacity-75' : 'hover:bg-slate-50'}`} onClick={() => abrirPrancheta(os)}>
+                        <tr key={os.id} className={`transition-colors cursor-pointer group hover:bg-slate-50`} onClick={() => abrirPrancheta(os)}>
                           <td className="p-4 text-center font-black text-purple-700 font-mono text-sm">OSG-{String(os.numero_op).padStart(4,'0')}</td>
                           <td className="p-4">
                               <p className="font-bold text-slate-800 text-sm leading-tight">{os.cliente_nome}</p>
@@ -465,12 +451,7 @@ export default function Grafica() {
                           <td className="p-4 text-center text-xs font-bold text-rose-600">{new Date(os.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
                           <td className="p-4 text-right font-bold text-emerald-600 text-sm">R$ {Number(os.valor_total || 0).toFixed(2).replace('.',',')}</td>
                           <td className="p-4 text-center">
-                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>
-                                  {isFaturada ? <><CheckCircle2 className="w-3 h-3 inline mr-1"/> Faturada</> : os.status}
-                              </span>
-                          </td>
-                          <td className="p-4 text-center">
-                              <Button variant="outline" size="sm" className="text-purple-600 border-purple-200 group-hover:bg-purple-50 h-8 text-xs">Abrir</Button>
+                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>{isFaturada ? 'Faturada' : os.status}</span>
                           </td>
                         </tr>
                       )
@@ -482,12 +463,8 @@ export default function Grafica() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* ABA: PRANCHETA DO IMPRESSOR */}
-        {/* ========================================================================= */}
         {abaAtiva === "painel" && osSelecionada && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
-            
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-purple-600">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
@@ -495,12 +472,9 @@ export default function Grafica() {
                         <h2 className="text-2xl font-black text-slate-800 uppercase">OSG-{String(osSelecionada.numero_op).padStart(4,'0')}</h2>
                         <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{osSelecionada.cliente_nome}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700 ml-12">
-                        <span className="font-bold flex items-center gap-1"><Printer className="w-4 h-4 text-slate-400"/> {osSelecionada.descricao_servico} (Qtd: {osSelecionada.quantidade_produzir})</span>
-                    </div>
                 </div>
                 {osSelecionada.status === 'Faturada' ? (
-                     <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Serviço Entregue e Faturado</div>
+                     <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Serviço Faturado</div>
                 ) : (
                     <div className="flex items-center gap-2">
                         <Select value={statusOS} onValueChange={setStatusOS}>
@@ -512,7 +486,7 @@ export default function Grafica() {
                 )}
             </div>
 
-            {/* PAINEL DE IMPRESSÃO INTELIGENTE (Exibido se a OS tiver tag de impressão e estiver em produção) */}
+            {/* PAINEL DE IMPRESSÃO */}
             {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm">
                     <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2"><Printer className="w-5 h-5"/> Painel de Produção & Apontamento</h3>
@@ -537,7 +511,7 @@ export default function Grafica() {
                                 <Select value={modoImpressao} onValueChange={setModoImpressao}>
                                     <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue/></SelectTrigger>
                                     <SelectContent className="bg-white z-[99999]">
-                                        <SelectItem value="Simplex">Simplex (Só Frente)</SelectItem>
+                                        <SelectItem value="Simplex">Simplex (Frente)</SelectItem>
                                         <SelectItem value="Duplex">Duplex (Frente/Verso)</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -549,14 +523,14 @@ export default function Grafica() {
                                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                         <div className="p-3 bg-slate-50 rounded border"><p className="text-[10px] uppercase font-bold text-slate-400">Tempo Estimado</p><p className="font-bold text-lg text-slate-700">{tempoEstimado} min</p></div>
                                         <div className="p-3 bg-emerald-50 rounded border border-emerald-100"><p className="text-[10px] uppercase font-bold text-emerald-600">Custo Orig. Novo</p><p className="font-bold text-lg text-emerald-700">R$ {custoOriginalNovo}</p></div>
-                                        <div className="p-3 bg-teal-50 rounded border border-teal-100"><p className="text-[10px] uppercase font-bold text-teal-600">Custo Orig. Recond.</p><p className="font-bold text-lg text-teal-700">R$ {custoOriginalRecond}</p></div>
-                                        <div className="p-3 bg-blue-50 rounded border border-blue-100"><p className="text-[10px] uppercase font-bold text-blue-600">Custo Comp. Novo</p><p className="font-bold text-lg text-blue-700">R$ {custoCompatNovo}</p></div>
-                                        <div className="p-3 bg-indigo-50 rounded border border-indigo-100"><p className="text-[10px] uppercase font-bold text-indigo-600">Custo Comp. Recond.</p><p className="font-bold text-lg text-indigo-700">R$ {custoCompatRecond}</p></div>
+                                        <div className="p-3 bg-teal-50 rounded border border-teal-100"><p className="text-[10px] uppercase font-bold text-teal-600">Orig. Recond.</p><p className="font-bold text-lg text-teal-700">R$ {custoOriginalRecond}</p></div>
+                                        <div className="p-3 bg-blue-50 rounded border border-blue-100"><p className="text-[10px] uppercase font-bold text-blue-600">Comp. Novo</p><p className="font-bold text-lg text-blue-700">R$ {custoCompatNovo}</p></div>
+                                        <div className="p-3 bg-indigo-50 rounded border border-indigo-100"><p className="text-[10px] uppercase font-bold text-indigo-600">Comp. Recond.</p><p className="font-bold text-lg text-indigo-700">R$ {custoCompatRecond}</p></div>
                                     </div>
                                     <div className="mt-4 flex gap-4 items-end">
                                         <div className="flex-1 space-y-2">
-                                            <label className="text-sm font-bold text-rose-600">Contador Atual (Inicial)</label>
-                                            <Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} placeholder="Digite o contador antes de imprimir" className="bg-white border-rose-300 font-bold" />
+                                            <label className="text-sm font-bold text-rose-600">Contador Inicial</label>
+                                            <Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} placeholder="Contador antes de imprimir" className="bg-white border-rose-300 font-bold" />
                                         </div>
                                         <Button onClick={() => setStatusImpressao("imprimindo")} disabled={!contadorInicial} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 px-8"><PlayCircle className="w-4 h-4 mr-2"/> Iniciar Impressão</Button>
                                     </div>
@@ -569,7 +543,6 @@ export default function Grafica() {
                         <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
                             <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
-                            <p className="text-slate-500">Imprimindo {qtdImprimir} páginas em modo {modoImpressao}.</p>
                             <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
                                 <label className="text-sm font-bold text-rose-600">Contador Final do Equipamento</label>
                                 <Input type="number" value={contadorFinal} onChange={e => setContadorFinal(e.target.value)} placeholder="Contador após conclusão..." className="font-bold border-rose-300" />
@@ -588,21 +561,7 @@ export default function Grafica() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* LADO ESQUERDO: INFOS, EDIÇÃO DE FICHA E ANEXOS */}
                 <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                            <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-1">Prazo Entrega</h4>
-                            <p className="text-lg font-black text-amber-900">{new Date(osSelecionada.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
-                        </div>
-                        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                            <h4 className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Valor Venda</h4>
-                            <p className="text-lg font-black text-emerald-900">R$ {Number(osSelecionada.valor_total || 0).toFixed(2).replace('.',',')}</p>
-                        </div>
-                    </div>
-
-                    {/* Ficha Técnica (Editável) */}
                     <div className="bg-slate-50 p-5 rounded-xl border shadow-sm border-slate-200">
                         <div className="flex justify-between items-center mb-3">
                             <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Scissors className="w-4 h-4 text-purple-500"/> Ficha Técnica</h4>
@@ -613,50 +572,18 @@ export default function Grafica() {
                             )}
                         </div>
                         {!editandoObs ? (
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{osSelecionada.observacoes || "Nenhuma observação cadastrada."}</p>
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{osSelecionada.observacoes || "Nenhuma observação."}</p>
                         ) : (
-                            <textarea value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="w-full min-h-[120px] p-3 text-sm rounded-md border border-slate-300 focus:ring-purple-500 outline-none" placeholder="Digite as especificações de sangria, acabamento, etc..."></textarea>
+                            <textarea value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="w-full min-h-[120px] p-3 text-sm rounded-md border outline-none"></textarea>
                         )}
-                    </div>
-
-                    {/* Anexos (Upload de Arquivos) */}
-                    <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
-                        <div className="flex justify-between items-center mb-4 border-b pb-2">
-                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
-                            
-                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                            <Button variant="outline" size="sm" disabled={uploading || osSelecionada.status === 'Faturada'} onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
-                                {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar Arte
-                            </Button>
-                        </div>
-                        
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-                            {anexos.length === 0 ? (
-                                <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado a esta OS.</p>
-                            ) : (
-                                anexos.map(anexo => (
-                                    <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
-                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded" title="Baixar / Visualizar"><Download className="w-3.5 h-3.5"/></a>
-                                            {osSelecionada.status !== 'Faturada' && (
-                                                <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded" title="Excluir Arquivo"><Trash2 className="w-3.5 h-3.5"/></button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
                     </div>
                 </div>
 
-                {/* LADO DIREITO: APONTAMENTO DE INSUMOS E FATURAMENTO */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                         <div className="p-4 border-b bg-purple-50 flex flex-wrap justify-between items-center gap-4">
                             <div>
-                                <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Matéria-Prima / Insumos Consumidos</h4>
-                                <p className="text-[10px] text-purple-700 mt-1">Aponte o que foi gasto nesta OS para calcular o custo do serviço.</p>
+                                <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Insumos Consumidos</h4>
                             </div>
                             {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') && (
                                 <div className="flex gap-2">
@@ -671,52 +598,40 @@ export default function Grafica() {
                                 <thead>
                                     <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b bg-white">
                                         <th className="p-3 font-medium">Insumo</th>
-                                        <th className="p-3 font-medium text-center">Qtd Gasta</th>
+                                        <th className="p-3 font-medium text-center">Qtd</th>
                                         <th className="p-3 font-medium text-right">Custo Un.</th>
-                                        <th className="p-3 font-medium text-right">Custo Total</th>
-                                        {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') && <th className="p-3"></th>}
+                                        <th className="p-3 font-medium text-right">Total</th>
+                                        <th className="p-3"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {insumos.length === 0 ? (
-                                        <tr><td colSpan={5} className="p-8 text-center text-xs text-slate-400 font-medium">Nenhum insumo apontado. O custo deste serviço está zerado.</td></tr>
-                                    ) : (
-                                        insumos.map((ins, idx) => (
-                                            <tr key={ins.id} className="bg-white hover:bg-slate-50">
-                                                <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
-                                                <td className="p-3 text-center">
-                                                    <Input type="number" step="0.0001" min="0" disabled={osSelecionada.status === 'Pronto para Entrega' || osSelecionada.status === 'Faturada'} value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200 focus-visible:ring-purple-500"/>
-                                                </td>
-                                                <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
-                                                <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
-                                                {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') && (
-                                                    <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
-                                                )}
-                                            </tr>
-                                        ))
-                                    )}
+                                    {insumos.map((ins, idx) => (
+                                        <tr key={ins.id} className="bg-white hover:bg-slate-50">
+                                            <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
+                                            <td className="p-3 text-center">
+                                                <Input type="number" step="0.0001" min="0" disabled={osSelecionada.status === 'Pronto para Entrega' || osSelecionada.status === 'Faturada'} value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200"/>
+                                            </td>
+                                            <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
+                                            <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
+                                            <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                         
-                        {/* RODAPÉ E BOTÕES DE AÇÃO PRINCIPAL */}
                         <div className="bg-slate-800 p-5 text-white flex flex-col md:flex-row justify-between items-center gap-4">
                             <div className="flex gap-8 w-full md:w-auto">
                                 <div>
                                     <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Prod.</p>
                                     <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
                                 </div>
-                                <div className="border-l border-slate-600 pl-8">
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3"/> Venda</p>
-                                    <p className="text-2xl font-black text-emerald-400">R$ {Number(osSelecionada.valor_total || 0).toFixed(2).replace('.',',')}</p>
-                                </div>
                             </div>
-                            
                             <div className="w-full md:w-auto">
                                 {(osSelecionada.status !== 'Pronto para Entrega' && osSelecionada.status !== 'Faturada') ? (
-                                    <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS e Baixar Estoque</Button>
+                                    <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS</Button>
                                 ) : osSelecionada.status === 'Pronto para Entrega' ? (
-                                    <Button onClick={faturarServico} disabled={salvandoOS} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 px-6 gap-2 shadow-md animate-pulse duration-2000"><Landmark className="w-5 h-5"/> Faturar e Gerar Receita</Button>
+                                    <Button onClick={faturarServico} disabled={salvandoOS} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 px-6 gap-2 shadow-md animate-pulse duration-2000"><Landmark className="w-5 h-5"/> Faturar</Button>
                                 ) : (
                                     <div className="bg-white/10 text-emerald-300 font-bold px-6 py-3 rounded-lg border border-emerald-500/30 flex items-center justify-center gap-2"><CheckCircle2 className="w-5 h-5"/> Faturada</div>
                                 )}
@@ -727,7 +642,6 @@ export default function Grafica() {
             </div>
           </div>
         )}
-
       </div>
     </AppLayout>
   );
