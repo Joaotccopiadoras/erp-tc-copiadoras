@@ -7,14 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Briefcase, CheckCircle, Fingerprint, Lock, Settings, Shield,
   ShieldAlert, Trash2, User, UserPlus, Landmark, Tags, MapPin,
-  Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness, Wrench
+  Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness, Wrench, Printer
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 
 export default function ConfiguracoesPage() {
-  const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "contas" | "transacoes" | "centros" | "segmentos" | "formas" | "locais" | "tecnicos">("seguranca");
+  const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "contas" | "transacoes" | "centros" | "segmentos" | "formas" | "locais" | "tecnicos" | "operadores">("seguranca");
   const { toast } = useToast();
 
   // ==========================================
@@ -50,6 +50,16 @@ export default function ConfiguracoesPage() {
     data_admissao: "", tipo_cnh: "Nenhuma", valor_hora: "", usuario_id: "nenhum"
   });
 
+  // ==========================================
+  // ESTADOS DA ABA: GESTÃO DE OPERADORES GRÁFICOS
+  // ==========================================
+  const [operadoresBD, setOperadoresBD] = useState<any[]>([]);
+  const [mostrarFormOperador, setMostrarFormOperador] = useState(false);
+  const [formOperador, setFormOperador] = useState({
+    nome: "", cpf: "", idade: "", endereco: "",
+    data_admissao: "", valor_hora: "", login_vinculado: "nenhum"
+  });
+
   useEffect(() => { verificarAcessoAdmin(); }, []);
 
   useEffect(() => {
@@ -58,6 +68,9 @@ export default function ConfiguracoesPage() {
     } else if (abaAtiva === "tecnicos") {
         fetchTecnicos();
         limparFormTecnico();
+    } else if (abaAtiva === "operadores") {
+        fetchOperadores();
+        limparFormOperador();
     } else {
         fetchDadosAuxiliares();
         limparFormularioAuxiliar();
@@ -84,6 +97,27 @@ export default function ConfiguracoesPage() {
       sessionStorage.setItem("tecnicos_rascunho", JSON.stringify({ formTecnico, mostrarFormTecnico, editandoAuxiliarId }));
     }
   }, [formTecnico, mostrarFormTecnico, editandoAuxiliarId]);
+
+  // ==========================================
+  // AUTO-SAVE: OPERADORES
+  // ==========================================
+  useEffect(() => {
+    const rascunhoOp = sessionStorage.getItem("operadores_rascunho");
+    if (rascunhoOp) {
+      try {
+        const draft = JSON.parse(rascunhoOp);
+        if (draft.formOperador) setFormOperador(draft.formOperador);
+        if (draft.mostrarFormOperador !== undefined) setMostrarFormOperador(draft.mostrarFormOperador);
+        if (draft.editandoAuxiliarId !== undefined) setEditandoAuxiliarId(draft.editandoAuxiliarId);
+      } catch(e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mostrarFormOperador || formOperador.nome) {
+      sessionStorage.setItem("operadores_rascunho", JSON.stringify({ formOperador, mostrarFormOperador, editandoAuxiliarId }));
+    }
+  }, [formOperador, mostrarFormOperador, editandoAuxiliarId]);
 
   // ==========================================
   // LÓGICA: SEGURANÇA
@@ -232,7 +266,7 @@ export default function ConfiguracoesPage() {
     setFormTecnico({
       nome: t.nome || "", cpf: t.cpf || "", idade: t.idade ? String(t.idade) : "", endereco: t.endereco || "",
       formacao: t.formacao || "", data_admissao: t.data_admissao || "", 
-      tipo_cnh: t.tipo_cnh || "Nenhuma", // Mapeia null de volta para a opção visual "Nenhuma"
+      tipo_cnh: t.tipo_cnh || "Nenhuma", 
       valor_hora: t.valor_hora ? String(t.valor_hora) : "",
       usuario_id: t.usuario_id || "nenhum"
     });
@@ -250,13 +284,12 @@ export default function ConfiguracoesPage() {
         endereco: formTecnico.endereco.trim() || null,
         formacao: formTecnico.formacao.trim() || null,
         data_admissao: formTecnico.data_admissao || null,
-        // Impede que a palavra "Nenhuma" fure o limite de VARCHAR(5) do banco de dados
         tipo_cnh: formTecnico.tipo_cnh === "Nenhuma" ? null : (formTecnico.tipo_cnh || null),
         valor_hora: formTecnico.valor_hora ? parseFloat(formTecnico.valor_hora.replace(',', '.')) : null,
         usuario_id: formTecnico.usuario_id === "nenhum" ? null : formTecnico.usuario_id
       };
 
-      if (editandoAuxiliarId) {
+      if (editandoAuxiliarId && abaAtiva === "tecnicos") {
         const { error } = await supabase.from("srv_tecnicos").update(payload).eq("id", editandoAuxiliarId);
         if (error) throw error; 
       } else {
@@ -277,6 +310,75 @@ export default function ConfiguracoesPage() {
     } catch (error: any) { alert("Erro ao excluir.\n" + error.message); }
   };
 
+  // ==========================================
+  // LÓGICA: GESTÃO DE OPERADORES GRÁFICOS
+  // ==========================================
+  const fetchOperadores = async () => {
+    setCarregandoAuxiliares(true);
+    try {
+      const [opRes, userRes] = await Promise.all([
+        supabase.from("grafica_operadores").select("*").order("nome"),
+        supabase.from("permissoes").select("id, nome, email").order("nome")
+      ]);
+      if (opRes.error) throw opRes.error;
+      setOperadoresBD(opRes.data || []);
+      if (userRes.data) setPermissoes(userRes.data);
+    } catch (error: any) { alert("Erro ao carregar operadores: " + error.message); } 
+    finally { setCarregandoAuxiliares(false); }
+  };
+
+  const limparFormOperador = () => {
+    sessionStorage.removeItem("operadores_rascunho");
+    setMostrarFormOperador(false); setEditandoAuxiliarId(null);
+    setFormOperador({ nome: "", cpf: "", idade: "", endereco: "", data_admissao: "", valor_hora: "", login_vinculado: "nenhum" });
+  };
+
+  const editarOperador = (op: any) => {
+    setEditandoAuxiliarId(op.id);
+    setFormOperador({
+      nome: op.nome || "", cpf: op.cpf || "", idade: op.idade ? String(op.idade) : "", endereco: op.endereco || "",
+      data_admissao: op.data_admissao || "", 
+      valor_hora: op.valor_hora ? String(op.valor_hora) : "",
+      login_vinculado: op.login_vinculado || "nenhum"
+    });
+    setMostrarFormOperador(true);
+  };
+
+  const salvarOperador = async () => {
+    if (!formOperador.nome.trim()) return alert("O Nome do Operador é obrigatório!");
+    setSalvandoAuxiliar(true);
+    try {
+      const payload = {
+        nome: formOperador.nome.trim(),
+        cpf: formOperador.cpf.trim() || null,
+        idade: formOperador.idade ? parseInt(formOperador.idade) : null,
+        endereco: formOperador.endereco.trim() || null,
+        data_admissao: formOperador.data_admissao || null,
+        valor_hora: formOperador.valor_hora ? parseFloat(formOperador.valor_hora.replace(',', '.')) : null,
+        login_vinculado: formOperador.login_vinculado === "nenhum" ? null : formOperador.login_vinculado
+      };
+
+      if (editandoAuxiliarId && abaAtiva === "operadores") {
+        const { error } = await supabase.from("grafica_operadores").update(payload).eq("id", editandoAuxiliarId);
+        if (error) throw error; 
+      } else {
+        const { error } = await supabase.from("grafica_operadores").insert([payload]);
+        if (error) throw error;
+      }
+      toast({ title: "Sucesso", description: "Ficha do operador salva com sucesso!" });
+      limparFormOperador(); fetchOperadores();
+    } catch (error: any) { alert("Erro ao salvar operador: " + error.message); } 
+    finally { setSalvandoAuxiliar(false); }
+  };
+
+  const excluirOperador = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este operador da base de dados?")) return;
+    try {
+      await supabase.from("grafica_operadores").delete().eq("id", id);
+      toast({ title: "Excluído", description: "Operador removido com sucesso." }); fetchOperadores();
+    } catch (error: any) { alert("Erro ao excluir.\n" + error.message); }
+  };
+
 
   if (isCurrentUserAdmin === false) {
     return (
@@ -290,10 +392,10 @@ export default function ConfiguracoesPage() {
     );
   }
 
-  const tituloTabelaAtual = {
+  const tituloTabelaAtual: Record<string, string> = {
       contas: "Contas Bancárias", transacoes: "Transações Financeiras", centros: "Centros de Custo",
       segmentos: "Segmentos de Negócio", formas: "Formas de Pagamento", locais: "Locais de Estoque",
-      tecnicos: "Técnicos (Assistência Técnica)"
+      tecnicos: "Técnicos (Assistência Técnica)", operadores: "Operadores Gráficos"
   };
 
   return (
@@ -314,6 +416,7 @@ export default function ConfiguracoesPage() {
 
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2 mt-4 mb-1">Equipe e Operação</h3>
             <button onClick={() => setAbaAtiva("tecnicos")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "tecnicos" ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}><Wrench className="w-4 h-4 mr-3" /> Gestão de Técnicos</button>
+            <button onClick={() => setAbaAtiva("operadores")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "operadores" ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}><Printer className="w-4 h-4 mr-3" /> Operadores Gráficos</button>
 
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2 mt-4 mb-1">Tabelas Financeiras</h3>
             <button onClick={() => setAbaAtiva("contas")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "contas" ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}><Landmark className="w-4 h-4 mr-3" /> Contas Bancárias</button>
@@ -428,7 +531,7 @@ export default function ConfiguracoesPage() {
             )}
 
             {/* ABA: TABELAS AUXILIARES */}
-            {abaAtiva !== "seguranca" && abaAtiva !== "tecnicos" && (
+            {abaAtiva !== "seguranca" && abaAtiva !== "tecnicos" && abaAtiva !== "operadores" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                     <h2 className="font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide text-sm">Gerenciar {tituloTabelaAtual[abaAtiva]}</h2>
@@ -507,7 +610,7 @@ export default function ConfiguracoesPage() {
                 </div>
             )}
 
-            {/* ABA: TÉCNICOS (NOVA) */}
+            {/* ABA: TÉCNICOS */}
             {abaAtiva === "tecnicos" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
@@ -615,6 +718,113 @@ export default function ConfiguracoesPage() {
                                 </td>
                             </tr>
                             ))
+                        )}
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ABA: OPERADORES GRÁFICOS (NOVA) */}
+            {abaAtiva === "operadores" && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+                        <h2 className="font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide text-sm">Gerenciar Operadores Gráficos</h2>
+                        <Button onClick={() => { limparFormOperador(); setMostrarFormOperador(true); }} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-9 shadow-sm"><Plus className="w-4 h-4" /> Novo Operador</Button>
+                    </div>
+
+                    {/* FORMULÁRIO OPERADOR */}
+                    {mostrarFormOperador && (
+                    <div className="p-6 bg-blue-50/40 border-b border-blue-100 space-y-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-blue-900">{editandoAuxiliarId ? "Editar Ficha do Operador" : "Cadastrar Novo Operador"}</h3>
+                            <Button variant="ghost" size="sm" onClick={limparFormOperador} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-4 h-4"/></Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Nome Completo *</label>
+                                <Input value={formOperador.nome} onChange={(e) => setFormOperador({...formOperador, nome: e.target.value})} placeholder="Nome do operador" className="bg-white border-blue-200" />
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">CPF</label>
+                                <Input value={formOperador.cpf} onChange={(e) => setFormOperador({...formOperador, cpf: e.target.value})} placeholder="000.000.000-00" className="bg-white border-blue-200" />
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Idade</label>
+                                <Input type="number" value={formOperador.idade} onChange={(e) => setFormOperador({...formOperador, idade: e.target.value})} className="bg-white border-blue-200" />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-4">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Endereço Completo</label>
+                                <Input value={formOperador.endereco} onChange={(e) => setFormOperador({...formOperador, endereco: e.target.value})} placeholder="Rua, Número, Bairro..." className="bg-white border-blue-200" />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Data de Admissão</label>
+                                <Input type="date" value={formOperador.data_admissao} onChange={(e) => setFormOperador({...formOperador, data_admissao: e.target.value})} className="bg-white border-blue-200" />
+                            </div>
+                            <div className="space-y-2 md:col-span-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Valor Hora (R$)</label>
+                                <Input value={formOperador.valor_hora} onChange={(e) => setFormOperador({...formOperador, valor_hora: e.target.value})} placeholder="Ex: 50,00" className="bg-white border-blue-200" />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase" title="Opcional: vincule esta ficha técnica a um login do sistema.">Login (Sistema)</label>
+                                <Select value={formOperador.login_vinculado} onValueChange={v => setFormOperador({...formOperador, login_vinculado: v})}>
+                                    <SelectTrigger className="bg-white border-blue-200"><SelectValue placeholder="Sem login"/></SelectTrigger>
+                                    <SelectContent className="bg-white z-[99999] max-h-60 overflow-y-auto">
+                                        <SelectItem value="nenhum">Sem login</SelectItem>
+                                        {permissoes.map(p => <SelectItem key={p.id} value={p.id}>{p.nome || p.email}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="flex justify-end pt-2 border-t border-blue-100 mt-4">
+                            <Button onClick={salvarOperador} disabled={salvandoAuxiliar} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">{salvandoAuxiliar ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} Salvar Ficha do Operador</Button>
+                        </div>
+                    </div>
+                    )}
+
+                    {/* TABELA DE OPERADORES */}
+                    <div className="overflow-x-auto min-h-[300px]">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                        <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider border-b border-slate-200">
+                            <th className="p-4 font-semibold">Nome do Operador</th>
+                            <th className="p-4 font-semibold text-center">Data Admissão</th>
+                            <th className="p-4 font-semibold text-center">Valor Hora</th>
+                            <th className="p-4 font-semibold text-center w-24 border-l border-slate-200">Ações</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                        {carregandoAuxiliares ? (
+                            <tr><td colSpan={4} className="p-12 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
+                        ) : operadoresBD.length === 0 ? (
+                            <tr><td colSpan={4} className="p-12 text-center text-slate-500">Nenhum operador cadastrado.</td></tr>
+                        ) : (
+                            operadoresBD.map((item) => {
+                                const vinculado = permissoes.find(p => p.id === item.login_vinculado);
+                                return (
+                                <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
+                                    <td className="p-4">
+                                        <p className="font-semibold text-slate-800 text-sm">{item.nome}</p>
+                                        <p className="text-xs text-slate-400 font-medium mt-0.5">{vinculado ? `Login: ${vinculado.nome || vinculado.email}` : 'Sem acesso ao sistema'}</p>
+                                    </td>
+                                    <td className="p-4 text-center text-xs text-slate-600 font-medium">
+                                        {item.data_admissao ? new Date(item.data_admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}
+                                    </td>
+                                    <td className="p-4 text-center text-xs text-emerald-600 font-bold">
+                                        {item.valor_hora ? `R$ ${Number(item.valor_hora).toFixed(2).replace('.', ',')}` : '-'}
+                                    </td>
+                                    <td className="p-4 text-center border-l border-slate-100">
+                                    <div className="flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="icon" onClick={() => editarOperador(item)} className="h-8 w-8 text-slate-400 hover:text-blue-600"><Edit className="w-4 h-4"/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => excluirOperador(item.id)} className="h-8 w-8 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></Button>
+                                    </div>
+                                    </td>
+                                </tr>
+                                )
+                            })
                         )}
                         </tbody>
                     </table>
