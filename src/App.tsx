@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client"
+import { AuthProvider } from "@/contexts/AuthContext";
 import PortalPage from "./pages/PortalPage";
 import Login from "./pages/Login";
 import Configuracoes from "./pages/Configuracoes";
@@ -70,9 +71,9 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Joga direto pro login */}
           <Route 
             path="/"
             element={
@@ -130,6 +131,7 @@ export default function App() {
           } />
         </Routes>
       </BrowserRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
