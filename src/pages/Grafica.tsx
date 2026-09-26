@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays } from "lucide-react";
+import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
@@ -29,19 +29,24 @@ export default function Grafica() {
   // DADOS BASE
   const [produtosBD, setProdutosBD] = useState<any[]>([]);
   const [clientesBD, setClientesBD] = useState<any[]>([]);
-  const [catReceitaId, setCatReceitaId] = useState("");
+  const [operadoresBD, setOperadoresBD] = useState<any[]>([]);
   const [equipamentosTC, setEquipamentosTC] = useState<any[]>([]);
 
   // ESTADOS: ABRIR ORDEM DE SERVIÇO (OS)
   const [clienteBusca, setClienteBusca] = useState("");
   const [solicitante, setSolicitante] = useState("");
   const [dataSolicitacao, setDataSolicitacao] = useState(new Date().toISOString().split('T')[0]);
+  const [operadorNome, setOperadorNome] = useState("");
   const [descServico, setDescServico] = useState("");
   const [qtdProduzir, setQtdProduzir] = useState(1);
   const [dataPrevista, setDataPrevista] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [possuiImpressao, setPossuiImpressao] = useState("Não");
   
+  // NOVOS CAMPOS NA ABERTURA DA OS
+  const [paginasPorProdutoOS, setPaginasPorProdutoOS] = useState(1);
+  const [valorUnitarioPaginaOS, setValorUnitarioPaginaOS] = useState("");
+
   const [salvandoOS, setSalvandoOS] = useState(false);
 
   // ESTADOS: PAINEL DE PRODUÇÃO
@@ -83,11 +88,14 @@ export default function Grafica() {
         if (draft.clienteBusca) setClienteBusca(draft.clienteBusca);
         if (draft.solicitante) setSolicitante(draft.solicitante);
         if (draft.dataSolicitacao) setDataSolicitacao(draft.dataSolicitacao);
+        if (draft.operadorNome) setOperadorNome(draft.operadorNome);
         if (draft.descServico) setDescServico(draft.descServico);
         if (draft.qtdProduzir) setQtdProduzir(draft.qtdProduzir);
         if (draft.dataPrevista) setDataPrevista(draft.dataPrevista);
         if (draft.observacoes) setObservacoes(draft.observacoes);
         if (draft.possuiImpressao) setPossuiImpressao(draft.possuiImpressao);
+        if (draft.paginasPorProdutoOS) setPaginasPorProdutoOS(draft.paginasPorProdutoOS);
+        if (draft.valorUnitarioPaginaOS) setValorUnitarioPaginaOS(draft.valorUnitarioPaginaOS);
         
         if (draft.osSelecionada !== undefined) setOsSelecionada(draft.osSelecionada);
         if (draft.statusOS) setStatusOS(draft.statusOS);
@@ -100,12 +108,12 @@ export default function Grafica() {
 
   useEffect(() => {
     const draft = { 
-        abaAtiva, clienteBusca, solicitante, dataSolicitacao, descServico, qtdProduzir, dataPrevista, observacoes, possuiImpressao,
+        abaAtiva, clienteBusca, solicitante, dataSolicitacao, operadorNome, descServico, qtdProduzir, dataPrevista, observacoes, possuiImpressao, paginasPorProdutoOS, valorUnitarioPaginaOS,
         osSelecionada, statusOS, insumos, editandoObs, obsTemp
     };
     sessionStorage.setItem("grafica_rascunho", JSON.stringify(draft));
   }, [
-      abaAtiva, clienteBusca, solicitante, dataSolicitacao, descServico, qtdProduzir, dataPrevista, observacoes, possuiImpressao,
+      abaAtiva, clienteBusca, solicitante, dataSolicitacao, operadorNome, descServico, qtdProduzir, dataPrevista, observacoes, possuiImpressao, paginasPorProdutoOS, valorUnitarioPaginaOS,
       osSelecionada, statusOS, insumos, editandoObs, obsTemp
   ]);
 
@@ -115,16 +123,16 @@ export default function Grafica() {
   }, [abaAtiva]);
 
   const fetchDadosBase = async () => {
-    const [prodRes, cliRes, catRes, eqRes] = await Promise.all([
+    const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia'),
-      supabase.from('fin_categorias').select('id').eq('tipo', 'Receita').limit(1).single(),
+      supabase.from('grafica_operadores').select('id, nome').order('nome'),
       supabase.from('srv_equipamentos').select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
-    if (catRes.data) setCatReceitaId(catRes.data.id);
+    if (opRes.data) setOperadoresBD(opRes.data);
     if (eqRes.data) {
         const tcEquips = eqRes.data.filter((e: any) => {
             const nomeCli = (e.log_clientes?.nome_fantasia || "").toUpperCase();
@@ -142,8 +150,12 @@ export default function Grafica() {
 
   // --- ABRIR OS ---
   const criarOS = async () => {
-    if (!clienteBusca || !solicitante || !dataSolicitacao || !descServico || !dataPrevista) {
-        return alert("Cliente, Solicitante, Data de Solicitação, Serviço e Data Prevista são obrigatórios.");
+    if (!clienteBusca || !solicitante || !dataSolicitacao || !operadorNome || !descServico || !dataPrevista) {
+        return alert("Cliente, Solicitante, Operador, Serviço e Datas são obrigatórios.");
+    }
+
+    if (possuiImpressao === "Sim" && (!paginasPorProdutoOS || !valorUnitarioPaginaOS)) {
+        return alert("Para serviços com impressão, informe a quantidade de páginas por produto e o valor unitário.");
     }
     
     setSalvandoOS(true);
@@ -152,9 +164,12 @@ export default function Grafica() {
         cliente_nome: clienteBusca,
         solicitante: solicitante,
         data_solicitacao: dataSolicitacao,
+        operador_nome: operadorNome,
         descricao_servico: descServico,
         quantidade_produzir: qtdProduzir,
         data_prevista: dataPrevista,
+        paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
+        valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
         status: 'Fila de Impressão',
         observacoes: `[Possui Impressão: ${possuiImpressao}]\n${observacoes}`,
         historico_producao: []
@@ -164,7 +179,8 @@ export default function Grafica() {
       if (error) throw error;
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
-      setClienteBusca(""); setSolicitante(""); setDataSolicitacao(new Date().toISOString().split('T')[0]); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setPossuiImpressao("Não");
+      sessionStorage.removeItem("grafica_rascunho");
+      setClienteBusca(""); setSolicitante(""); setDataSolicitacao(new Date().toISOString().split('T')[0]); setOperadorNome(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setPossuiImpressao("Não"); setPaginasPorProdutoOS(1); setValorUnitarioPaginaOS("");
       setAbaAtiva("painel");
     } catch (e: any) { alert("Erro ao criar OS: " + e.message); } finally { setSalvandoOS(false); }
   };
@@ -200,8 +216,9 @@ export default function Grafica() {
         setContadorFinal("");
         setEquipImpressaoId("");
         setQtdImprimirServico(pendente || os.quantidade_produzir);
-        setPaginasPorProduto(1);
-        setValorUnitarioPagina("");
+        // Carrega automaticamente os valores definidos na abertura da OS
+        setPaginasPorProduto(os.paginas_por_produto || 1);
+        setValorUnitarioPagina(os.valor_unitario_pagina ? os.valor_unitario_pagina.toString() : "");
     }
 
     const [insumosRes, anexosRes] = await Promise.all([
@@ -391,8 +408,6 @@ export default function Grafica() {
         setContadorInicial("");
         setContadorFinal("");
         setQtdImprimirServico(Math.max(0, osSelecionada.quantidade_produzir - totalProduzidoAgora));
-        setPaginasPorProduto(1);
-        setValorUnitarioPagina("");
     } catch (e: any) {
         alert("Erro ao salvar histórico de produção: " + e.message);
     }
@@ -422,6 +437,7 @@ export default function Grafica() {
     <AppLayout>
       <div className="space-y-6 max-w-6xl mx-auto mb-12">
         <datalist id="grafica-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>
+        <datalist id="grafica-operadores">{operadoresBD.map((op) => <option key={op.id} value={op.nome} />)}</datalist>
         <datalist id="grafica-insumos">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
 
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
@@ -449,7 +465,6 @@ export default function Grafica() {
                   <Input list="grafica-clientes" value={clienteBusca} onChange={e => setClienteBusca(e.target.value)} placeholder="Nome do cliente ou empresa..." className="bg-slate-50" />
               </div>
               
-              {/* NOVOS CAMPOS: Solicitante e Data */}
               <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><User className="w-4 h-4 text-slate-400"/> Nome do Solicitante <span className="text-red-500">*</span></label>
                   <Input value={solicitante} onChange={e => setSolicitante(e.target.value)} placeholder="Ex: Tais Santos" className="bg-slate-50" />
@@ -457,6 +472,11 @@ export default function Grafica() {
               <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400"/> Data da Solicitação <span className="text-red-500">*</span></label>
                   <Input type="date" value={dataSolicitacao} onChange={e => setDataSolicitacao(e.target.value)} className="bg-slate-50" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2 pt-2 border-t border-slate-100">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><UserCheck className="w-4 h-4 text-indigo-500"/> Operador Gráfico Responsável <span className="text-red-500">*</span></label>
+                  <Input list="grafica-operadores" value={operadorNome} onChange={e => setOperadorNome(e.target.value)} placeholder="Selecione ou digite o nome do operador..." className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium" />
               </div>
 
               <div className="space-y-2 md:col-span-2 mt-2 pt-4 border-t border-slate-100">
@@ -472,15 +492,36 @@ export default function Grafica() {
                   <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
               </div>
 
-              <div className="space-y-2 md:col-span-2 bg-slate-50 p-3 rounded-md border border-slate-200">
-                  <label className="text-sm font-bold text-slate-700">Requer Impressão em Equipamento TC?</label>
-                  <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
-                      <SelectTrigger className="bg-white z-[99999]"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-white z-[99999]">
-                          <SelectItem value="Sim">Sim, exigirá apontamento de contadores</SelectItem>
-                          <SelectItem value="Não">Não, apenas acabamento/outros</SelectItem>
-                      </SelectContent>
-                  </Select>
+              <div className="space-y-4 md:col-span-2 bg-slate-50 p-4 rounded-md border border-slate-200">
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">Requer Impressão em Equipamento TC?</label>
+                      <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
+                          <SelectTrigger className="bg-white z-[99999] border-slate-300"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white z-[99999]">
+                              <SelectItem value="Sim">Sim, exigirá apontamento de contadores</SelectItem>
+                              <SelectItem value="Não">Não, apenas acabamento/outros</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  
+                  {/* NOVOS CAMPOS EXIGIDOS NA ABERTURA SE HOUVER IMPRESSÃO */}
+                  {possuiImpressao === "Sim" && (
+                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 animate-in slide-in-from-top-2">
+                          <div className="space-y-2">
+                              <label className="text-sm font-bold text-blue-800">Qtd de Páginas por Produto <span className="text-red-500">*</span></label>
+                              <Input type="number" min="1" value={paginasPorProdutoOS} onChange={e => setPaginasPorProdutoOS(Number(e.target.value))} placeholder="Ex: 50" className="bg-white border-blue-200" />
+                          </div>
+                          <div className="space-y-2">
+                              <label className="text-sm font-bold text-blue-800">Valor Unitário da Pág (R$) <span className="text-red-500">*</span></label>
+                              <Input type="number" step="0.01" value={valorUnitarioPaginaOS} onChange={e => setValorUnitarioPaginaOS(e.target.value)} placeholder="0.00" className="bg-white border-blue-200" />
+                          </div>
+                      </div>
+                  )}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-bold text-slate-700">Ficha Técnica e Acabamento</label>
+                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Especificações..."></textarea>
               </div>
             </div>
 
@@ -518,8 +559,7 @@ export default function Grafica() {
                           <td className="p-4 text-center font-black text-purple-700 font-mono text-sm">OSG-{String(os.numero_op).padStart(4,'0')}</td>
                           <td className="p-4">
                               <p className="font-bold text-slate-800 text-sm leading-tight">{os.cliente_nome}</p>
-                              {/* EXIBIÇÃO DO SOLICITANTE */}
-                              <p className="text-[10px] text-slate-500 uppercase mt-0.5">Solicitante: <span className="font-bold text-slate-600">{os.solicitante || 'Não informado'}</span></p>
+                              <p className="text-[10px] text-slate-500 mt-0.5"><span className="uppercase">Solicitante:</span> <span className="font-bold text-slate-600">{os.solicitante || 'Não informado'}</span> | <span className="uppercase">Operador:</span> <span className="font-bold text-indigo-600">{os.operador_nome || 'Não atribuído'}</span></p>
                               <p className="text-xs text-slate-500 mt-1 line-clamp-1">{os.descricao_servico} <span className="font-semibold">(Qtd Serviço: {os.quantidade_produzir})</span></p>
                           </td>
                           <td className="p-4 text-center text-xs font-bold text-rose-600">{new Date(os.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
@@ -545,10 +585,10 @@ export default function Grafica() {
                         <h2 className="text-2xl font-black text-slate-800 uppercase">OSG-{String(osSelecionada.numero_op).padStart(4,'0')}</h2>
                         <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{osSelecionada.cliente_nome}</span>
                     </div>
-                    {/* INFORMAÇÕES DE SOLICITAÇÃO NA PRANCHETA */}
                     <div className="ml-12 mt-1 flex flex-wrap gap-4 text-xs font-medium text-slate-500">
                         <span className="flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400"/> Por: {osSelecionada.solicitante || 'Não informado'}</span>
                         {osSelecionada.data_solicitacao && <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5 text-slate-400"/> Em: {new Date(osSelecionada.data_solicitacao).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>}
+                        <span className="flex items-center gap-1 text-indigo-600"><UserCheck className="w-3.5 h-3.5 text-indigo-400"/> Operador: {osSelecionada.operador_nome || 'N/A'}</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -580,7 +620,6 @@ export default function Grafica() {
                         </div>
                     </div>
 
-                    {/* HISTÓRICO DE PRODUÇÃO DA OS */}
                     {historicoProducao.length > 0 && (
                         <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
                             <div className="p-3 bg-slate-50 border-b text-xs font-bold text-slate-600 uppercase flex items-center gap-2">
@@ -619,7 +658,6 @@ export default function Grafica() {
                         </div>
                     )}
                     
-                    {/* NOVO APONTAMENTO / OU RETORNO DE APONTAMENTO PENDENTE */}
                     {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="md:col-span-2 space-y-2">
