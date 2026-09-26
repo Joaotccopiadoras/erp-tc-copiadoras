@@ -273,7 +273,7 @@ export default function Grafica() {
             <p className="text-slate-500">Gestão de Ordens de Serviço Gráfico (OSG), insumos e faturamento.</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button onClick={() => setAbaAtiva("painel")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-purple-700" : "text-slate-600"}`}><Printer className="w-4 h-4"/> Chão de Fábrica</button>
+            <button onClick={() => setAbaAtiva("painel")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-purple-700" : "text-slate-600"}`}><Printer className="w-4 h-4"/> Painel</button>
             <button onClick={() => setAbaAtiva("abrir")} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "abrir" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Plus className="w-4 h-4"/> Nova OS</button>
           </div>
         </div>
@@ -335,7 +335,7 @@ export default function Grafica() {
             </div>
 
             <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
-                {salvandoOS ? "Gerando..." : "Enviar para Chão de Fábrica"}
+                {salvandoOS ? "Gerando..." : "Enviar para Painel"}
             </Button>
           </div>
         )}
