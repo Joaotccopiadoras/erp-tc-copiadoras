@@ -7,7 +7,19 @@ import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLef
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
-type ApontamentoProducao = { id: string; data: string; equipamentoId: string; equipamentoNome: string; modo: string; qtdSolicitada: number; contadorInicial: number; contadorFinal: number; producaoValida: number; desperdicio: number };
+type ApontamentoProducao = { 
+    id: string; 
+    data: string; 
+    equipamentoId: string; 
+    equipamentoNome: string; 
+    modo: string; 
+    qtdSolicitada: number; 
+    contadorInicial: number; 
+    contadorFinal?: number; 
+    producaoValida?: number; 
+    desperdicio?: number;
+    status: 'imprimindo' | 'concluido';
+};
 
 export default function Grafica() {
   const [abaAtiva, setAbaAtiva] = useState<"abrir" | "painel">("painel");
@@ -73,16 +85,10 @@ export default function Grafica() {
         if (draft.condicaoPagamento) setCondicaoPagamento(draft.condicaoPagamento);
         if (draft.possuiImpressao) setPossuiImpressao(draft.possuiImpressao);
         
+        // Obs: Evitamos restaurar statusImpressao do sessionStorage para não conflitar com a persistência real do Banco.
         if (draft.osSelecionada !== undefined) setOsSelecionada(draft.osSelecionada);
         if (draft.statusOS) setStatusOS(draft.statusOS);
         if (draft.insumos) setInsumos(draft.insumos);
-        if (draft.historicoProducao) setHistoricoProducao(draft.historicoProducao);
-        if (draft.statusImpressao) setStatusImpressao(draft.statusImpressao);
-        if (draft.equipImpressaoId) setEquipImpressaoId(draft.equipImpressaoId);
-        if (draft.qtdImprimir) setQtdImprimir(draft.qtdImprimir);
-        if (draft.modoImpressao) setModoImpressao(draft.modoImpressao);
-        if (draft.contadorInicial) setContadorInicial(draft.contadorInicial);
-        if (draft.contadorFinal) setContadorFinal(draft.contadorFinal);
         if (draft.editandoObs !== undefined) setEditandoObs(draft.editandoObs);
         if (draft.obsTemp) setObsTemp(draft.obsTemp);
       } catch (e) {}
@@ -92,12 +98,12 @@ export default function Grafica() {
   useEffect(() => {
     const draft = { 
         abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao,
-        osSelecionada, statusOS, insumos, historicoProducao, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
+        osSelecionada, statusOS, insumos, editandoObs, obsTemp
     };
     sessionStorage.setItem("grafica_rascunho", JSON.stringify(draft));
   }, [
       abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao,
-      osSelecionada, statusOS, insumos, historicoProducao, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
+      osSelecionada, statusOS, insumos, editandoObs, obsTemp
   ]);
 
   useEffect(() => {
@@ -165,18 +171,30 @@ export default function Grafica() {
     setObsTemp(os.observacoes || "");
     setEditandoObs(false);
     
-    let hist = [];
+    let hist: ApontamentoProducao[] = [];
     try { hist = typeof os.historico_producao === 'string' ? JSON.parse(os.historico_producao) : (os.historico_producao || []); } catch(e){}
     setHistoricoProducao(hist);
 
-    const totalProduzido = hist.reduce((acc: number, curr: ApontamentoProducao) => acc + curr.producaoValida, 0);
-    const pendente = Math.max(0, os.quantidade_produzir - totalProduzido);
+    // Identifica se há uma produção interrompida/em andamento no Banco de Dados
+    const producaoAtiva = hist.find(h => h.status === 'imprimindo');
+    
+    if (producaoAtiva) {
+        setStatusImpressao("imprimindo");
+        setEquipImpressaoId(producaoAtiva.equipamentoId);
+        setQtdImprimir(producaoAtiva.qtdSolicitada);
+        setModoImpressao(producaoAtiva.modo);
+        setContadorInicial(producaoAtiva.contadorInicial.toString());
+        setContadorFinal("");
+    } else {
+        const totalProduzido = hist.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
+        const pendente = Math.max(0, os.quantidade_produzir - totalProduzido);
 
-    setStatusImpressao("pendente");
-    setContadorInicial("");
-    setContadorFinal("");
-    setEquipImpressaoId("");
-    setQtdImprimir(pendente || os.quantidade_produzir);
+        setStatusImpressao("pendente");
+        setContadorInicial("");
+        setContadorFinal("");
+        setEquipImpressaoId("");
+        setQtdImprimir(pendente || os.quantidade_produzir);
+    }
 
     const [insumosRes, anexosRes] = await Promise.all([
         supabase.from('prd_op_insumos').select('*').eq('op_id', os.id),
@@ -192,7 +210,6 @@ export default function Grafica() {
     if (anexosRes.data) setAnexos(anexosRes.data);
   };
 
-  // --- EDIÇÃO DE OBSERVAÇÕES ---
   const salvarObservacoes = async () => {
       try {
           await supabase.from('prd_ordens_producao').update({ observacoes: obsTemp }).eq('id', osSelecionada.id);
@@ -202,7 +219,6 @@ export default function Grafica() {
       } catch(e: any) { alert("Erro ao salvar observações: " + e.message); }
   };
 
-  // --- GESTÃO DE ANEXOS ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -235,7 +251,6 @@ export default function Grafica() {
       setAnexos(anexos.filter(a => a.id !== id));
   };
 
-  // --- INSUMOS E CONCLUSÃO ---
   const adicionarInsumo = () => {
     if (!buscaInsumo) return;
     const prod = produtosBD.find(p => p.nome === buscaInsumo || `${p.sku || 'S/N'} - ${p.nome}` === buscaInsumo);
@@ -307,6 +322,33 @@ export default function Grafica() {
     } catch (e: any) { alert("Erro ao faturar: " + e.message); } finally { setSalvandoOS(false); }
   };
 
+  // --- INICIAR IMPRESSÃO (SALVA NO BANCO O STATUS EM ANDAMENTO) ---
+  const iniciarImpressao = async () => {
+      if (!contadorInicial) return alert("Informe o contador inicial do equipamento.");
+      
+      const eq = equipamentosTC.find(e => e.id === equipImpressaoId);
+      const novoApontamento: ApontamentoProducao = {
+          id: crypto.randomUUID(),
+          data: new Date().toISOString(),
+          equipamentoId: equipImpressaoId,
+          equipamentoNome: eq ? `${eq.log_produtos?.nome} (S/N: ${eq.numero_serie})` : 'Equipamento Desconhecido',
+          modo: modoImpressao,
+          qtdSolicitada: qtdImprimir,
+          contadorInicial: Number(contadorInicial),
+          status: 'imprimindo'
+      };
+
+      const novoHistorico = [...historicoProducao, novoApontamento];
+      setHistoricoProducao(novoHistorico);
+      setStatusImpressao("imprimindo");
+
+      try {
+          await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+      } catch (e: any) {
+          alert("Erro ao persistir o início da produção no banco: " + e.message);
+      }
+  };
+
   // --- FINALIZAR IMPRESSÃO (APONTAMENTO PARCIAL/TOTAL) ---
   const finalizarImpressao = async () => {
     if (!contadorFinal || Number(contadorFinal) < Number(contadorInicial)) return alert("Contador Final inválido.");
@@ -324,28 +366,20 @@ export default function Grafica() {
         alert(`Apontamento Parcial: Foram impressas ${diff} páginas de um total de ${qtdImprimir} demandadas nesta rodada.`);
     }
 
-    const eq = equipamentosTC.find(e => e.id === equipImpressaoId);
-    
-    const novoApontamento: ApontamentoProducao = {
-        id: crypto.randomUUID(),
-        data: new Date().toISOString(),
-        equipamentoId: equipImpressaoId,
-        equipamentoNome: eq ? `${eq.log_produtos?.nome} (S/N: ${eq.numero_serie})` : 'Equipamento Desconhecido',
-        modo: modoImpressao,
-        qtdSolicitada: qtdImprimir,
-        contadorInicial: Number(contadorInicial),
-        contadorFinal: Number(contadorFinal),
-        producaoValida,
-        desperdicio
-    };
+    // Atualiza o registro que estava "imprimindo" para "concluido"
+    const novoHistorico = historicoProducao.map(h => {
+        if (h.status === 'imprimindo') {
+            return { ...h, contadorFinal: Number(contadorFinal), producaoValida, desperdicio, status: 'concluido' as const };
+        }
+        return h;
+    });
 
-    const novoHistorico = [...historicoProducao, novoApontamento];
     setHistoricoProducao(novoHistorico);
 
     try {
         await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
         
-        const totalProduzidoAgora = novoHistorico.reduce((acc, curr) => acc + curr.producaoValida, 0);
+        const totalProduzidoAgora = novoHistorico.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
         if (totalProduzidoAgora >= osSelecionada.quantidade_produzir) {
             alert("Sucesso! A quantidade total demandada para esta OS foi atingida.");
         }
@@ -373,7 +407,7 @@ export default function Grafica() {
     (o.numero_op?.toString() || "").includes(buscaOS)
   );
 
-  const totalProduzidoGeral = historicoProducao.reduce((acc, curr) => acc + curr.producaoValida, 0);
+  const totalProduzidoGeral = historicoProducao.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
   const percentualConclusao = osSelecionada ? Math.min(100, (totalProduzidoGeral / osSelecionada.quantidade_produzir) * 100) : 0;
 
   return (
@@ -532,7 +566,7 @@ export default function Grafica() {
                 )}
             </div>
 
-            {/* PAINEL DE IMPRESSÃO - COM PROGRESSO */}
+            {/* PAINEL DE IMPRESSÃO - COM PROGRESSO PERSISTENTE */}
             {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm space-y-6">
                     
@@ -574,8 +608,14 @@ export default function Grafica() {
                                             <td className="p-2 text-xs text-slate-600">{new Date(hist.data).toLocaleDateString('pt-BR')}</td>
                                             <td className="p-2 font-medium text-slate-800 text-xs">{hist.equipamentoNome}</td>
                                             <td className="p-2 text-center text-xs">{hist.modo}</td>
-                                            <td className="p-2 text-center font-bold text-emerald-600">+{hist.producaoValida}</td>
-                                            <td className="p-2 text-center font-bold text-rose-500">{hist.desperdicio > 0 ? hist.desperdicio : '-'}</td>
+                                            {hist.status === 'imprimindo' ? (
+                                                <td colSpan={2} className="p-2 text-center font-bold text-blue-500 animate-pulse text-xs bg-blue-50/50">Produção em andamento...</td>
+                                            ) : (
+                                                <>
+                                                    <td className="p-2 text-center font-bold text-emerald-600">+{hist.producaoValida}</td>
+                                                    <td className="p-2 text-center font-bold text-rose-500">{(hist.desperdicio ?? 0) > 0 ? hist.desperdicio : '-'}</td>
+                                                </>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>
@@ -583,7 +623,7 @@ export default function Grafica() {
                         </div>
                     )}
                     
-                    {/* NOVO APONTAMENTO */}
+                    {/* NOVO APONTAMENTO / OU RETORNO DE APONTAMENTO PENDENTE */}
                     {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="md:col-span-2 space-y-2">
@@ -625,7 +665,7 @@ export default function Grafica() {
                                             <label className="text-sm font-bold text-rose-600">Contador Inicial</label>
                                             <Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} placeholder="Contador antes de imprimir" className="bg-white border-rose-300 font-bold" />
                                         </div>
-                                        <Button onClick={() => setStatusImpressao("imprimindo")} disabled={!contadorInicial} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 px-8"><PlayCircle className="w-4 h-4 mr-2"/> Iniciar Impressão</Button>
+                                        <Button onClick={iniciarImpressao} disabled={!contadorInicial} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 px-8"><PlayCircle className="w-4 h-4 mr-2"/> Iniciar Impressão</Button>
                                     </div>
                                 </div>
                             )}
@@ -633,10 +673,13 @@ export default function Grafica() {
                     )}
                     
                     {statusImpressao === "imprimindo" && (
-                        <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4">
+                        <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4 shadow-inner">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
                             <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
-                            <p className="text-slate-500 text-sm">Produzindo lote de {qtdImprimir} unidades. Não se preocupe, este apontamento ficará salvo se você navegar pelo sistema.</p>
+                            <p className="text-slate-500 text-sm">
+                                Lote ativo de <span className="font-bold">{qtdImprimir} unidades</span> (Iniciado em: {contadorInicial}).<br/>
+                                <span className="text-blue-600 font-medium">Este status já está salvo no banco. Você pode fechar o sistema e retornar mais tarde.</span>
+                            </p>
                             <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
                                 <label className="text-sm font-bold text-rose-600">Contador Final do Equipamento</label>
                                 <Input type="number" value={contadorFinal} onChange={e => setContadorFinal(e.target.value)} placeholder="Contador após conclusão..." className="font-bold border-rose-300" />
