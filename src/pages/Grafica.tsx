@@ -483,6 +483,7 @@ export default function Grafica() {
                       </Select>
                   </div>
               </div>
+            </div>
 
             <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
                 {salvandoOS ? "Gerando..." : "Enviar para Painel"}
@@ -714,6 +715,14 @@ export default function Grafica() {
                                 ))
                             )}
                         </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-5 rounded-xl border shadow-sm border-slate-200">
+                        {!editandoObs ? (
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{osSelecionada.observacoes || "Nenhuma observação."}</p>
+                        ) : (
+                            <textarea value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="w-full min-h-[120px] p-3 text-sm rounded-md border outline-none"></textarea>
+                        )}
                     </div>
                 </div>
 
