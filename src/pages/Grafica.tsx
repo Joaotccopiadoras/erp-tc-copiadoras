@@ -518,11 +518,6 @@ export default function Grafica() {
                       </div>
                   )}
               </div>
-
-              <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">Ficha Técnica e Acabamento</label>
-                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Especificações..."></textarea>
-              </div>
             </div>
 
             <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
