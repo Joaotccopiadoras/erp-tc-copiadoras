@@ -3,10 +3,11 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign } from "lucide-react";
+import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
+type ApontamentoProducao = { id: string; data: string; equipamentoId: string; equipamentoNome: string; modo: string; qtdSolicitada: number; contadorInicial: number; contadorFinal: number; producaoValida: number; desperdicio: number };
 
 export default function Grafica() {
   const [abaAtiva, setAbaAtiva] = useState<"abrir" | "painel">("painel");
@@ -25,10 +26,8 @@ export default function Grafica() {
   const [observacoes, setObservacoes] = useState("");
   const [possuiImpressao, setPossuiImpressao] = useState("Não");
   
-  // NOVOS CAMPOS COMERCIAIS DA OS
   const [valorCobrado, setValorCobrado] = useState("");
   const [condicaoPagamento, setCondicaoPagamento] = useState("À Vista");
-  
   const [salvandoOS, setSalvandoOS] = useState(false);
 
   // ESTADOS: PAINEL DE PRODUÇÃO
@@ -39,9 +38,10 @@ export default function Grafica() {
   const [statusOS, setStatusOS] = useState("");
   const [buscaInsumo, setBuscaInsumo] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
+  const [historicoProducao, setHistoricoProducao] = useState<ApontamentoProducao[]>([]);
 
   // ESTADOS: FLUXO DE IMPRESSÃO
-  const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo" | "concluido">("pendente");
+  const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo">("pendente");
   const [equipImpressaoId, setEquipImpressaoId] = useState("");
   const [qtdImprimir, setQtdImprimir] = useState(1);
   const [modoImpressao, setModoImpressao] = useState("Simplex");
@@ -63,7 +63,6 @@ export default function Grafica() {
     if (rascunho) {
       try {
         const draft = JSON.parse(rascunho);
-        // Aba de Criação
         if (draft.abaAtiva) setAbaAtiva(draft.abaAtiva);
         if (draft.clienteBusca) setClienteBusca(draft.clienteBusca);
         if (draft.descServico) setDescServico(draft.descServico);
@@ -74,10 +73,10 @@ export default function Grafica() {
         if (draft.condicaoPagamento) setCondicaoPagamento(draft.condicaoPagamento);
         if (draft.possuiImpressao) setPossuiImpressao(draft.possuiImpressao);
         
-        // Aba da Prancheta (Evita sumir a OS selecionada)
         if (draft.osSelecionada !== undefined) setOsSelecionada(draft.osSelecionada);
         if (draft.statusOS) setStatusOS(draft.statusOS);
         if (draft.insumos) setInsumos(draft.insumos);
+        if (draft.historicoProducao) setHistoricoProducao(draft.historicoProducao);
         if (draft.statusImpressao) setStatusImpressao(draft.statusImpressao);
         if (draft.equipImpressaoId) setEquipImpressaoId(draft.equipImpressaoId);
         if (draft.qtdImprimir) setQtdImprimir(draft.qtdImprimir);
@@ -93,12 +92,12 @@ export default function Grafica() {
   useEffect(() => {
     const draft = { 
         abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao,
-        osSelecionada, statusOS, insumos, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
+        osSelecionada, statusOS, insumos, historicoProducao, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
     };
     sessionStorage.setItem("grafica_rascunho", JSON.stringify(draft));
   }, [
       abaAtiva, clienteBusca, descServico, qtdProduzir, dataPrevista, observacoes, valorCobrado, condicaoPagamento, possuiImpressao,
-      osSelecionada, statusOS, insumos, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
+      osSelecionada, statusOS, insumos, historicoProducao, statusImpressao, equipImpressaoId, qtdImprimir, modoImpressao, contadorInicial, contadorFinal, editandoObs, obsTemp
   ]);
 
   useEffect(() => {
@@ -111,14 +110,12 @@ export default function Grafica() {
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia'),
       supabase.from('fin_categorias').select('id').eq('tipo', 'Receita').limit(1).single(),
-      // Trazemos a relação completa de clientes para filtrar com segurança no JS
       supabase.from('srv_equipamentos').select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (catRes.data) setCatReceitaId(catRes.data.id);
-    
     if (eqRes.data) {
         const tcEquips = eqRes.data.filter((e: any) => {
             const nomeCli = (e.log_clientes?.nome_fantasia || "").toUpperCase();
@@ -148,7 +145,8 @@ export default function Grafica() {
         valor_total: parseFloat(valorCobrado) || 0,
         condicao_pagamento: condicaoPagamento,
         status: 'Fila de Impressão',
-        observacoes: `[Possui Impressão: ${possuiImpressao}]\n${observacoes}`
+        observacoes: `[Possui Impressão: ${possuiImpressao}]\n${observacoes}`,
+        historico_producao: []
       };
 
       const { error } = await supabase.from('prd_ordens_producao').insert([payload]);
@@ -167,11 +165,18 @@ export default function Grafica() {
     setObsTemp(os.observacoes || "");
     setEditandoObs(false);
     
+    let hist = [];
+    try { hist = typeof os.historico_producao === 'string' ? JSON.parse(os.historico_producao) : (os.historico_producao || []); } catch(e){}
+    setHistoricoProducao(hist);
+
+    const totalProduzido = hist.reduce((acc: number, curr: ApontamentoProducao) => acc + curr.producaoValida, 0);
+    const pendente = Math.max(0, os.quantidade_produzir - totalProduzido);
+
     setStatusImpressao("pendente");
     setContadorInicial("");
     setContadorFinal("");
     setEquipImpressaoId("");
-    setQtdImprimir(os.quantidade_produzir);
+    setQtdImprimir(pendente || os.quantidade_produzir);
 
     const [insumosRes, anexosRes] = await Promise.all([
         supabase.from('prd_op_insumos').select('*').eq('op_id', os.id),
@@ -302,6 +307,58 @@ export default function Grafica() {
     } catch (e: any) { alert("Erro ao faturar: " + e.message); } finally { setSalvandoOS(false); }
   };
 
+  // --- FINALIZAR IMPRESSÃO (APONTAMENTO PARCIAL/TOTAL) ---
+  const finalizarImpressao = async () => {
+    if (!contadorFinal || Number(contadorFinal) < Number(contadorInicial)) return alert("Contador Final inválido.");
+    const diff = Number(contadorFinal) - Number(contadorInicial);
+    
+    let producaoValida = diff;
+    let desperdicio = 0;
+
+    if (diff > qtdImprimir) {
+        producaoValida = qtdImprimir;
+        desperdicio = diff - qtdImprimir;
+        const porcentagem = ((desperdicio / qtdImprimir) * 100).toFixed(1);
+        alert(`ALERTA DE DESPERDÍCIO:\nDiferença: ${diff} | Demandada: ${qtdImprimir}\nDesperdício: ${desperdicio} páginas (${porcentagem}%)`);
+    } else if (diff < qtdImprimir) {
+        alert(`Apontamento Parcial: Foram impressas ${diff} páginas de um total de ${qtdImprimir} demandadas nesta rodada.`);
+    }
+
+    const eq = equipamentosTC.find(e => e.id === equipImpressaoId);
+    
+    const novoApontamento: ApontamentoProducao = {
+        id: crypto.randomUUID(),
+        data: new Date().toISOString(),
+        equipamentoId: equipImpressaoId,
+        equipamentoNome: eq ? `${eq.log_produtos?.nome} (S/N: ${eq.numero_serie})` : 'Equipamento Desconhecido',
+        modo: modoImpressao,
+        qtdSolicitada: qtdImprimir,
+        contadorInicial: Number(contadorInicial),
+        contadorFinal: Number(contadorFinal),
+        producaoValida,
+        desperdicio
+    };
+
+    const novoHistorico = [...historicoProducao, novoApontamento];
+    setHistoricoProducao(novoHistorico);
+
+    try {
+        await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+        
+        const totalProduzidoAgora = novoHistorico.reduce((acc, curr) => acc + curr.producaoValida, 0);
+        if (totalProduzidoAgora >= osSelecionada.quantidade_produzir) {
+            alert("Sucesso! A quantidade total demandada para esta OS foi atingida.");
+        }
+        
+        setStatusImpressao("pendente");
+        setContadorInicial("");
+        setContadorFinal("");
+        setQtdImprimir(Math.max(0, osSelecionada.quantidade_produzir - totalProduzidoAgora));
+    } catch (e: any) {
+        alert("Erro ao salvar histórico de produção: " + e.message);
+    }
+  };
+
   // Estimativas de Impressão (Mock)
   const eqPPM = 40;
   const tempoEstimado = Math.ceil(qtdImprimir / eqPPM);
@@ -310,27 +367,14 @@ export default function Grafica() {
   const custoCompatNovo = (qtdImprimir * 0.04).toFixed(2);
   const custoCompatRecond = (qtdImprimir * 0.02).toFixed(2);
 
-  const finalizarImpressao = () => {
-    if (!contadorFinal || Number(contadorFinal) < Number(contadorInicial)) return alert("Contador Final inválido.");
-    const diff = Number(contadorFinal) - Number(contadorInicial);
-    
-    if (diff === qtdImprimir) {
-        alert(`Impressão exata! ${diff} páginas impressas.`);
-    } else if (diff < qtdImprimir) {
-        alert(`Atenção: A diferença de contadores (${diff}) é INFERIOR à quantidade que deveria ser impressa (${qtdImprimir}).`);
-    } else {
-        const desperdicio = diff - qtdImprimir;
-        const porcentagem = ((desperdicio / qtdImprimir) * 100).toFixed(1);
-        alert(`ALERTA DE DESPERDÍCIO/ERRO:\n\nDiferença: ${diff}\nDemandada: ${qtdImprimir}\n\nDesperdício: ${desperdicio} páginas (${porcentagem}%)`);
-    }
-    setStatusImpressao("concluido");
-  };
-
   const ordensFiltradas = ordens.filter(o => 
     (o.cliente_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) || 
     (o.descricao_servico?.toLowerCase() || "").includes(buscaOS.toLowerCase()) ||
     (o.numero_op?.toString() || "").includes(buscaOS)
   );
+
+  const totalProduzidoGeral = historicoProducao.reduce((acc, curr) => acc + curr.producaoValida, 0);
+  const percentualConclusao = osSelecionada ? Math.min(100, (totalProduzidoGeral / osSelecionada.quantidade_produzir) * 100) : 0;
 
   return (
     <AppLayout>
@@ -349,6 +393,7 @@ export default function Grafica() {
           </div>
         </div>
 
+        {/* ABA: NOVA OS COMERCIAL */}
         {abaAtiva === "abrir" && (
           <div className="bg-white p-8 rounded-xl border shadow-sm max-w-3xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="text-center border-b pb-6">
@@ -417,6 +462,7 @@ export default function Grafica() {
           </div>
         )}
 
+        {/* ABA: PAINEL DE PRODUÇÃO */}
         {abaAtiva === "painel" && !osSelecionada && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
@@ -486,12 +532,59 @@ export default function Grafica() {
                 )}
             </div>
 
-            {/* PAINEL DE IMPRESSÃO */}
+            {/* PAINEL DE IMPRESSÃO - COM PROGRESSO */}
             {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
-                <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm">
-                    <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2"><Printer className="w-5 h-5"/> Painel de Produção & Apontamento</h3>
+                <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm space-y-6">
                     
-                    {statusImpressao === "pendente" && (
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><Printer className="w-5 h-5"/> Painel de Produção & Apontamento</h3>
+                        <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-blue-100 shadow-sm w-full md:w-1/2">
+                            <div className="flex-1">
+                                <div className="flex justify-between text-xs font-bold text-slate-600 mb-1">
+                                    <span>Progresso da OS ({percentualConclusao.toFixed(0)}%)</span>
+                                    <span>{totalProduzidoGeral} / {osSelecionada.quantidade_produzir} un</span>
+                                </div>
+                                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                    <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${percentualConclusao}%` }}></div>
+                                </div>
+                            </div>
+                            {percentualConclusao >= 100 && <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0"/>}
+                        </div>
+                    </div>
+
+                    {/* HISTÓRICO DE PRODUÇÃO DA OS */}
+                    {historicoProducao.length > 0 && (
+                        <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
+                            <div className="p-3 bg-slate-50 border-b text-xs font-bold text-slate-600 uppercase flex items-center gap-2">
+                                <Activity className="w-4 h-4"/> Histórico de Apontamentos
+                            </div>
+                            <table className="w-full text-left text-sm">
+                                <thead>
+                                    <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b">
+                                        <th className="p-2 font-medium">Data</th>
+                                        <th className="p-2 font-medium">Equipamento</th>
+                                        <th className="p-2 font-medium text-center">Modo</th>
+                                        <th className="p-2 font-medium text-center">Produzido</th>
+                                        <th className="p-2 font-medium text-center text-rose-500">Desperdício</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {historicoProducao.map(hist => (
+                                        <tr key={hist.id} className="hover:bg-slate-50">
+                                            <td className="p-2 text-xs text-slate-600">{new Date(hist.data).toLocaleDateString('pt-BR')}</td>
+                                            <td className="p-2 font-medium text-slate-800 text-xs">{hist.equipamentoNome}</td>
+                                            <td className="p-2 text-center text-xs">{hist.modo}</td>
+                                            <td className="p-2 text-center font-bold text-emerald-600">+{hist.producaoValida}</td>
+                                            <td className="p-2 text-center font-bold text-rose-500">{hist.desperdicio > 0 ? hist.desperdicio : '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    
+                    {/* NOVO APONTAMENTO */}
+                    {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="md:col-span-2 space-y-2">
                                 <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
@@ -503,8 +596,8 @@ export default function Grafica() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-bold text-blue-800">Qtd a Imprimir</label>
-                                <Input type="number" max={osSelecionada.quantidade_produzir} value={qtdImprimir} onChange={e => setQtdImprimir(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
+                                <label className="text-sm font-bold text-blue-800">Qtd a Imprimir Agora</label>
+                                <Input type="number" max={Math.max(0, osSelecionada.quantidade_produzir - totalProduzidoGeral)} value={qtdImprimir} onChange={e => setQtdImprimir(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-blue-800">Modo</label>
@@ -519,7 +612,7 @@ export default function Grafica() {
                             
                             {equipImpressaoId && (
                                 <div className="md:col-span-4 mt-4 bg-white p-4 rounded-lg border border-blue-100 shadow-sm">
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Estimativas de Produção</h4>
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Estimativas da Rodada</h4>
                                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                         <div className="p-3 bg-slate-50 rounded border"><p className="text-[10px] uppercase font-bold text-slate-400">Tempo Estimado</p><p className="font-bold text-lg text-slate-700">{tempoEstimado} min</p></div>
                                         <div className="p-3 bg-emerald-50 rounded border border-emerald-100"><p className="text-[10px] uppercase font-bold text-emerald-600">Custo Orig. Novo</p><p className="font-bold text-lg text-emerald-700">R$ {custoOriginalNovo}</p></div>
@@ -543,18 +636,12 @@ export default function Grafica() {
                         <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
                             <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
+                            <p className="text-slate-500 text-sm">Produzindo lote de {qtdImprimir} unidades. Não se preocupe, este apontamento ficará salvo se você navegar pelo sistema.</p>
                             <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
                                 <label className="text-sm font-bold text-rose-600">Contador Final do Equipamento</label>
                                 <Input type="number" value={contadorFinal} onChange={e => setContadorFinal(e.target.value)} placeholder="Contador após conclusão..." className="font-bold border-rose-300" />
-                                <Button onClick={finalizarImpressao} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold mt-2"><CheckCircle2 className="w-4 h-4 mr-2"/> Finalizar & Apurar</Button>
+                                <Button onClick={finalizarImpressao} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold mt-2"><CheckCircle2 className="w-4 h-4 mr-2"/> Registrar Lote</Button>
                             </div>
-                        </div>
-                    )}
-
-                    {statusImpressao === "concluido" && (
-                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-lg font-bold flex items-center justify-between">
-                            <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Apontamento de Impressão Registrado com Sucesso.</span>
-                            <Button variant="outline" size="sm" onClick={() => setStatusImpressao("pendente")} className="bg-white text-slate-700">Novo Apontamento</Button>
                         </div>
                     )}
                 </div>
@@ -562,6 +649,36 @@ export default function Grafica() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="space-y-6">
+                    
+                    {/* ANEXOS RESTAURADOS */}
+                    <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                            <Button variant="outline" size="sm" disabled={uploading || osSelecionada.status === 'Faturada'} onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
+                                {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar
+                            </Button>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                            {anexos.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado.</p>
+                            ) : (
+                                anexos.map(anexo => (
+                                    <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
+                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"><Download className="w-3.5 h-3.5"/></a>
+                                            {osSelecionada.status !== 'Faturada' && (
+                                                <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
                     <div className="bg-slate-50 p-5 rounded-xl border shadow-sm border-slate-200">
                         <div className="flex justify-between items-center mb-3">
                             <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Scissors className="w-4 h-4 text-purple-500"/> Ficha Técnica</h4>
