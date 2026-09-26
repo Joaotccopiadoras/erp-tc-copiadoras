@@ -484,12 +484,6 @@ export default function Grafica() {
                   </div>
               </div>
 
-              <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">Ficha Técnica e Acabamento</label>
-                  <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} className="w-full min-h-[80px] p-3 border rounded-md bg-slate-50 text-sm" placeholder="Especificações..."></textarea>
-              </div>
-            </div>
-
             <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
                 {salvandoOS ? "Gerando..." : "Enviar para Painel"}
             </Button>
@@ -720,22 +714,6 @@ export default function Grafica() {
                                 ))
                             )}
                         </div>
-                    </div>
-
-                    <div className="bg-slate-50 p-5 rounded-xl border shadow-sm border-slate-200">
-                        <div className="flex justify-between items-center mb-3">
-                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Scissors className="w-4 h-4 text-purple-500"/> Ficha Técnica</h4>
-                            {!editandoObs ? (
-                                <Button variant="ghost" size="sm" onClick={() => { setObsTemp(osSelecionada.observacoes || ""); setEditandoObs(true); }} className="h-7 text-xs text-indigo-600 hover:bg-indigo-50 gap-1 px-2 border border-transparent"><Edit2 className="w-3 h-3"/> Editar</Button>
-                            ) : (
-                                <Button variant="default" size="sm" onClick={salvarObservacoes} className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 gap-1 px-3"><Save className="w-3 h-3"/> Salvar</Button>
-                            )}
-                        </div>
-                        {!editandoObs ? (
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{osSelecionada.observacoes || "Nenhuma observação."}</p>
-                        ) : (
-                            <textarea value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="w-full min-h-[120px] p-3 text-sm rounded-md border outline-none"></textarea>
-                        )}
                     </div>
                 </div>
 
