@@ -3,8 +3,10 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, Scissors, CheckCircle2, Plus, Search, Trash2, ArrowLeft, Clock, PaintBucket, FileOutput, PlayCircle, AlertCircle, Edit2, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck } from "lucide-react";
+import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type InsumoOS = { id: string; produtoId: string; nome: string; quantidade: number; custoUn: number; estoqueAtual: number };
 type ApontamentoProducao = { 
@@ -40,10 +42,9 @@ export default function Grafica() {
   const [descServico, setDescServico] = useState("");
   const [qtdProduzir, setQtdProduzir] = useState(1);
   const [dataPrevista, setDataPrevista] = useState("");
-  const [observacoes, setObservacoes] = useState("");
   const [possuiImpressao, setPossuiImpressao] = useState("Não");
   
-  // NOVOS CAMPOS NA ABERTURA DA OS
+  // CAMPOS CONDICIONAIS SE HOUVER IMPRESSÃO
   const [paginasPorProdutoOS, setPaginasPorProdutoOS] = useState(1);
   const [valorUnitarioPaginaOS, setValorUnitarioPaginaOS] = useState("");
 
@@ -53,6 +54,7 @@ export default function Grafica() {
   const [ordens, setOrdens] = useState<any[]>([]);
   const [buscaOS, setBuscaOS] = useState("");
   const [osSelecionada, setOsSelecionada] = useState<any | null>(null);
+  const [osSelecionadasLote, setOsSelecionadasLote] = useState<string[]>([]);
   
   const [statusOS, setStatusOS] = useState("");
   const [buscaInsumo, setBuscaInsumo] = useState("");
@@ -69,9 +71,7 @@ export default function Grafica() {
   const [contadorInicial, setContadorInicial] = useState("");
   const [contadorFinal, setContadorFinal] = useState("");
 
-  // ESTADOS: EDIÇÃO E ANEXOS
-  const [editandoObs, setEditandoObs] = useState(false);
-  const [obsTemp, setObsTemp] = useState("");
+  // ESTADOS: ANEXOS
   const [anexos, setAnexos] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +92,6 @@ export default function Grafica() {
         if (draft.descServico) setDescServico(draft.descServico);
         if (draft.qtdProduzir) setQtdProduzir(draft.qtdProduzir);
         if (draft.dataPrevista) setDataPrevista(draft.dataPrevista);
-        if (draft.observacoes) setObservacoes(draft.observacoes);
         if (draft.possuiImpressao) setPossuiImpressao(draft.possuiImpressao);
         if (draft.paginasPorProdutoOS) setPaginasPorProdutoOS(draft.paginasPorProdutoOS);
         if (draft.valorUnitarioPaginaOS) setValorUnitarioPaginaOS(draft.valorUnitarioPaginaOS);
@@ -100,21 +99,19 @@ export default function Grafica() {
         if (draft.osSelecionada !== undefined) setOsSelecionada(draft.osSelecionada);
         if (draft.statusOS) setStatusOS(draft.statusOS);
         if (draft.insumos) setInsumos(draft.insumos);
-        if (draft.editandoObs !== undefined) setEditandoObs(draft.editandoObs);
-        if (draft.obsTemp) setObsTemp(draft.obsTemp);
       } catch (e) {}
     }
   }, []);
 
   useEffect(() => {
     const draft = { 
-        abaAtiva, clienteBusca, solicitante, dataSolicitacao, operadorNome, descServico, qtdProduzir, dataPrevista, observacoes, possuiImpressao, paginasPorProdutoOS, valorUnitarioPaginaOS,
-        osSelecionada, statusOS, insumos, editandoObs, obsTemp
+        abaAtiva, clienteBusca, solicitante, dataSolicitacao, operadorNome, descServico, qtdProduzir, dataPrevista, possuiImpressao, paginasPorProdutoOS, valorUnitarioPaginaOS,
+        osSelecionada, statusOS, insumos
     };
     sessionStorage.setItem("grafica_rascunho", JSON.stringify(draft));
   }, [
-      abaAtiva, clienteBusca, solicitante, dataSolicitacao, operadorNome, descServico, qtdProduzir, dataPrevista, observacoes, possuiImpressao, paginasPorProdutoOS, valorUnitarioPaginaOS,
-      osSelecionada, statusOS, insumos, editandoObs, obsTemp
+      abaAtiva, clienteBusca, solicitante, dataSolicitacao, operadorNome, descServico, qtdProduzir, dataPrevista, possuiImpressao, paginasPorProdutoOS, valorUnitarioPaginaOS,
+      osSelecionada, statusOS, insumos
   ]);
 
   useEffect(() => {
@@ -125,7 +122,8 @@ export default function Grafica() {
   const fetchDadosBase = async () => {
     const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
-      supabase.from('log_clientes').select('id, razao_social, nome_fantasia').order('nome_fantasia'),
+      // Buscando também o CNPJ para a emissão do PDF
+      supabase.from('log_clientes').select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores').select('id, nome').order('nome'),
       supabase.from('srv_equipamentos').select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
@@ -171,7 +169,7 @@ export default function Grafica() {
         paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
         valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
         status: 'Fila de Impressão',
-        observacoes: `[Possui Impressão: ${possuiImpressao}]\n${observacoes}`,
+        observacoes: `[Possui Impressão: ${possuiImpressao}]`, 
         historico_producao: []
       };
 
@@ -180,7 +178,7 @@ export default function Grafica() {
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
       sessionStorage.removeItem("grafica_rascunho");
-      setClienteBusca(""); setSolicitante(""); setDataSolicitacao(new Date().toISOString().split('T')[0]); setOperadorNome(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setObservacoes(""); setPossuiImpressao("Não"); setPaginasPorProdutoOS(1); setValorUnitarioPaginaOS("");
+      setClienteBusca(""); setSolicitante(""); setDataSolicitacao(new Date().toISOString().split('T')[0]); setOperadorNome(""); setDescServico(""); setQtdProduzir(1); setDataPrevista(""); setPossuiImpressao("Não"); setPaginasPorProdutoOS(1); setValorUnitarioPaginaOS("");
       setAbaAtiva("painel");
     } catch (e: any) { alert("Erro ao criar OS: " + e.message); } finally { setSalvandoOS(false); }
   };
@@ -189,8 +187,6 @@ export default function Grafica() {
   const abrirPrancheta = async (os: any) => {
     setOsSelecionada(os);
     setStatusOS(os.status);
-    setObsTemp(os.observacoes || "");
-    setEditandoObs(false);
     
     let hist: ApontamentoProducao[] = [];
     try { hist = typeof os.historico_producao === 'string' ? JSON.parse(os.historico_producao) : (os.historico_producao || []); } catch(e){}
@@ -216,7 +212,6 @@ export default function Grafica() {
         setContadorFinal("");
         setEquipImpressaoId("");
         setQtdImprimirServico(pendente || os.quantidade_produzir);
-        // Carrega automaticamente os valores definidos na abertura da OS
         setPaginasPorProduto(os.paginas_por_produto || 1);
         setValorUnitarioPagina(os.valor_unitario_pagina ? os.valor_unitario_pagina.toString() : "");
     }
@@ -233,15 +228,6 @@ export default function Grafica() {
         })));
     }
     if (anexosRes.data) setAnexos(anexosRes.data);
-  };
-
-  const salvarObservacoes = async () => {
-      try {
-          await supabase.from('prd_ordens_producao').update({ observacoes: obsTemp }).eq('id', osSelecionada.id);
-          setOsSelecionada({...osSelecionada, observacoes: obsTemp});
-          setEditandoObs(false);
-          fetchOrdens();
-      } catch(e: any) { alert("Erro ao salvar observações: " + e.message); }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -413,6 +399,102 @@ export default function Grafica() {
     }
   };
 
+  // ==========================================
+  // EMISSÃO DE COMPROVANTE PDF (Individual ou Lote)
+  // ==========================================
+  const gerarComprovantePDF = (osList: any[]) => {
+      if (!osList || osList.length === 0) return;
+
+      const clienteNome = osList[0].cliente_nome;
+      const clientesDiferentes = osList.some(os => os.cliente_nome !== clienteNome);
+      if (clientesDiferentes) {
+          return alert("Atenção: Para emissão coletiva, todas as OSGs selecionadas devem pertencer ao mesmo cliente.");
+      }
+
+      const clienteObj = clientesBD.find(c => c.nome_fantasia === clienteNome || c.razao_social === clienteNome);
+      const razaoSocial = clienteObj?.razao_social || clienteNome;
+      const cnpj = clienteObj?.cnpj_cpf || "Não informado";
+      const operador = osList[0].operador_nome || "Operador Não Informado";
+
+      const doc = new jsPDF("p", "mm", "a4");
+
+      const hoje = new Date();
+      const dia = String(hoje.getDate()).padStart(2, '0');
+      const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+      const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(dataEmissao, 200 - 14, 20, { align: "right" });
+
+      doc.setFont("helvetica", "bold");
+      doc.text(`AO ${razaoSocial.toUpperCase()}`, 14, 30);
+      doc.text(`CNPJ: ${cnpj}`, 14, 35);
+
+      const tituloOS = osList.length === 1 ? `COMPROVANTE DE ENTREGA – OSG-${String(osList[0].numero_op).padStart(4,'0')}` : `COMPROVANTE DE ENTREGA – MÚLTIPLAS OSGs`;
+      doc.setFontSize(12);
+      doc.text(tituloOS, 105, 50, { align: "center" });
+
+      const tableColumn = ["DATA DA SOLICITAÇÃO", "SOLICITANTE", "PRODUTO", "QTD PRODUTOS", "P.P P/ PRODUTO", "TOTAL P.P IMPRESSAS"];
+      const tableRows: any[] = [];
+
+      let totalGeralPaginas = 0;
+
+      osList.forEach(os => {
+          const dataSol = os.data_solicitacao ? new Date(os.data_solicitacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-";
+          const ppProduto = os.paginas_por_produto || 1;
+          const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
+          totalGeralPaginas += totalPaginas;
+
+          tableRows.push([
+              dataSol,
+              os.solicitante || "-",
+              os.descricao_servico || "-",
+              os.quantidade_produzir || 0,
+              ppProduto,
+              totalPaginas
+          ]);
+      });
+
+      tableRows.push([
+          { content: "TOTAL DA SOLICITAÇÃO", colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+          { content: totalGeralPaginas.toString(), styles: { fontStyle: 'bold' } }
+      ]);
+
+      autoTable(doc, {
+          head: [tableColumn],
+          body: tableRows,
+          startY: 60,
+          theme: 'grid',
+          styles: { font: 'helvetica', fontSize: 8, cellPadding: 3 },
+          headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' },
+          columnStyles: {
+              0: { halign: 'center', cellWidth: 25 },
+              1: { halign: 'center', cellWidth: 30 },
+              2: { halign: 'left' },
+              3: { halign: 'center', cellWidth: 25 },
+              4: { halign: 'center', cellWidth: 25 },
+              5: { halign: 'center', cellWidth: 30 }
+          }
+      });
+
+      const finalY = (doc as any).lastAutoTable.finalY + 30;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Cliente: ___________________________________________________", 14, finalY);
+      doc.text("Data da Entrega: __________________", 14, finalY + 10);
+
+      doc.text("________________________________________", 105, finalY + 30, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.text(operador.toUpperCase(), 105, finalY + 35, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.text("TC COMÉRCIO DE SERVIÇOS E TECNOLOGIA LTDA", 105, finalY + 40, { align: "center" });
+      doc.text("CNPJ: 07.679.989/0001-50", 105, finalY + 45, { align: "center" });
+
+      doc.save(`Comprovante_Entrega_${clienteNome}.pdf`);
+  };
+
   const eqPPM = 40;
   const tempoEstimado = Math.ceil((qtdImprimirServico * paginasPorProduto) / eqPPM);
   const custoOriginalNovo = ((qtdImprimirServico * paginasPorProduto) * 0.08).toFixed(2);
@@ -492,7 +574,7 @@ export default function Grafica() {
                   <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
               </div>
 
-              <div className="space-y-4 md:col-span-2 bg-slate-50 p-4 rounded-md border border-slate-200">
+              <div className="space-y-4 md:col-span-2 bg-slate-50 p-4 rounded-md border border-slate-200 mt-2">
                   <div className="space-y-2">
                       <label className="text-sm font-bold text-slate-700">Requer Impressão em Equipamento TC?</label>
                       <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
@@ -504,9 +586,8 @@ export default function Grafica() {
                       </Select>
                   </div>
                   
-                  {/* NOVOS CAMPOS EXIGIDOS NA ABERTURA SE HOUVER IMPRESSÃO */}
                   {possuiImpressao === "Sim" && (
-                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 animate-in slide-in-from-top-2">
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 animate-in slide-in-from-top-2">
                           <div className="space-y-2">
                               <label className="text-sm font-bold text-blue-800">Qtd de Páginas por Produto <span className="text-red-500">*</span></label>
                               <Input type="number" min="1" value={paginasPorProdutoOS} onChange={e => setPaginasPorProdutoOS(Number(e.target.value))} placeholder="Ex: 50" className="bg-white border-blue-200" />
@@ -526,16 +607,31 @@ export default function Grafica() {
           </div>
         )}
 
-        {/* ABA: PAINEL DE PRODUÇÃO */}
+        {/* ABA: PAINEL DE PRODUÇÃO (TABELA PRINCIPAL) */}
         {abaAtiva === "painel" && !osSelecionada && (
           <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
               <div className="relative w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaOS} onChange={e => setBuscaOS(e.target.value)} placeholder="Buscar OS ou Solicitante..." className="pl-9 bg-white" /></div>
             </div>
+
+            {/* BARRA DE AÇÃO COLETIVA (GERAR COMPROVANTE LOTE) */}
+            {osSelecionadasLote.length > 0 && (
+                <div className="bg-blue-50 border-b border-blue-200 p-3 flex justify-between items-center px-4 animate-in slide-in-from-top-2">
+                    <span className="text-sm text-blue-800 font-bold flex items-center gap-2"><CheckSquare className="w-4 h-4"/> {osSelecionadasLote.length} OSG(s) selecionada(s)</span>
+                    <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"><FileText className="w-4 h-4"/> Gerar Comprovante Coletivo</Button>
+                </div>
+            )}
+
             <div className="overflow-x-auto min-h-[400px]">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                    <th className="p-4 font-semibold border-b text-center w-12">
+                        <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                            onChange={(e) => setOsSelecionadasLote(e.target.checked ? ordensFiltradas.map(o => o.id) : [])}
+                            checked={osSelecionadasLote.length === ordensFiltradas.length && ordensFiltradas.length > 0} 
+                        />
+                    </th>
                     <th className="p-4 font-semibold border-b text-center w-28">OS Nº</th>
                     <th className="p-4 font-semibold border-b">Cliente / Serviço</th>
                     <th className="p-4 font-semibold border-b text-center">Entrega</th>
@@ -544,13 +640,22 @@ export default function Grafica() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {ordensFiltradas.length === 0 ? (
-                    <tr><td colSpan={4} className="p-12 text-center text-slate-500">Nenhuma OS encontrada.</td></tr>
+                    <tr><td colSpan={5} className="p-12 text-center text-slate-500">Nenhuma OS encontrada.</td></tr>
                   ) : (
                     ordensFiltradas.map(os => {
                         const corStatus = os.status === 'Fila de Impressão' ? 'bg-slate-100 text-slate-700' : os.status === 'Em Produção' ? 'bg-blue-100 text-blue-700' : os.status === 'Acabamento' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
 
                         return (
-                        <tr key={os.id} className={`transition-colors cursor-pointer group hover:bg-slate-50`} onClick={() => abrirPrancheta(os)}>
+                        <tr key={os.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => abrirPrancheta(os)}>
+                          <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                                checked={osSelecionadasLote.includes(os.id)} 
+                                onChange={(e) => {
+                                    if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]);
+                                    else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id));
+                                }} 
+                              />
+                          </td>
                           <td className="p-4 text-center font-black text-purple-700 font-mono text-sm">OSG-{String(os.numero_op).padStart(4,'0')}</td>
                           <td className="p-4">
                               <p className="font-bold text-slate-800 text-sm leading-tight">{os.cliente_nome}</p>
@@ -571,6 +676,7 @@ export default function Grafica() {
           </div>
         )}
 
+        {/* ABA: PRANCHETA DO IMPRESSOR */}
         {abaAtiva === "painel" && osSelecionada && (
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
             <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-purple-600">
@@ -586,17 +692,20 @@ export default function Grafica() {
                         <span className="flex items-center gap-1 text-indigo-600"><UserCheck className="w-3.5 h-3.5 text-indigo-400"/> Operador: {osSelecionada.operador_nome || 'N/A'}</span>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Select value={statusOS} onValueChange={setStatusOS}>
-                        <SelectTrigger className="w-44 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
-                        <SelectContent className="bg-white z-[99999]"><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Pronto para Entrega">Pronto para Entrega</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
-                    </Select>
-                    <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Etapa</Button>
+                <div className="flex flex-col md:flex-row items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={() => gerarComprovantePDF([osSelecionada])} className="text-slate-600 border-slate-300 gap-2"><FileText className="w-4 h-4"/> Imprimir Comprovante</Button>
+                    <div className="flex items-center gap-2">
+                        <Select value={statusOS} onValueChange={setStatusOS}>
+                            <SelectTrigger className="w-44 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
+                            <SelectContent className="bg-white z-[99999]"><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Pronto para Entrega">Pronto para Entrega</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
+                        </Select>
+                        <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Etapa</Button>
+                    </div>
                 </div>
             </div>
 
-            {/* PAINEL DE IMPRESSÃO */}
-            {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
+            {/* PAINEL DE IMPRESSÃO - AGORA FIXO, INDEPENDENTE DO STATUS */}
+            {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
                 <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm space-y-6">
                     
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -625,7 +734,8 @@ export default function Grafica() {
                                     <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b">
                                         <th className="p-2 font-medium">Data</th>
                                         <th className="p-2 font-medium">Equipamento</th>
-                                        <th className="p-2 font-medium text-center">Val. Unit. (Pág)</th>
+                                        <th className="p-2 font-medium text-center">Cont. Inicial</th>
+                                        <th className="p-2 font-medium text-center">Cont. Final</th>
                                         <th className="p-2 font-medium text-center">Págs/Produto</th>
                                         <th className="p-2 font-medium text-center">Produzido (Serviço)</th>
                                         <th className="p-2 font-medium text-center text-rose-500">Desperdício (Páginas)</th>
@@ -636,7 +746,8 @@ export default function Grafica() {
                                         <tr key={hist.id} className="hover:bg-slate-50">
                                             <td className="p-2 text-xs text-slate-600">{new Date(hist.data).toLocaleDateString('pt-BR')}</td>
                                             <td className="p-2 font-medium text-slate-800 text-xs">{hist.equipamentoNome}</td>
-                                            <td className="p-2 text-center text-xs">R$ {hist.valorUnitarioPagina?.toFixed(2)}</td>
+                                            <td className="p-2 text-center text-xs font-mono font-bold text-slate-500">{hist.contadorInicial}</td>
+                                            <td className="p-2 text-center text-xs font-mono font-bold text-slate-700">{hist.contadorFinal || '-'}</td>
                                             <td className="p-2 text-center text-xs">{hist.paginasPorProduto}</td>
                                             {hist.status === 'imprimindo' ? (
                                                 <td colSpan={2} className="p-2 text-center font-bold text-blue-500 animate-pulse text-xs bg-blue-50/50">Produção em andamento...</td>
@@ -653,7 +764,8 @@ export default function Grafica() {
                         </div>
                     )}
                     
-                    {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && (
+                    {/* NOVO APONTAMENTO / OU RETORNO DE APONTAMENTO PENDENTE */}
+                    {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="md:col-span-2 space-y-2">
                                 <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
@@ -714,7 +826,7 @@ export default function Grafica() {
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
                             <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
                             <p className="text-slate-500 text-sm">
-                                Lote ativo de <span className="font-bold">{qtdImprimirServico} unidades</span> ({qtdImprimirServico * paginasPorProduto} páginas) (Iniciado em: {contadorInicial}).<br/>
+                                Lote ativo de <span className="font-bold">{qtdImprimirServico} unidades</span> ({qtdImprimirServico * paginasPorProduto} páginas) (Contador Inicial: <span className="font-mono text-slate-800">{contadorInicial}</span>).<br/>
                                 <span className="text-blue-600 font-medium">Este status já está salvo no banco. Você pode fechar o sistema e retornar mais tarde.</span>
                             </p>
                             <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
@@ -727,99 +839,89 @@ export default function Grafica() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="space-y-6">
-                    
-                    <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
-                        <div className="flex justify-between items-center mb-4 border-b pb-2">
-                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
-                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
-                                {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar
-                            </Button>
-                        </div>
-                        
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-                            {anexos.length === 0 ? (
-                                <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado.</p>
-                            ) : (
-                                anexos.map(anexo => (
-                                    <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
-                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"><Download className="w-3.5 h-3.5"/></a>
-                                            <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* ANEXOS */}
+                <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
+                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
+                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
+                            {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar
+                        </Button>
                     </div>
-
-                    <div className="bg-slate-50 p-5 rounded-xl border shadow-sm border-slate-200">
-                        {!editandoObs ? (
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{osSelecionada.observacoes || "Nenhuma observação."}</p>
+                    
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                        {anexos.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado.</p>
                         ) : (
-                            <textarea value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="w-full min-h-[120px] p-3 text-sm rounded-md border outline-none"></textarea>
+                            anexos.map(anexo => (
+                                <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
+                                    <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"><Download className="w-3.5 h-3.5"/></a>
+                                        <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                                    </div>
+                                </div>
+                            ))
                         )}
                     </div>
                 </div>
 
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                        <div className="p-4 border-b bg-purple-50 flex flex-wrap justify-between items-center gap-4">
-                            <div>
-                                <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Insumos Consumidos</h4>
-                            </div>
-                            <div className="flex gap-2">
-                                <Input list="grafica-insumos" value={buscaInsumo} onChange={e => setBuscaInsumo(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') adicionarInsumo() }} placeholder="Buscar insumo..." className="h-9 text-xs w-48 bg-white border-purple-200" />
-                                <Button size="sm" onClick={adicionarInsumo} className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="w-4 h-4"/></Button>
-                            </div>
+                {/* INSUMOS E CONCLUSÃO */}
+                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                    <div className="p-4 border-b bg-purple-50 flex flex-wrap justify-between items-center gap-4">
+                        <div>
+                            <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Insumos Consumidos</h4>
                         </div>
-                        
-                        <div className="overflow-x-auto min-h-[200px]">
-                            <table className="w-full text-left text-sm border-collapse">
-                                <thead>
-                                    <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b bg-white">
-                                        <th className="p-3 font-medium">Insumo</th>
-                                        <th className="p-3 font-medium text-center">Qtd</th>
-                                        <th className="p-3 font-medium text-right">Custo Un.</th>
-                                        <th className="p-3 font-medium text-right">Total</th>
-                                        <th className="p-3"></th>
+                        <div className="flex gap-2">
+                            <Input list="grafica-insumos" value={buscaInsumo} onChange={e => setBuscaInsumo(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') adicionarInsumo() }} placeholder="Buscar insumo..." className="h-9 text-xs w-48 bg-white border-purple-200" />
+                            <Button size="sm" onClick={adicionarInsumo} className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="w-4 h-4"/></Button>
+                        </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto min-h-[200px]">
+                        <table className="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b bg-white">
+                                    <th className="p-3 font-medium">Insumo</th>
+                                    <th className="p-3 font-medium text-center">Qtd</th>
+                                    <th className="p-3 font-medium text-right">Custo Un.</th>
+                                    <th className="p-3 font-medium text-right">Total</th>
+                                    <th className="p-3"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {insumos.map((ins, idx) => (
+                                    <tr key={ins.id} className="bg-white hover:bg-slate-50">
+                                        <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
+                                        <td className="p-3 text-center">
+                                            <Input type="number" step="0.0001" min="0" value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200"/>
+                                        </td>
+                                        <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
+                                        <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
+                                        <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
                                     </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {insumos.map((ins, idx) => (
-                                        <tr key={ins.id} className="bg-white hover:bg-slate-50">
-                                            <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
-                                            <td className="p-3 text-center">
-                                                <Input type="number" step="0.0001" min="0" value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200"/>
-                                            </td>
-                                            <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
-                                            <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
-                                            <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <div className="bg-slate-800 p-5 text-white flex flex-col md:flex-row justify-between items-center gap-4">
-                            <div className="flex gap-8 w-full md:w-auto">
-                                <div>
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Prod.</p>
-                                    <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div className="bg-slate-800 p-5 text-white flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex gap-8 w-full md:w-auto">
+                            <div>
+                                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Prod.</p>
+                                <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
+                            </div>
+                            {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
+                                <div className="border-l border-slate-600 pl-8">
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3"/> Receita Impressões Estimada</p>
+                                    <p className="text-2xl font-black text-emerald-400">R$ {totalReceitaGerada.toFixed(2).replace('.',',')}</p>
                                 </div>
-                                {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
-                                    <div className="border-l border-slate-600 pl-8">
-                                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3"/> Receita Impressões Estimada</p>
-                                        <p className="text-2xl font-black text-emerald-400">R$ {totalReceitaGerada.toFixed(2).replace('.',',')}</p>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="w-full md:w-auto">
-                                <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS</Button>
-                            </div>
+                            )}
+                        </div>
+                        <div className="w-full md:w-auto">
+                            <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS</Button>
                         </div>
                     </div>
                 </div>
