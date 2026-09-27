@@ -164,7 +164,6 @@ export default function Grafica() {
   const fetchOrdens = async () => {
     const { data } = await supabase.from('prd_ordens_producao').select('*').order('numero_op', { ascending: false });
     if (data) {
-      // Mapeia visualmente para garantir que o Kanban identifique Cancelados também
       const dataNormalizada = data.map(os => ({
         ...os,
         status: (STATUS_FLUXO_GRAFICA.includes(os.status) || os.status === "Cancelado") ? os.status : "Solicitação Recebida"
@@ -215,7 +214,6 @@ export default function Grafica() {
     setOsSelecionada(os);
     setStatusOS(os.status);
     
-    // Popula campos de edição dinâmica
     setEditDescServico(os.descricao_servico || "");
     setEditQtdProduzir(os.quantidade_produzir || 1);
     setEditDataPrevista(os.data_prevista || "");
@@ -316,25 +314,40 @@ export default function Grafica() {
       const flagImpressao = osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") ? "[Possui Impressão: Sim]\n" : "[Possui Impressão: Não]\n";
       const obsFinal = flagImpressao + obsTemp;
 
-      await supabase.from('prd_ordens_producao').update({ 
+      // O payload foi blindado, se editDataPrevista for vazio, enviamos null para evitar Erro 400 no Banco
+      const payloadUpdate = { 
         status: novoStatus, 
         custo_total_insumos: custoTotalInsumos,
         observacoes: obsFinal,
         descricao_servico: editDescServico,
-        quantidade_produzir: editQtdProduzir,
-        data_prevista: editDataPrevista,
-        paginas_por_produto: editPaginasPorProduto
-      }).eq('id', osSelecionada.id);
+        quantidade_produzir: editQtdProduzir || 1,
+        data_prevista: editDataPrevista || null, 
+        paginas_por_produto: editPaginasPorProduto || 1
+      };
 
-      await supabase.from('prd_op_insumos').delete().eq('op_id', osSelecionada.id);
+      const { error: updateError } = await supabase.from('prd_ordens_producao').update(payloadUpdate).eq('id', osSelecionada.id);
+      if (updateError) throw new Error("Falha ao atualizar dados: " + updateError.message);
+
+      const { error: delError } = await supabase.from('prd_op_insumos').delete().eq('op_id', osSelecionada.id);
+      if (delError) throw new Error("Falha de comunicação: " + delError.message);
+
       if (insumos.length > 0) {
         const payloadInsumos = insumos.map(i => ({ op_id: osSelecionada.id, produto_id: i.produtoId, produto_nome: i.nome, quantidade: i.quantidade, custo_unitario: i.custoUn, custo_total: i.quantidade * i.custoUn }));
-        await supabase.from('prd_op_insumos').insert(payloadInsumos);
+        const { error: insError } = await supabase.from('prd_op_insumos').insert(payloadInsumos);
+        if (insError) throw new Error("Erro ao salvar insumos: " + insError.message);
       }
 
-      alert("Apontamentos e OSG atualizados com sucesso!");
-      fetchOrdens(); setOsSelecionada(null);
-    } catch (e: any) { alert(e.message); } finally { setSalvandoOS(false); }
+      // Se o comando de Salvar for manual (sem parametro statusFinal), alertamos
+      if (!statusFinal) {
+          alert("Apontamentos e OSG atualizados com sucesso!");
+          fetchOrdens(); setOsSelecionada(null);
+      }
+    } catch (e: any) { 
+        alert(e.message); 
+        throw e; // Interrompe para evitar o falso positivo
+    } finally { 
+        setSalvandoOS(false); 
+    }
   };
 
   const concluirServico = async () => {
@@ -355,7 +368,9 @@ export default function Grafica() {
       }
       alert("Serviço Concluído! A ordem de serviço está pronta para ser faturada.");
       fetchOrdens(); setOsSelecionada(null);
-    } catch (e: any) { alert("Erro ao concluir: " + e.message); } finally { setSalvandoOS(false); }
+    } catch (e: any) { 
+        // O Erro já foi exibido pela função salvarAndamento
+    } finally { setSalvandoOS(false); }
   };
 
   // --- INICIAR IMPRESSÃO ---
@@ -383,7 +398,8 @@ export default function Grafica() {
       setStatusImpressao("imprimindo");
 
       try {
-          await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+          const { error } = await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+          if (error) throw error;
       } catch (e: any) {
           alert("Erro ao persistir o início da produção no banco: " + e.message);
       }
@@ -430,7 +446,8 @@ export default function Grafica() {
     setHistoricoProducao(novoHistorico);
 
     try {
-        await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+        const { error } = await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+        if (error) throw error;
         
         const totalProduzidoAgora = novoHistorico.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
         if (totalProduzidoAgora >= osSelecionada.quantidade_produzir) {
