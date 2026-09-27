@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare } from "lucide-react";
+import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -24,6 +24,19 @@ type ApontamentoProducao = {
     paginasPorProduto: number; 
     valorUnitarioPagina: number; 
 };
+
+// ORDEM EXATA DOS STATUS SOLICITADA
+const STATUS_FLUXO_GRAFICA = [
+  "Solicitação Recebida",
+  "Levantamento de Material",
+  "Fechamento de Arquivo",
+  "Impressão",
+  "Acabamento",
+  "Pronto para Expedição",
+  "Entregue",
+  "Faturamento",
+  "Concluído"
+];
 
 export default function Grafica() {
   const [abaAtiva, setAbaAtiva] = useState<"abrir" | "painel">("painel");
@@ -72,7 +85,8 @@ export default function Grafica() {
   const [contadorInicial, setContadorInicial] = useState("");
   const [contadorFinal, setContadorFinal] = useState("");
 
-  // ESTADOS: ANEXOS
+  // ESTADOS: ANEXOS & OBSERVAÇÕES
+  const [obsTemp, setObsTemp] = useState("");
   const [anexos, setAnexos] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -143,7 +157,14 @@ export default function Grafica() {
 
   const fetchOrdens = async () => {
     const { data } = await supabase.from('prd_ordens_producao').select('*').order('numero_op', { ascending: false });
-    if (data) setOrdens(data);
+    if (data) {
+      // Caso haja ordens com status antigo, mapeamos visualmente para a nova estrutura sem perder o dado
+      const dataNormalizada = data.map(os => ({
+        ...os,
+        status: STATUS_FLUXO_GRAFICA.includes(os.status) ? os.status : "Solicitação Recebida"
+      }));
+      setOrdens(dataNormalizada);
+    }
   };
 
   // --- ABRIR OS ---
@@ -168,7 +189,7 @@ export default function Grafica() {
         data_prevista: dataPrevista,
         paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
         valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
-        status: 'Fila de Impressão',
+        status: 'Solicitação Recebida', // Inicia na primeira coluna do Kanban
         observacoes: `[Possui Impressão: ${possuiImpressao}]`, 
         historico_producao: []
       };
@@ -188,6 +209,10 @@ export default function Grafica() {
     setOsSelecionada(os);
     setStatusOS(os.status);
     
+    // Limpamos o lixo da tag de impressão para exibir só os comentários reais no follow-up
+    const obsLimpas = os.observacoes?.replace("[Possui Impressão: Sim]\n", "")?.replace("[Possui Impressão: Não]\n", "")?.replace("[Possui Impressão: Sim]", "")?.replace("[Possui Impressão: Não]", "") || "";
+    setObsTemp(obsLimpas);
+
     let hist: ApontamentoProducao[] = [];
     try { hist = typeof os.historico_producao === 'string' ? JSON.parse(os.historico_producao) : (os.historico_producao || []); } catch(e){}
     setHistoricoProducao(hist);
@@ -277,7 +302,15 @@ export default function Grafica() {
       const novoStatus = statusFinal || statusOS;
       const custoTotalInsumos = insumos.reduce((a, b) => a + (b.quantidade * b.custoUn), 0);
 
-      await supabase.from('prd_ordens_producao').update({ status: novoStatus, custo_total_insumos: custoTotalInsumos }).eq('id', osSelecionada.id);
+      // Reconstrói a observação garantindo que a tag de impressão fique escondida lá no banco
+      const flagImpressao = osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") ? "[Possui Impressão: Sim]\n" : "[Possui Impressão: Não]\n";
+      const obsFinal = flagImpressao + obsTemp;
+
+      await supabase.from('prd_ordens_producao').update({ 
+        status: novoStatus, 
+        custo_total_insumos: custoTotalInsumos,
+        observacoes: obsFinal
+      }).eq('id', osSelecionada.id);
 
       await supabase.from('prd_op_insumos').delete().eq('op_id', osSelecionada.id);
       if (insumos.length > 0) {
@@ -285,30 +318,9 @@ export default function Grafica() {
         await supabase.from('prd_op_insumos').insert(payloadInsumos);
       }
 
-      alert("Apontamentos de serviço salvos com sucesso!");
+      alert("Apontamentos e status atualizados com sucesso!");
       fetchOrdens(); setOsSelecionada(null);
     } catch (e: any) { alert(e.message); } finally { setSalvandoOS(false); }
-  };
-
-  const concluirServico = async () => {
-    if (!confirm("Atenção: Ao concluir a OS, a matéria-prima listada será baixada do estoque. Confirmar?")) return;
-    setSalvandoOS(true);
-    try {
-      await salvarAndamento('Pronto para Entrega');
-      for (const insumo of insumos) {
-        const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', insumo.produtoId).single();
-        if (prodData) {
-            const novoEst = Math.max(0, prodData.estoque_atual - insumo.quantidade);
-            await supabase.from('log_produtos').update({ estoque_atual: novoEst }).eq('id', insumo.produtoId);
-        }
-        await supabase.from('log_movimentacoes').insert({
-            produto_id: insumo.produtoId, tipo: 'Saída', quantidade: insumo.quantidade, 
-            documento: `OSG-${osSelecionada.numero_op}`, fornecedor_cliente: osSelecionada.cliente_nome, observacoes: 'Consumo Gráfica'
-        });
-      }
-      alert("Serviço Concluído! A ordem de serviço está pronta para ser faturada.");
-      fetchOrdens(); setOsSelecionada(null);
-    } catch (e: any) { alert("Erro ao concluir: " + e.message); } finally { setSalvandoOS(false); }
   };
 
   // --- INICIAR IMPRESSÃO ---
@@ -536,7 +548,6 @@ export default function Grafica() {
 
           let finalY = (doc as any).lastAutoTable.finalY + 20;
 
-          // Se a assinatura for cair em cima do rodapé, cria nova página
           if (finalY + 50 > pageHeight - 35) {
               doc.addPage();
               finalY = 50; 
@@ -586,423 +597,440 @@ export default function Grafica() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-6xl mx-auto mb-12">
-        <datalist id="grafica-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>
-        <datalist id="grafica-operadores">{operadoresBD.map((op) => <option key={op.id} value={op.nome} />)}</datalist>
-        <datalist id="grafica-insumos">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
-
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><Layers className="w-6 h-6 text-purple-600" /> Produção Gráfica (Serviços)</h1>
-            <p className="text-slate-500">Gestão de Ordens de Serviço Gráfico (OSG) e controle de produção.</p>
-          </div>
-          <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button onClick={() => { setAbaAtiva("painel"); setOsSelecionada(null); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "painel" ? "bg-white shadow-sm text-purple-700" : "text-slate-600"}`}><Printer className="w-4 h-4"/> Painel</button>
-            <button onClick={() => { setAbaAtiva("abrir"); setOsSelecionada(null); }} className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center gap-2 ${abaAtiva === "abrir" ? "bg-white shadow-sm text-emerald-700" : "text-slate-600"}`}><Plus className="w-4 h-4"/> Nova OS</button>
-          </div>
-        </div>
-
-        {/* ABA: NOVA OS */}
-        {abaAtiva === "abrir" && (
-          <div className="bg-white p-8 rounded-xl border shadow-sm max-w-3xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="text-center border-b pb-6">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 text-purple-600 mb-3"><FileOutput className="w-6 h-6"/></div>
-                <h2 className="text-xl font-bold text-slate-800">Gerar Ordem de Serviço (OS)</h2>
+      <div className="flex h-[calc(100vh-6rem)] max-w-[1600px] mx-auto overflow-hidden bg-slate-50 rounded-xl border shadow-sm">
+        
+        {/* KANBAN: ÁREA PRINCIPAL */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          
+          {/* Header da Tela */}
+          <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Layers className="w-5 h-5 text-purple-600"/> Kanban de Produção Gráfica</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Gestão visual do fluxo de Ordens de Serviço (OSG).</p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold text-slate-700">Cliente Autorizador <span className="text-red-500">*</span></label>
-                  <Input list="grafica-clientes" value={clienteBusca} onChange={e => setClienteBusca(e.target.value)} placeholder="Nome do cliente ou empresa..." className="bg-slate-50" />
-              </div>
-              
-              <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><User className="w-4 h-4 text-slate-400"/> Nome do Solicitante <span className="text-red-500">*</span></label>
-                  <Input value={solicitante} onChange={e => setSolicitante(e.target.value)} placeholder="Ex: Tais Santos" className="bg-slate-50" />
-              </div>
-              <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400"/> Data da Solicitação <span className="text-red-500">*</span></label>
-                  <Input type="date" value={dataSolicitacao} onChange={e => setDataSolicitacao(e.target.value)} className="bg-slate-50" />
-              </div>
+            <div className="flex gap-2 items-center flex-wrap">
+               {osSelecionadasLote.length > 0 && (
+                  <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" className="bg-slate-800 hover:bg-slate-900 text-white gap-2 shadow-sm mr-2">
+                      {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
+                      {exportando ? "Gerando PDF..." : `Gerar Comprovante (${osSelecionadasLote.length})`}
+                  </Button>
+              )}
+              <Button onClick={() => setAbaAtiva("abrir")} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Nova OSG</Button>
+            </div>
+          </div>
 
-              <div className="space-y-2 md:col-span-2 pt-2 border-t border-slate-100">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><UserCheck className="w-4 h-4 text-indigo-500"/> Operador Gráfico Responsável <span className="text-red-500">*</span></label>
-                  <Input list="grafica-operadores" value={operadorNome} onChange={e => setOperadorNome(e.target.value)} placeholder="Selecione ou digite o nome do operador..." className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium" />
-              </div>
+          {/* O BOARD KANBAN DE FATO */}
+          {abaAtiva === "painel" && !osSelecionada && (
+              <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6 bg-slate-100">
+                {STATUS_FLUXO_GRAFICA.map(colunaNome => {
+                  const cardsDaColuna = ordensFiltradas.filter(os => os.status === colunaNome);
 
-              <div className="space-y-2 md:col-span-2 mt-2 pt-4 border-t border-slate-100">
-                  <label className="text-sm font-bold text-slate-700">Serviço a ser Realizado <span className="text-red-500">*</span></label>
-                  <Input value={descServico} onChange={e => setDescServico(e.target.value)} placeholder="Ex: Impressão de 500 Apostilas..." className="bg-slate-50" />
-              </div>
-              <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Quantidade Total (Qtd do Serviço) <span className="text-red-500">*</span></label>
-                  <Input type="number" min="1" value={qtdProduzir} onChange={e => setQtdProduzir(parseFloat(e.target.value)||1)} className="bg-slate-50 font-bold text-center" />
-              </div>
-              <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Data Prevista p/ Entrega <span className="text-red-500">*</span></label>
-                  <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
-              </div>
-
-              <div className="space-y-4 md:col-span-2 bg-slate-50 p-4 rounded-md border border-slate-200 mt-2">
-                  <div className="space-y-2">
-                      <label className="text-sm font-bold text-slate-700">Requer Impressão em Equipamento TC?</label>
-                      <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
-                          <SelectTrigger className="bg-white z-[99999] border-slate-300"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-white z-[99999]">
-                              <SelectItem value="Sim">Sim, exigirá apontamento de contadores</SelectItem>
-                              <SelectItem value="Não">Não, apenas acabamento/outros</SelectItem>
-                          </SelectContent>
-                      </Select>
-                  </div>
-                  
-                  {possuiImpressao === "Sim" && (
-                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 animate-in slide-in-from-top-2">
-                          <div className="space-y-2">
-                              <label className="text-sm font-bold text-blue-800">Qtd de Páginas por Produto <span className="text-red-500">*</span></label>
-                              <Input type="number" min="1" value={paginasPorProdutoOS} onChange={e => setPaginasPorProdutoOS(Number(e.target.value))} placeholder="Ex: 50" className="bg-white border-blue-200" />
-                          </div>
-                          <div className="space-y-2">
-                              <label className="text-sm font-bold text-blue-800">Valor Unitário da Pág (R$) <span className="text-red-500">*</span></label>
-                              <Input type="number" step="0.01" value={valorUnitarioPaginaOS} onChange={e => setValorUnitarioPaginaOS(e.target.value)} placeholder="0.00" className="bg-white border-blue-200" />
-                          </div>
+                  return (
+                  <div key={colunaNome} className="w-80 shrink-0 flex flex-col bg-slate-200/50 rounded-xl border border-slate-300/60 max-h-full">
+                    {/* Header da Coluna */}
+                    <div className="p-3 border-b border-slate-300/60 bg-slate-200 rounded-t-xl flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-slate-700 text-sm">{colunaNome}</h3>
+                        <span className="bg-slate-300 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{cardsDaColuna.length}</span>
                       </div>
-                  )}
+                    </div>
+
+                    {/* Área dos Cards */}
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                      {cardsDaColuna.map(os => (
+                        <div 
+                          key={os.id} 
+                          onClick={() => abrirPrancheta(os)}
+                          className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-purple-400 hover:shadow-md cursor-pointer transition-all relative group"
+                        >
+                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                <input type="checkbox" className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer shadow-sm" 
+                                    checked={osSelecionadasLote.includes(os.id)} 
+                                    onChange={(e) => {
+                                        if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]);
+                                        else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id));
+                                    }} 
+                                />
+                          </div>
+
+                          <div className="flex justify-between items-start mb-2 pr-6">
+                            <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">OSG-{String(os.numero_op).padStart(4,'0')}</span>
+                            <span className={`flex items-center gap-1 text-[9px] font-bold ${new Date(os.data_prevista) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
+                              <CalendarDays className="w-3 h-3"/> {new Date(os.data_prevista).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                            </span>
+                          </div>
+                          
+                          <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1 line-clamp-2" title={os.cliente_nome}>{os.cliente_nome}</h4>
+                          <p className="text-[10px] text-slate-500 line-clamp-2 mb-3 leading-relaxed">{os.descricao_servico} <span className="font-semibold text-slate-700">(Qtd: {os.quantidade_produzir})</span></p>
+                          
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-auto">
+                            <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
+                                <UserCheck className="w-3 h-3 text-indigo-400 shrink-0"/> {os.operador_nome || 'Não atribuído'}
+                            </div>
+                            {os.observacoes?.includes("[Possui Impressão: Sim]") && <Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Requer Impressão"/>}
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {cardsDaColuna.length === 0 && (
+                        <div className="h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">
+                          Vazio
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  )
+                })}
               </div>
-            </div>
+          )}
 
-            <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
-                {salvandoOS ? "Gerando..." : "Enviar para Fila de Produção"}
-            </Button>
-          </div>
-        )}
-
-        {/* ABA: PAINEL DE PRODUÇÃO (TABELA PRINCIPAL) */}
-        {abaAtiva === "painel" && !osSelecionada && (
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
-              <div className="relative w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaOS} onChange={e => setBuscaOS(e.target.value)} placeholder="Buscar OS ou Solicitante..." className="pl-9 bg-white" /></div>
-            </div>
-
-            {/* BARRA DE AÇÃO COLETIVA (GERAR COMPROVANTE LOTE) */}
-            {osSelecionadasLote.length > 0 && (
-                <div className="bg-blue-50 border-b border-blue-200 p-3 flex justify-between items-center px-4 animate-in slide-in-from-top-2">
-                    <span className="text-sm text-blue-800 font-bold flex items-center gap-2"><CheckSquare className="w-4 h-4"/> {osSelecionadasLote.length} OSG(s) selecionada(s)</span>
-                    <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">
-                        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
-                        {exportando ? "Gerando PDF..." : "Gerar Comprovante Coletivo"}
-                    </Button>
-                </div>
-            )}
-
-            <div className="overflow-x-auto min-h-[400px]">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
-                    <th className="p-4 font-semibold border-b text-center w-12">
-                        <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                            onChange={(e) => setOsSelecionadasLote(e.target.checked ? ordensFiltradas.map(o => o.id) : [])}
-                            checked={osSelecionadasLote.length === ordensFiltradas.length && ordensFiltradas.length > 0} 
-                        />
-                    </th>
-                    <th className="p-4 font-semibold border-b text-center w-28">OS Nº</th>
-                    <th className="p-4 font-semibold border-b">Cliente / Serviço</th>
-                    <th className="p-4 font-semibold border-b text-center">Entrega</th>
-                    <th className="p-4 font-semibold border-b text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {ordensFiltradas.length === 0 ? (
-                    <tr><td colSpan={5} className="p-12 text-center text-slate-500">Nenhuma OS encontrada.</td></tr>
-                  ) : (
-                    ordensFiltradas.map(os => {
-                        const corStatus = os.status === 'Fila de Impressão' ? 'bg-slate-100 text-slate-700' : os.status === 'Em Produção' ? 'bg-blue-100 text-blue-700' : os.status === 'Acabamento' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
-
-                        return (
-                        <tr key={os.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => abrirPrancheta(os)}>
-                          <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                              <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                                checked={osSelecionadasLote.includes(os.id)} 
-                                onChange={(e) => {
-                                    if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]);
-                                    else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id));
-                                }} 
-                              />
-                          </td>
-                          <td className="p-4 text-center font-black text-purple-700 font-mono text-sm">OSG-{String(os.numero_op).padStart(4,'0')}</td>
-                          <td className="p-4">
-                              <p className="font-bold text-slate-800 text-sm leading-tight">{os.cliente_nome}</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5"><span className="uppercase">Solicitante:</span> <span className="font-bold text-slate-600">{os.solicitante || 'Não informado'}</span> | <span className="uppercase">Operador:</span> <span className="font-bold text-indigo-600">{os.operador_nome || 'Não atribuído'}</span></p>
-                              <p className="text-xs text-slate-500 mt-1 line-clamp-1">{os.descricao_servico} <span className="font-semibold">(Qtd Serviço: {os.quantidade_produzir})</span></p>
-                          </td>
-                          <td className="p-4 text-center text-xs font-bold text-rose-600">{new Date(os.data_prevista).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-                          <td className="p-4 text-center">
-                              <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>{os.status}</span>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ABA: PRANCHETA DO IMPRESSOR */}
-        {abaAtiva === "painel" && osSelecionada && (
-          <div className="space-y-6 animate-in slide-in-from-right-8 duration-200">
-            <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-purple-600">
-                <div>
-                    <div className="flex items-center gap-3 mb-1">
-                        <Button variant="ghost" size="sm" onClick={() => setOsSelecionada(null)} className="h-8 px-2 text-slate-400 hover:text-slate-700"><ArrowLeft className="w-4 h-4"/></Button>
-                        <h2 className="text-2xl font-black text-slate-800 uppercase">OSG-{String(osSelecionada.numero_op).padStart(4,'0')}</h2>
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{osSelecionada.cliente_nome}</span>
+          {/* PRANCHETA DO IMPRESSOR (DENTRO DA OSG) */}
+          {abaAtiva === "painel" && osSelecionada && (
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50">
+              <div className="max-w-5xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-200">
+                <div className="bg-white p-5 rounded-xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-l-4 border-l-purple-600">
+                    <div>
+                        <div className="flex items-center gap-3 mb-1">
+                            <Button variant="ghost" size="sm" onClick={() => setOsSelecionada(null)} className="h-8 px-2 text-slate-400 hover:text-slate-700"><ArrowLeft className="w-4 h-4"/></Button>
+                            <h2 className="text-2xl font-black text-slate-800 uppercase">OSG-{String(osSelecionada.numero_op).padStart(4,'0')}</h2>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{osSelecionada.cliente_nome}</span>
+                        </div>
+                        <div className="ml-12 mt-1 flex flex-wrap gap-4 text-xs font-medium text-slate-500">
+                            <span className="flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400"/> Por: {osSelecionada.solicitante || 'Não informado'}</span>
+                            {osSelecionada.data_solicitacao && <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5 text-slate-400"/> Em: {new Date(osSelecionada.data_solicitacao).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>}
+                            <span className="flex items-center gap-1 text-indigo-600"><UserCheck className="w-3.5 h-3.5 text-indigo-400"/> Operador: {osSelecionada.operador_nome || 'N/A'}</span>
+                        </div>
                     </div>
-                    <div className="ml-12 mt-1 flex flex-wrap gap-4 text-xs font-medium text-slate-500">
-                        <span className="flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400"/> Por: {osSelecionada.solicitante || 'Não informado'}</span>
-                        {osSelecionada.data_solicitacao && <span className="flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5 text-slate-400"/> Em: {new Date(osSelecionada.data_solicitacao).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>}
-                        <span className="flex items-center gap-1 text-indigo-600"><UserCheck className="w-3.5 h-3.5 text-indigo-400"/> Operador: {osSelecionada.operador_nome || 'N/A'}</span>
+                    <div className="flex flex-col md:flex-row items-center gap-3">
+                        <Button variant="outline" size="sm" disabled={exportando} onClick={() => gerarComprovantePDF([osSelecionada])} className="text-slate-600 border-slate-300 gap-2">
+                            {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
+                            {exportando ? "Gerando..." : "Imprimir Comprovante"}
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Select value={statusOS} onValueChange={setStatusOS}>
+                                <SelectTrigger className="w-48 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
+                                <SelectContent className="bg-white z-[99999]">
+                                    {STATUS_FLUXO_GRAFICA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Prancheta</Button>
+                        </div>
                     </div>
                 </div>
-                <div className="flex flex-col md:flex-row items-center gap-3">
-                    <Button variant="outline" size="sm" disabled={exportando} onClick={() => gerarComprovantePDF([osSelecionada])} className="text-slate-600 border-slate-300 gap-2">
-                        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
-                        {exportando ? "Gerando..." : "Imprimir Comprovante"}
-                    </Button>
-                    <div className="flex items-center gap-2">
-                        <Select value={statusOS} onValueChange={setStatusOS}>
-                            <SelectTrigger className="w-44 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
-                            <SelectContent className="bg-white z-[99999]"><SelectItem value="Fila de Impressão">Fila de Impressão</SelectItem><SelectItem value="Em Produção">Em Produção</SelectItem><SelectItem value="Acabamento">Acabamento</SelectItem><SelectItem value="Pronto para Entrega">Pronto para Entrega</SelectItem><SelectItem value="Cancelado">Cancelado</SelectItem></SelectContent>
-                        </Select>
-                        <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Etapa</Button>
-                    </div>
-                </div>
-            </div>
 
-            {/* PAINEL DE IMPRESSÃO - AGORA FIXO, INDEPENDENTE DO STATUS */}
-            {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
-                <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm space-y-6">
-                    
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><Printer className="w-5 h-5"/> Painel de Produção & Apontamento</h3>
-                        <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-blue-100 shadow-sm w-full md:w-1/2">
-                            <div className="flex-1">
-                                <div className="flex justify-between text-xs font-bold text-slate-600 mb-1">
-                                    <span>Progresso do Serviço ({percentualConclusao.toFixed(0)}%)</span>
-                                    <span>{totalProduzidoGeral} / {osSelecionada.quantidade_produzir} un</span>
+                {/* NOVO BLOCO: OBSERVAÇÕES / FOLLOW-UP */}
+                <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
+                    <h4 className="text-sm font-bold text-amber-900 uppercase flex items-center gap-2 mb-3"><MessageSquare className="w-4 h-4 text-amber-600"/> Observações e Follow-up</h4>
+                    <textarea 
+                        value={obsTemp} 
+                        onChange={e => setObsTemp(e.target.value)} 
+                        className="w-full min-h-[100px] p-3 text-sm rounded-md border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500" 
+                        placeholder="Registre aqui o andamento, problemas com arquivos ou informações para a próxima etapa..."
+                    ></textarea>
+                </div>
+
+                {/* PAINEL DE IMPRESSÃO */}
+                {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
+                    <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm space-y-6">
+                        
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><Printer className="w-5 h-5"/> Painel de Produção & Apontamento</h3>
+                            <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-blue-100 shadow-sm w-full md:w-1/2">
+                                <div className="flex-1">
+                                    <div className="flex justify-between text-xs font-bold text-slate-600 mb-1">
+                                        <span>Progresso do Serviço ({percentualConclusao.toFixed(0)}%)</span>
+                                        <span>{totalProduzidoGeral} / {osSelecionada.quantidade_produzir} un</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                        <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${percentualConclusao}%` }}></div>
+                                    </div>
                                 </div>
-                                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                                    <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${percentualConclusao}%` }}></div>
+                                {percentualConclusao >= 100 && <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0"/>}
+                            </div>
+                        </div>
+
+                        {historicoProducao.length > 0 && (
+                            <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
+                                <div className="p-3 bg-slate-50 border-b text-xs font-bold text-slate-600 uppercase flex items-center gap-2">
+                                    <Activity className="w-4 h-4"/> Histórico de Apontamentos
+                                </div>
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b">
+                                            <th className="p-2 font-medium">Data</th>
+                                            <th className="p-2 font-medium">Equipamento</th>
+                                            <th className="p-2 font-medium text-center">Cont. Inicial</th>
+                                            <th className="p-2 font-medium text-center">Cont. Final</th>
+                                            <th className="p-2 font-medium text-center">Págs/Produto</th>
+                                            <th className="p-2 font-medium text-center">Produzido (Serviço)</th>
+                                            <th className="p-2 font-medium text-center text-rose-500">Desperdício (Páginas)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {historicoProducao.map(hist => (
+                                            <tr key={hist.id} className="hover:bg-slate-50">
+                                                <td className="p-2 text-xs text-slate-600">{new Date(hist.data).toLocaleDateString('pt-BR')}</td>
+                                                <td className="p-2 font-medium text-slate-800 text-xs">{hist.equipamentoNome}</td>
+                                                <td className="p-2 text-center text-xs font-mono font-bold text-slate-500">{hist.contadorInicial}</td>
+                                                <td className="p-2 text-center text-xs font-mono font-bold text-slate-700">{hist.contadorFinal || '-'}</td>
+                                                <td className="p-2 text-center text-xs">{hist.paginasPorProduto}</td>
+                                                {hist.status === 'imprimindo' ? (
+                                                    <td colSpan={2} className="p-2 text-center font-bold text-blue-500 animate-pulse text-xs bg-blue-50/50">Produção em andamento...</td>
+                                                ) : (
+                                                    <>
+                                                        <td className="p-2 text-center font-bold text-emerald-600">+{hist.producaoValida} un</td>
+                                                        <td className="p-2 text-center font-bold text-rose-500">{(hist.desperdicio ?? 0) > 0 ? `${hist.desperdicio} págs` : '-'}</td>
+                                                    </>
+                                                )}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        
+                        {/* NOVO APONTAMENTO / OU RETORNO DE APONTAMENTO PENDENTE */}
+                        {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && statusOS !== "Faturamento" && statusOS !== "Concluído" && statusOS !== "Entregue" && (
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="md:col-span-2 space-y-2">
+                                    <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
+                                    <Select value={equipImpressaoId} onValueChange={setEquipImpressaoId}>
+                                        <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue placeholder="Selecione o equipamento interno..."/></SelectTrigger>
+                                        <SelectContent className="bg-white z-[99999]">
+                                            {equipamentosTC.map(e => <SelectItem key={e.id} value={e.id}>{e.log_produtos?.nome} (S/N: {e.numero_serie})</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-blue-800">Qtd do Serviço a Imprimir</label>
+                                    <Input type="number" max={Math.max(0, osSelecionada.quantidade_produzir - totalProduzidoGeral)} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-blue-800">Páginas por Produto</label>
+                                    <Input type="number" min="1" value={paginasPorProduto} onChange={e => setPaginasPorProduto(Number(e.target.value))} className="bg-white text-center border-blue-300" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-blue-800">Valor Unitário por Pág.</label>
+                                    <Input type="number" step="0.01" value={valorUnitarioPagina} onChange={e => setValorUnitarioPagina(e.target.value)} placeholder="0.00" className="bg-white font-bold border-blue-300" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-blue-800">Modo</label>
+                                    <Select value={modoImpressao} onValueChange={setModoImpressao}>
+                                        <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue/></SelectTrigger>
+                                        <SelectContent className="bg-white z-[99999]">
+                                            <SelectItem value="Simplex">Simplex (Frente)</SelectItem>
+                                            <SelectItem value="Duplex">Duplex (Frente/Verso)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                
+                                {equipImpressaoId && (
+                                    <div className="md:col-span-4 mt-4 bg-white p-4 rounded-lg border border-blue-100 shadow-sm">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Estimativas da Rodada (Baseadas no total de {qtdImprimirServico * paginasPorProduto} páginas)</h4>
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                            <div className="p-3 bg-slate-50 rounded border"><p className="text-[10px] uppercase font-bold text-slate-400">Tempo Estimado</p><p className="font-bold text-lg text-slate-700">{tempoEstimado} min</p></div>
+                                            <div className="p-3 bg-emerald-50 rounded border border-emerald-100"><p className="text-[10px] uppercase font-bold text-emerald-600">Custo Orig. Novo</p><p className="font-bold text-lg text-emerald-700">R$ {custoOriginalNovo}</p></div>
+                                            <div className="p-3 bg-teal-50 rounded border border-teal-100"><p className="text-[10px] uppercase font-bold text-teal-600">Orig. Recond.</p><p className="font-bold text-lg text-teal-700">R$ {custoOriginalRecond}</p></div>
+                                            <div className="p-3 bg-blue-50 rounded border border-blue-100"><p className="text-[10px] uppercase font-bold text-blue-600">Comp. Novo</p><p className="font-bold text-lg text-blue-700">R$ {custoCompatNovo}</p></div>
+                                            <div className="p-3 bg-indigo-50 rounded border border-indigo-100"><p className="text-[10px] uppercase font-bold text-indigo-600">Comp. Recond.</p><p className="font-bold text-lg text-indigo-700">R$ {custoCompatRecond}</p></div>
+                                        </div>
+                                        <div className="mt-4 flex gap-4 items-end">
+                                            <div className="flex-1 space-y-2">
+                                                <label className="text-sm font-bold text-rose-600">Contador Inicial (Páginas)</label>
+                                                <Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} placeholder="Contador antes de imprimir" className="bg-white border-rose-300 font-bold" />
+                                            </div>
+                                            <Button onClick={iniciarImpressao} disabled={!contadorInicial || !valorUnitarioPagina || !paginasPorProduto} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 px-8"><PlayCircle className="w-4 h-4 mr-2"/> Iniciar Impressão</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        {statusImpressao === "imprimindo" && (
+                            <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4 shadow-inner">
+                                <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
+                                <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
+                                <p className="text-slate-500 text-sm">
+                                    Lote ativo de <span className="font-bold">{qtdImprimirServico} unidades</span> ({qtdImprimirServico * paginasPorProduto} páginas) (Contador Inicial: <span className="font-mono text-slate-800">{contadorInicial}</span>).<br/>
+                                    <span className="text-blue-600 font-medium">Este status já está salvo no banco. Você pode fechar o sistema e retornar mais tarde.</span>
+                                </p>
+                                <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
+                                    <label className="text-sm font-bold text-rose-600">Contador Final do Equipamento</label>
+                                    <Input type="number" value={contadorFinal} onChange={e => setContadorFinal(e.target.value)} placeholder="Contador após conclusão..." className="font-bold border-rose-300" />
+                                    <Button onClick={finalizarImpressao} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold mt-2"><CheckCircle2 className="w-4 h-4 mr-2"/> Registrar Lote</Button>
                                 </div>
                             </div>
-                            {percentualConclusao >= 100 && <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0"/>}
+                        )}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    {/* ANEXOS */}
+                    <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
+                        <div className="flex justify-between items-center mb-4 border-b pb-2">
+                            <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
+                                {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar
+                            </Button>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                            {anexos.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado.</p>
+                            ) : (
+                                anexos.map(anexo => (
+                                    <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
+                                        <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"><Download className="w-3.5 h-3.5"/></a>
+                                            <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 
-                    {historicoProducao.length > 0 && (
-                        <div className="bg-white rounded-lg border border-blue-100 overflow-hidden">
-                            <div className="p-3 bg-slate-50 border-b text-xs font-bold text-slate-600 uppercase flex items-center gap-2">
-                                <Activity className="w-4 h-4"/> Histórico de Apontamentos
+                    {/* INSUMOS E CONCLUSÃO */}
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                        <div className="p-4 border-b bg-purple-50 flex flex-wrap justify-between items-center gap-4">
+                            <div>
+                                <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Insumos Consumidos</h4>
                             </div>
-                            <table className="w-full text-left text-sm">
+                            <div className="flex gap-2">
+                                <Input list="grafica-insumos" value={buscaInsumo} onChange={e => setBuscaInsumo(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') adicionarInsumo() }} placeholder="Buscar insumo..." className="h-9 text-xs w-48 bg-white border-purple-200" />
+                                <Button size="sm" onClick={adicionarInsumo} className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="w-4 h-4"/></Button>
+                            </div>
+                        </div>
+                        
+                        <div className="overflow-x-auto min-h-[200px]">
+                            <table className="w-full text-left text-sm border-collapse">
                                 <thead>
-                                    <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b">
-                                        <th className="p-2 font-medium">Data</th>
-                                        <th className="p-2 font-medium">Equipamento</th>
-                                        <th className="p-2 font-medium text-center">Cont. Inicial</th>
-                                        <th className="p-2 font-medium text-center">Cont. Final</th>
-                                        <th className="p-2 font-medium text-center">Págs/Produto</th>
-                                        <th className="p-2 font-medium text-center">Produzido (Serviço)</th>
-                                        <th className="p-2 font-medium text-center text-rose-500">Desperdício (Páginas)</th>
+                                    <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b bg-white">
+                                        <th className="p-3 font-medium">Insumo</th>
+                                        <th className="p-3 font-medium text-center">Qtd</th>
+                                        <th className="p-3 font-medium text-right">Custo Un.</th>
+                                        <th className="p-3 font-medium text-right">Total</th>
+                                        <th className="p-3"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {historicoProducao.map(hist => (
-                                        <tr key={hist.id} className="hover:bg-slate-50">
-                                            <td className="p-2 text-xs text-slate-600">{new Date(hist.data).toLocaleDateString('pt-BR')}</td>
-                                            <td className="p-2 font-medium text-slate-800 text-xs">{hist.equipamentoNome}</td>
-                                            <td className="p-2 text-center text-xs font-mono font-bold text-slate-500">{hist.contadorInicial}</td>
-                                            <td className="p-2 text-center text-xs font-mono font-bold text-slate-700">{hist.contadorFinal || '-'}</td>
-                                            <td className="p-2 text-center text-xs">{hist.paginasPorProduto}</td>
-                                            {hist.status === 'imprimindo' ? (
-                                                <td colSpan={2} className="p-2 text-center font-bold text-blue-500 animate-pulse text-xs bg-blue-50/50">Produção em andamento...</td>
-                                            ) : (
-                                                <>
-                                                    <td className="p-2 text-center font-bold text-emerald-600">+{hist.producaoValida} un</td>
-                                                    <td className="p-2 text-center font-bold text-rose-500">{(hist.desperdicio ?? 0) > 0 ? `${hist.desperdicio} págs` : '-'}</td>
-                                                </>
-                                            )}
+                                    {insumos.map((ins, idx) => (
+                                        <tr key={ins.id} className="bg-white hover:bg-slate-50">
+                                            <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
+                                            <td className="p-3 text-center">
+                                                <Input type="number" step="0.0001" min="0" value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200"/>
+                                            </td>
+                                            <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
+                                            <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
+                                            <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
-                    )}
-                    
-                    {/* NOVO APONTAMENTO / OU RETORNO DE APONTAMENTO PENDENTE */}
-                    {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && (statusOS === "Fila de Impressão" || statusOS === "Em Produção") && (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="md:col-span-2 space-y-2">
-                                <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
-                                <Select value={equipImpressaoId} onValueChange={setEquipImpressaoId}>
-                                    <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue placeholder="Selecione o equipamento interno..."/></SelectTrigger>
-                                    <SelectContent className="bg-white z-[99999]">
-                                        {equipamentosTC.map(e => <SelectItem key={e.id} value={e.id}>{e.log_produtos?.nome} (S/N: {e.numero_serie})</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-blue-800">Qtd do Serviço a Imprimir</label>
-                                <Input type="number" max={Math.max(0, osSelecionada.quantidade_produzir - totalProduzidoGeral)} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-blue-800">Páginas por Produto</label>
-                                <Input type="number" min="1" value={paginasPorProduto} onChange={e => setPaginasPorProduto(Number(e.target.value))} className="bg-white text-center border-blue-300" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-blue-800">Valor Unitário por Pág.</label>
-                                <Input type="number" step="0.01" value={valorUnitarioPagina} onChange={e => setValorUnitarioPagina(e.target.value)} placeholder="0.00" className="bg-white font-bold border-blue-300" />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-bold text-blue-800">Modo</label>
-                                <Select value={modoImpressao} onValueChange={setModoImpressao}>
-                                    <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue/></SelectTrigger>
-                                    <SelectContent className="bg-white z-[99999]">
-                                        <SelectItem value="Simplex">Simplex (Frente)</SelectItem>
-                                        <SelectItem value="Duplex">Duplex (Frente/Verso)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            
-                            {equipImpressaoId && (
-                                <div className="md:col-span-4 mt-4 bg-white p-4 rounded-lg border border-blue-100 shadow-sm">
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Estimativas da Rodada (Baseadas no total de {qtdImprimirServico * paginasPorProduto} páginas)</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                        <div className="p-3 bg-slate-50 rounded border"><p className="text-[10px] uppercase font-bold text-slate-400">Tempo Estimado</p><p className="font-bold text-lg text-slate-700">{tempoEstimado} min</p></div>
-                                        <div className="p-3 bg-emerald-50 rounded border border-emerald-100"><p className="text-[10px] uppercase font-bold text-emerald-600">Custo Orig. Novo</p><p className="font-bold text-lg text-emerald-700">R$ {custoOriginalNovo}</p></div>
-                                        <div className="p-3 bg-teal-50 rounded border border-teal-100"><p className="text-[10px] uppercase font-bold text-teal-600">Orig. Recond.</p><p className="font-bold text-lg text-teal-700">R$ {custoOriginalRecond}</p></div>
-                                        <div className="p-3 bg-blue-50 rounded border border-blue-100"><p className="text-[10px] uppercase font-bold text-blue-600">Comp. Novo</p><p className="font-bold text-lg text-blue-700">R$ {custoCompatNovo}</p></div>
-                                        <div className="p-3 bg-indigo-50 rounded border border-indigo-100"><p className="text-[10px] uppercase font-bold text-indigo-600">Comp. Recond.</p><p className="font-bold text-lg text-indigo-700">R$ {custoCompatRecond}</p></div>
-                                    </div>
-                                    <div className="mt-4 flex gap-4 items-end">
-                                        <div className="flex-1 space-y-2">
-                                            <label className="text-sm font-bold text-rose-600">Contador Inicial (Páginas)</label>
-                                            <Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} placeholder="Contador antes de imprimir" className="bg-white border-rose-300 font-bold" />
-                                        </div>
-                                        <Button onClick={iniciarImpressao} disabled={!contadorInicial || !valorUnitarioPagina || !paginasPorProduto} className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 px-8"><PlayCircle className="w-4 h-4 mr-2"/> Iniciar Impressão</Button>
-                                    </div>
+                        
+                        <div className="bg-slate-800 p-5 text-white flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex gap-8 w-full md:w-auto">
+                                <div>
+                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Prod.</p>
+                                    <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
                                 </div>
-                            )}
-                        </div>
-                    )}
-                    
-                    {statusImpressao === "imprimindo" && (
-                        <div className="bg-white p-6 rounded-lg border border-blue-200 text-center space-y-4 shadow-inner">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto"/>
-                            <h3 className="text-xl font-bold text-blue-900">Produção em Andamento...</h3>
-                            <p className="text-slate-500 text-sm">
-                                Lote ativo de <span className="font-bold">{qtdImprimirServico} unidades</span> ({qtdImprimirServico * paginasPorProduto} páginas) (Contador Inicial: <span className="font-mono text-slate-800">{contadorInicial}</span>).<br/>
-                                <span className="text-blue-600 font-medium">Este status já está salvo no banco. Você pode fechar o sistema e retornar mais tarde.</span>
-                            </p>
-                            <div className="max-w-xs mx-auto space-y-2 mt-4 text-left">
-                                <label className="text-sm font-bold text-rose-600">Contador Final do Equipamento</label>
-                                <Input type="number" value={contadorFinal} onChange={e => setContadorFinal(e.target.value)} placeholder="Contador após conclusão..." className="font-bold border-rose-300" />
-                                <Button onClick={finalizarImpressao} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold mt-2"><CheckCircle2 className="w-4 h-4 mr-2"/> Registrar Lote</Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* ANEXOS */}
-                <div className="bg-white p-5 rounded-xl border shadow-sm border-slate-200">
-                    <div className="flex justify-between items-center mb-4 border-b pb-2">
-                        <h4 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><Paperclip className="w-4 h-4 text-blue-500"/> Arquivos da OS</h4>
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 gap-1">
-                            {uploading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>} Anexar
-                        </Button>
-                    </div>
-                    
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-                        {anexos.length === 0 ? (
-                            <p className="text-xs text-slate-400 italic text-center py-4">Nenhum arquivo anexado.</p>
-                        ) : (
-                            anexos.map(anexo => (
-                                <div key={anexo.id} className="flex justify-between items-center p-2.5 bg-slate-50 border border-slate-100 rounded-lg hover:border-blue-200 transition-colors group">
-                                    <span className="text-xs font-medium text-slate-700 truncate max-w-[160px]" title={anexo.nome_arquivo}>{anexo.nome_arquivo}</span>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <a href={anexo.url_arquivo} target="_blank" rel="noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"><Download className="w-3.5 h-3.5"/></a>
-                                        <button onClick={() => deletarAnexo(anexo.id)} className="p-1.5 text-red-500 hover:bg-red-100 rounded"><Trash2 className="w-3.5 h-3.5"/></button>
+                                {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
+                                    <div className="border-l border-slate-600 pl-8">
+                                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3"/> Receita Impressões Estimada</p>
+                                        <p className="text-2xl font-black text-emerald-400">R$ {totalReceitaGerada.toFixed(2).replace('.',',')}</p>
                                     </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                {/* INSUMOS E CONCLUSÃO */}
-                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="p-4 border-b bg-purple-50 flex flex-wrap justify-between items-center gap-4">
-                        <div>
-                            <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Insumos Consumidos</h4>
-                        </div>
-                        <div className="flex gap-2">
-                            <Input list="grafica-insumos" value={buscaInsumo} onChange={e => setBuscaInsumo(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') adicionarInsumo() }} placeholder="Buscar insumo..." className="h-9 text-xs w-48 bg-white border-purple-200" />
-                            <Button size="sm" onClick={adicionarInsumo} className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="w-4 h-4"/></Button>
-                        </div>
-                    </div>
-                    
-                    <div className="overflow-x-auto min-h-[200px]">
-                        <table className="w-full text-left text-sm border-collapse">
-                            <thead>
-                                <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b bg-white">
-                                    <th className="p-3 font-medium">Insumo</th>
-                                    <th className="p-3 font-medium text-center">Qtd</th>
-                                    <th className="p-3 font-medium text-right">Custo Un.</th>
-                                    <th className="p-3 font-medium text-right">Total</th>
-                                    <th className="p-3"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {insumos.map((ins, idx) => (
-                                    <tr key={ins.id} className="bg-white hover:bg-slate-50">
-                                        <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
-                                        <td className="p-3 text-center">
-                                            <Input type="number" step="0.0001" min="0" value={ins.quantidade} onChange={e => { const ni = [...insumos]; ni[idx].quantidade = parseFloat(e.target.value)||0; setInsumos(ni); }} className="h-8 w-20 text-center mx-auto text-xs font-bold bg-slate-50 border-purple-200"/>
-                                        </td>
-                                        <td className="p-3 text-right text-xs text-slate-500">R$ {Number(ins.custoUn).toFixed(4).replace('.',',')}</td>
-                                        <td className="p-3 text-right font-bold text-rose-600">R$ {(ins.quantidade * ins.custoUn).toFixed(2).replace('.', ',')}</td>
-                                        <td className="p-3 text-center"><button onClick={() => setInsumos(insumos.filter(x => x.id !== ins.id))} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div className="bg-slate-800 p-5 text-white flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="flex gap-8 w-full md:w-auto">
-                            <div>
-                                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Custo Prod.</p>
-                                <p className="text-2xl font-black text-rose-400">R$ {insumos.reduce((a,b) => a+(b.quantidade*b.custoUn), 0).toFixed(2).replace('.',',')}</p>
+                                )}
                             </div>
-                            {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
-                                <div className="border-l border-slate-600 pl-8">
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><DollarSign className="w-3 h-3"/> Receita Impressões Estimada</p>
-                                    <p className="text-2xl font-black text-emerald-400">R$ {totalReceitaGerada.toFixed(2).replace('.',',')}</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="w-full md:w-auto">
-                            <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS</Button>
                         </div>
                     </div>
                 </div>
+              </div>
             </div>
-          </div>
+          )}
+
+        </div>
+
+        {/* ABA: NOVA OS (Sobreposição Total se estiver ativada) */}
+        {abaAtiva === "abrir" && (
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50">
+              <div className="bg-white p-8 rounded-xl border shadow-sm max-w-3xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
+                <div className="text-center border-b pb-6">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 text-purple-600 mb-3"><FileOutput className="w-6 h-6"/></div>
+                    <h2 className="text-xl font-bold text-slate-800">Gerar Ordem de Serviço (OS)</h2>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-bold text-slate-700">Cliente Autorizador <span className="text-red-500">*</span></label>
+                      <Input list="grafica-clientes" value={clienteBusca} onChange={e => setClienteBusca(e.target.value)} placeholder="Nome do cliente ou empresa..." className="bg-slate-50" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><User className="w-4 h-4 text-slate-400"/> Nome do Solicitante <span className="text-red-500">*</span></label>
+                      <Input value={solicitante} onChange={e => setSolicitante(e.target.value)} placeholder="Ex: Tais Santos" className="bg-slate-50" />
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400"/> Data da Solicitação <span className="text-red-500">*</span></label>
+                      <Input type="date" value={dataSolicitacao} onChange={e => setDataSolicitacao(e.target.value)} className="bg-slate-50" />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2 pt-2 border-t border-slate-100">
+                      <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><UserCheck className="w-4 h-4 text-indigo-500"/> Operador Gráfico Responsável <span className="text-red-500">*</span></label>
+                      <Input list="grafica-operadores" value={operadorNome} onChange={e => setOperadorNome(e.target.value)} placeholder="Selecione ou digite o nome do operador..." className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium" />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2 mt-2 pt-4 border-t border-slate-100">
+                      <label className="text-sm font-bold text-slate-700">Serviço a ser Realizado <span className="text-red-500">*</span></label>
+                      <Input value={descServico} onChange={e => setDescServico(e.target.value)} placeholder="Ex: Impressão de 500 Apostilas..." className="bg-slate-50" />
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">Quantidade Total (Qtd do Serviço) <span className="text-red-500">*</span></label>
+                      <Input type="number" min="1" value={qtdProduzir} onChange={e => setQtdProduzir(parseFloat(e.target.value)||1)} className="bg-slate-50 font-bold text-center" />
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">Data Prevista p/ Entrega <span className="text-red-500">*</span></label>
+                      <Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} className="bg-slate-50" />
+                  </div>
+
+                  <div className="space-y-4 md:col-span-2 bg-slate-50 p-4 rounded-md border border-slate-200 mt-2">
+                      <div className="space-y-2">
+                          <label className="text-sm font-bold text-slate-700">Requer Impressão em Equipamento TC?</label>
+                          <Select value={possuiImpressao} onValueChange={setPossuiImpressao}>
+                              <SelectTrigger className="bg-white z-[99999] border-slate-300"><SelectValue /></SelectTrigger>
+                              <SelectContent className="bg-white z-[99999]">
+                                  <SelectItem value="Sim">Sim, exigirá apontamento de contadores</SelectItem>
+                                  <SelectItem value="Não">Não, apenas acabamento/outros</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      
+                      {possuiImpressao === "Sim" && (
+                          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200 animate-in slide-in-from-top-2">
+                              <div className="space-y-2">
+                                  <label className="text-sm font-bold text-blue-800">Qtd de Páginas por Produto <span className="text-red-500">*</span></label>
+                                  <Input type="number" min="1" value={paginasPorProdutoOS} onChange={e => setPaginasPorProdutoOS(Number(e.target.value))} placeholder="Ex: 50" className="bg-white border-blue-200" />
+                              </div>
+                              <div className="space-y-2">
+                                  <label className="text-sm font-bold text-blue-800">Valor Unitário da Pág (R$) <span className="text-red-500">*</span></label>
+                                  <Input type="number" step="0.01" value={valorUnitarioPaginaOS} onChange={e => setValorUnitarioPaginaOS(e.target.value)} placeholder="0.00" className="bg-white border-blue-200" />
+                              </div>
+                          </div>
+                      )}
+                  </div>
+                </div>
+
+                <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
+                    {salvandoOS ? "Gerando..." : "Enviar para Fila de Produção"}
+                </Button>
+              </div>
+            </div>
         )}
+
       </div>
     </AppLayout>
   );
