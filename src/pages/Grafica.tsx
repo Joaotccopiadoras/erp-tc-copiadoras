@@ -1136,6 +1136,7 @@ export default function Grafica() {
 
           </div>
                 </div>
+                        )}
     </AppLayout>
   );
 }
