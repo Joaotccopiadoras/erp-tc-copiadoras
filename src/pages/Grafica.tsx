@@ -1177,8 +1177,8 @@ export default function Grafica() {
                         {isCompactado ? (
                           <div className="flex-1 flex flex-col items-center justify-center text-center p-4 mt-8">
                               <CheckCircle2 className="w-8 h-8 text-slate-400 mb-3" />
-                              <p className="text-xs text-slate-500 mb-1">Quantidade de cards finalizados</p>
-                              <h4 className="text-xl font-bold text-blue-600 mb-6">{cardsDaColuna.length} cards</h4>
+                              <p className="text-xs text-slate-500 mb-1">Quantidade de OSG's finalizadas</p>
+                              <h4 className="text-xl font-bold text-blue-600 mb-6">{cardsDaColuna.length} OSG's</h4>
                               <Button onClick={() => setMostrarConcluidos(true)} className="bg-slate-800 hover:bg-slate-900 text-white w-full text-xs shadow-sm">Visualizar Todos</Button>
                           </div>
                         ) : (
