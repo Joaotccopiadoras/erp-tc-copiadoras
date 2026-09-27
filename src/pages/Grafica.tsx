@@ -181,6 +181,79 @@ export default function Grafica() {
     }
   };
 
+  // ==========================================
+  // SINCRONIZADOR KANBAN GESTÃO DE DEMANDAS
+  // ==========================================
+  const sincronizarCardKanban = async (os: any, isUpdate: boolean = false) => {
+    try {
+        // 1. Busca o Workflow "GESTÃO DE DEMANDAS"
+        let { data: wf } = await supabase.from('kanban_workflows').select('id').ilike('nome', 'GESTÃO DE DEMANDAS').single();
+        if (!wf) {
+            const { data: newWf } = await supabase.from('kanban_workflows').insert([{ nome: 'GESTÃO DE DEMANDAS' }]).select().single();
+            if (!newWf) return;
+            wf = newWf;
+        }
+
+        // 2. Busca ou Cria a Coluna correspondente
+        const statusNome = os.status || "Solicitação Recebida";
+        let { data: col } = await supabase.from('kanban_colunas').select('id').eq('workflow_id', wf.id).ilike('nome', statusNome).single();
+        
+        if (!col) {
+            let statusGlobalMap = "Andamento";
+            if (statusNome === "Concluído" || statusNome === "Entregue") statusGlobalMap = "Concluído";
+            else if (statusNome === "Solicitação Recebida" || statusNome === "Levantamento de Material") statusGlobalMap = "Andamento";
+            else if (statusNome === "Faturamento" || statusNome === "Aguardando") statusGlobalMap = "Aguardando";
+            
+            const { data: colsCount } = await supabase.from('kanban_colunas').select('id');
+            const ordem = colsCount ? colsCount.length : 0;
+            
+            const { data: newCol } = await supabase.from('kanban_colunas').insert([{
+                workflow_id: wf.id,
+                nome: statusNome.toUpperCase(),
+                status_global: statusGlobalMap,
+                ordem: ordem
+            }]).select().single();
+            
+            if (newCol) col = newCol;
+            else return; 
+        }
+
+        const numOpStr = String(os.numero_op).padStart(4, '0');
+        const tituloCard = `OSG-${numOpStr} - ${os.cliente_nome} - ${os.solicitante}`;
+        const descricao = os.observacoes || "";
+        const responsavel = os.operador_nome || "";
+        const vencimento = os.data_prevista || null;
+
+        if (isUpdate) {
+            // Busca o card pelo identificador OSG-XXXX
+            const { data: cardsExistentes } = await supabase.from('kanban_cards').select('id').eq('workflow_id', wf.id).ilike('titulo', `OSG-${numOpStr}%`);
+            
+            if (cardsExistentes && cardsExistentes.length > 0) {
+                await supabase.from('kanban_cards').update({
+                    coluna_id: col.id,
+                    titulo: tituloCard,
+                    descricao: descricao,
+                    responsavel_nome: responsavel,
+                    data_vencimento: vencimento,
+                    atualizado_em: new Date().toISOString()
+                }).eq('id', cardsExistentes[0].id);
+            } else {
+                await supabase.from('kanban_cards').insert([{
+                    workflow_id: wf.id, coluna_id: col.id, titulo: tituloCard,
+                    descricao: descricao, responsavel_nome: responsavel, data_vencimento: vencimento
+                }]);
+            }
+        } else {
+            await supabase.from('kanban_cards').insert([{
+                workflow_id: wf.id, coluna_id: col.id, titulo: tituloCard,
+                descricao: descricao, responsavel_nome: responsavel, data_vencimento: vencimento
+            }]);
+        }
+    } catch (error) {
+        console.error("Erro ao sincronizar com o Kanban:", error);
+    }
+  };
+
   // --- ABRIR OS ---
   const criarOS = async () => {
     if (!clienteBusca || !solicitante || !dataSolicitacao || !operadorNome || !descServico || !dataPrevista) {
@@ -208,8 +281,11 @@ export default function Grafica() {
         historico_producao: []
       };
 
-      const { error } = await supabase.from('prd_ordens_producao' as any).insert([payload]);
+      const { data: novaOs, error } = await supabase.from('prd_ordens_producao' as any).insert([payload]).select().single();
       if (error) throw error;
+
+      // SINCRONIZA COM KANBAN DA PRODUÇÃO
+      await sincronizarCardKanban(novaOs, false);
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
       sessionStorage.removeItem("grafica_rascunho");
@@ -330,7 +406,7 @@ export default function Grafica() {
         paginas_por_produto: editPaginasPorProduto || 1
       };
 
-      const { error: updateError } = await supabase.from('prd_ordens_producao' as any).update(payloadUpdate).eq('id', osSelecionada.id);
+      const { data: osAtualizada, error: updateError } = await supabase.from('prd_ordens_producao' as any).update(payloadUpdate).eq('id', osSelecionada.id).select().single();
       if (updateError) throw new Error("Falha ao atualizar dados: " + updateError.message);
 
       const { error: delError } = await supabase.from('prd_op_insumos' as any).delete().eq('op_id', osSelecionada.id);
@@ -341,6 +417,9 @@ export default function Grafica() {
         const { error: insError } = await supabase.from('prd_op_insumos' as any).insert(payloadInsumos);
         if (insError) throw new Error("Erro ao salvar insumos: " + insError.message);
       }
+
+      // SINCRONIZA COM KANBAN APÓS ATUALIZAR
+      await sincronizarCardKanban(osAtualizada || { ...osSelecionada, ...payloadUpdate }, true);
 
       if (!statusFinal) {
           alert("Apontamentos e OSG atualizados com sucesso!");
@@ -683,7 +762,6 @@ export default function Grafica() {
         const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
         const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
-        // Obtendo o período e ordenando as OSGs da mais antiga para a mais recente
         const sortedOsList = [...osList].sort((a, b) => {
             const dataA = new Date(a.data_solicitacao || 0).getTime();
             const dataB = new Date(b.data_solicitacao || 0).getTime();
@@ -700,7 +778,6 @@ export default function Grafica() {
         doc.setTextColor(0, 0, 0);
         doc.text(dataEmissao, pageWidth - 14, 45, { align: "right" });
 
-        // Inclusão do CNPJ abaixo da Razão Social conforme solicitado
         doc.setFont("times", "bold");
         doc.text(`À (O) ${String(razaoSocial).toUpperCase()}`, 14, 55);
         doc.text(`CNPJ: ${cnpj}`, 14, 60);
