@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, 
-  Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, 
-  Loader2, ArrowLeft, ArrowRight, Edit2 
+  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, Edit
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,7 +27,7 @@ export default function AgendaKanban() {
   const [workflowAtivo, setWorkflowAtivo] = useState<string>("global");
   const [exportando, setExportando] = useState(false);
   
-  // Modais e Estados de Edição
+  // Modais
   const [modalWF, setModalWF] = useState(false);
   const [modalColuna, setModalColuna] = useState(false);
   const [modalCard, setModalCard] = useState(false);
@@ -96,16 +94,40 @@ export default function AgendaKanban() {
     }
   };
 
+  const abrirEditarColuna = (col: Coluna) => {
+    setColunaSendoEditada(col);
+    setNomeColuna(col.nome);
+    setStatusGlobalColuna(col.status_global);
+    setModalColuna(true);
+  };
+
+  const deletarColuna = async (id: string, cardsCount: number) => {
+    if (cardsCount > 0) {
+      return alert("Não é possível excluir uma coluna que possui cards. Mova-os para outra etapa ou exclua-os primeiro.");
+    }
+    if (!window.confirm("Deseja realmente excluir esta etapa?")) return;
+    
+    try {
+      const { error } = await supabase.from('kanban_colunas').delete().eq('id', id);
+      if (error) throw error;
+      fetchQuadro();
+    } catch (error: any) {
+      alert("Erro ao excluir coluna: " + error.message);
+    }
+  };
+
   const salvarColuna = async () => {
     if (!nomeColuna || workflowAtivo === "global") return;
     
     if (colunaSendoEditada) {
       const { error } = await supabase.from('kanban_colunas').update({ nome: nomeColuna, status_global: statusGlobalColuna }).eq('id', colunaSendoEditada.id);
-      if (!error) {
-        setModalColuna(false);
-        setNomeColuna("");
+      if (!error) { 
+        setModalColuna(false); 
         setColunaSendoEditada(null);
-        fetchQuadro();
+        setNomeColuna(""); 
+        fetchQuadro(); 
+      } else {
+        alert("Erro ao editar etapa: " + error.message);
       }
     } else {
       const ordem = colunas.length;
@@ -114,66 +136,51 @@ export default function AgendaKanban() {
         setModalColuna(false); 
         setNomeColuna(""); 
         fetchQuadro(); 
+      } else {
+        alert("Erro ao criar etapa: " + error.message);
       }
     }
   };
 
-  const moverColuna = async (id: string, direcao: number) => {
-    const index = colunas.findIndex(c => c.id === id);
-    if (index < 0) return;
-    const newIndex = index + direcao;
-    if (newIndex < 0 || newIndex >= colunas.length) return;
-    
-    const novaLista = [...colunas];
-    const temp = novaLista[index];
-    novaLista[index] = novaLista[newIndex];
-    novaLista[newIndex] = temp;
-    
-    const listaAtualizada = novaLista.map((c, i) => ({ ...c, ordem: i }));
-    setColunas(listaAtualizada); // Atualização Otimista
-    
-    for (const u of listaAtualizada) {
-      await supabase.from('kanban_colunas').update({ ordem: u.ordem }).eq('id', u.id);
-    }
-  };
-
-  const abrirModalEditarColuna = (col: Coluna) => {
-    setColunaSendoEditada(col);
-    setNomeColuna(col.nome);
-    setStatusGlobalColuna(col.status_global);
-    setModalColuna(true);
-  };
-
-  const deletarColuna = async (id: string) => {
-    const temCards = cards.some(c => c.coluna_id === id);
-    if (temCards) return alert("Não é possível excluir uma etapa que contém cards. Mova-os primeiro para outra etapa.");
-    if (!window.confirm("Tem certeza que deseja excluir esta etapa?")) return;
-    
-    await supabase.from('kanban_colunas').delete().eq('id', id);
-    fetchQuadro();
-  };
-
   const salvarCard = async () => {
-    if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna são obrigatórios.");
+    if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna/Etapa são obrigatórios.");
     
     let finalColunaId = cardForm.coluna_id;
     let finalWfId = workflowAtivo;
 
-    // Se estivermos criando um card NOVO direto na visão global, ele organiza numa pasta oculta "Tarefas Avulsas"
-    if (workflowAtivo === "global" && !cardSendoEditado) {
-      let wfGeral = workflows.find(w => w.nome === "Tarefas Avulsas");
-      if (!wfGeral) {
-        const { data: newWf } = await supabase.from('kanban_workflows').insert([{ nome: "Tarefas Avulsas" }]).select().single();
-        if (newWf) { wfGeral = newWf; setWorkflows([...workflows, newWf]); }
-      }
-      if (wfGeral) {
-        finalWfId = wfGeral.id;
-        let colGeral = colunas.find(c => c.workflow_id === wfGeral!.id && c.status_global === cardForm.coluna_id);
-        if (!colGeral) {
-          const { data: newCol } = await supabase.from('kanban_colunas').insert([{ workflow_id: wfGeral.id, nome: cardForm.coluna_id, status_global: cardForm.coluna_id, ordem: STATUS_GLOBAIS.indexOf(cardForm.coluna_id) }]).select().single();
-          if (newCol) { colGeral = newCol; }
+    if (workflowAtivo === "global") {
+      if (cardSendoEditado) {
+        // Editando na Visão Global
+        const statusGlobalAlvo = cardForm.coluna_id;
+        finalWfId = cardSendoEditado.workflow_id;
+        let colunaEquivalente = colunas.find(c => c.workflow_id === finalWfId && c.status_global === statusGlobalAlvo);
+
+        // Se não existir, cria automaticamente para não travar o usuário
+        if (!colunaEquivalente) {
+          const ordem = colunas.filter(c => c.workflow_id === finalWfId).length;
+          const { data: newCol } = await supabase.from('kanban_colunas').insert([{
+            workflow_id: finalWfId, nome: statusGlobalAlvo, status_global: statusGlobalAlvo, ordem
+          }]).select().single();
+          if (newCol) colunaEquivalente = newCol;
         }
-        if (colGeral) finalColunaId = colGeral.id;
+        
+        if (colunaEquivalente) finalColunaId = colunaEquivalente.id;
+      } else {
+        // Criando Novo na Visão Global
+        let wfGeral = workflows.find(w => w.nome === "Tarefas Avulsas");
+        if (!wfGeral) {
+          const { data: newWf } = await supabase.from('kanban_workflows').insert([{ nome: "Tarefas Avulsas" }]).select().single();
+          if (newWf) { wfGeral = newWf; setWorkflows([...workflows, newWf]); }
+        }
+        if (wfGeral) {
+          finalWfId = wfGeral.id;
+          let colGeral = colunas.find(c => c.workflow_id === wfGeral!.id && c.status_global === cardForm.coluna_id);
+          if (!colGeral) {
+            const { data: newCol } = await supabase.from('kanban_colunas').insert([{ workflow_id: wfGeral.id, nome: cardForm.coluna_id, status_global: cardForm.coluna_id, ordem: STATUS_GLOBAIS.indexOf(cardForm.coluna_id) }]).select().single();
+            if (newCol) { colGeral = newCol; }
+          }
+          if (colGeral) finalColunaId = colGeral.id;
+        }
       }
     } else {
       const colSelecionada = colunas.find(c => c.id === cardForm.coluna_id);
@@ -206,10 +213,28 @@ export default function AgendaKanban() {
   const abrirModalCard = (card?: Card, defaultColId?: string) => {
     if (card) {
       setCardSendoEditado(card);
-      setCardForm({ titulo: card.titulo, descricao: card.descricao || "", responsavel: card.responsavel_nome || "", prioridade: card.prioridade || "Normal", vencimento: card.data_vencimento ? card.data_vencimento.split('T')[0] : "", coluna_id: card.coluna_id });
+      // Se estiver na visão global, o form carrega o nome do Status Global (ex: "Andamento"). 
+      // Se não, carrega o ID da coluna específica.
+      const initialCol = workflowAtivo === "global" ? (card.kanban_colunas?.status_global || "Backlog") : card.coluna_id;
+      
+      setCardForm({ 
+        titulo: card.titulo, 
+        descricao: card.descricao || "", 
+        responsavel: card.responsavel_nome || "", 
+        prioridade: card.prioridade || "Normal", 
+        vencimento: card.data_vencimento ? card.data_vencimento.split('T')[0] : "", 
+        coluna_id: initialCol 
+      });
     } else {
       setCardSendoEditado(null);
-      setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: workflowAtivo === "global" ? "Backlog" : (defaultColId || (colunas[0]?.id || "")) });
+      setCardForm({ 
+        titulo: "", 
+        descricao: "", 
+        responsavel: "", 
+        prioridade: "Normal", 
+        vencimento: "", 
+        coluna_id: workflowAtivo === "global" ? "Backlog" : (defaultColId || (colunas[0]?.id || "")) 
+      });
     }
     setModalCard(true);
   };
@@ -221,7 +246,6 @@ export default function AgendaKanban() {
     setModalCard(false);
   };
 
-  // --- DRAG AND DROP NATIVO ---
   const handleDragStart = (e: React.DragEvent, card: Card) => {
     e.dataTransfer.setData("cardId", card.id);
   };
@@ -238,10 +262,21 @@ export default function AgendaKanban() {
 
     if (isGlobal) {
       const statusGlobalAlvo = dropTargetId;
-      const colunaEquivalente = colunas.find(c => c.workflow_id === cardMovido.workflow_id && c.status_global === statusGlobalAlvo);
+      let colunaEquivalente = colunas.find(c => c.workflow_id === cardMovido.workflow_id && c.status_global === statusGlobalAlvo);
       
+      // Criação Inteligente: Se não houver coluna equivalente, cria automaticamente em vez de bloquear
       if (!colunaEquivalente) {
-        return alert(`Atenção: O fluxo original deste card não possui nenhuma coluna mapeada para o status "${statusGlobalAlvo}".`);
+        const ordem = colunas.filter(c => c.workflow_id === cardMovido.workflow_id).length;
+        const { data: newCol } = await supabase.from('kanban_colunas').insert([{
+            workflow_id: cardMovido.workflow_id, nome: statusGlobalAlvo, status_global: statusGlobalAlvo, ordem
+        }]).select().single();
+
+        if (newCol) {
+           colunaEquivalente = newCol;
+           setColunas(prev => [...prev, newCol]); // Update local
+        } else {
+           return alert(`Erro ao mover: O fluxo original não possui etapa para "${statusGlobalAlvo}".`);
+        }
       }
       novaColunaId = colunaEquivalente.id;
     }
@@ -266,7 +301,7 @@ export default function AgendaKanban() {
 
   const colunasAtivas = getColunasRenderizacao();
 
-  // EXPORTAÇÕES
+  // EXPORTAÇÕES (MANTIDAS)
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
       const res = await fetch(imageUrl);
@@ -278,24 +313,14 @@ export default function AgendaKanban() {
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(blob);
       });
-    } catch (e) { return null; }
+    } catch (e) {
+      return null;
+    }
   };
 
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "—";
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
-  };
-
-  const getExportData = () => {
-    const exportData: any[] = [];
-    colunasAtivas.forEach(col => {
-      col.cards.forEach(card => {
-        exportData.push({
-          etapa: col.nome, titulo: card.titulo, responsavel: card.responsavel_nome || "-", prioridade: card.prioridade, vencimento: formatarData(card.data_vencimento), workflow: card.kanban_workflows?.nome || "-", status_global: card.kanban_colunas?.status_global || "-", descricao: card.descricao || "-"
-        });
-      });
-    });
-    return exportData;
   };
 
   const exportarPDF = async () => {
@@ -310,35 +335,39 @@ export default function AgendaKanban() {
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
         if (respA > respB) return 1;
-        const stA = (a.kanban_colunas?.status_global || 'BACKLOG').toUpperCase();
-        const stB = (b.kanban_colunas?.status_global || 'BACKLOG').toUpperCase();
+        const stA = formatarStatus(a.kanban_colunas?.status_global || "BACKLOG");
+        const stB = formatarStatus(b.kanban_colunas?.status_global || "BACKLOG");
         const ordemA = pesoStatus[stA] || 99;
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
         return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
       });
 
-      const tableColumn = ["Etapa/Coluna", "Título", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
+      const tableColumn = ["Workflow / Etapa", "Título do Card", "Responsável", "Prioridade", "Vencimento", "Status Global", "Resumo/Obs"];
       const tableRows: any[] = [];
       let grupoAtual = null;
 
       dadosOrdenados.forEach(item => {
         let valGrupo = item.responsavel_nome || "Sem Responsável";
         if (valGrupo !== grupoAtual) {
-          tableRows.push([{ content: `Responsável: ${valGrupo}`, colSpan: 7, styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' } }]);
+          tableRows.push([{
+            content: `Responsável: ${valGrupo}`, colSpan: 7, 
+            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
+          }]);
           grupoAtual = valGrupo;
         }
         tableRows.push([
-          item.kanban_colunas?.nome || "-", item.titulo || "-", item.prioridade || "-", formatarData(item.data_vencimento), 
-          item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
+          `${item.kanban_workflows?.nome || "-"} / ${item.kanban_colunas?.nome || "-"}`, 
+          item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", formatarData(item.data_vencimento), 
+          item.kanban_colunas?.status_global || "-", item.descricao || "-"
         ]);
       });
 
       autoTable(doc, {
         head: [tableColumn], body: tableRows, startY: 40, margin: { top: 40, bottom: 40, left: 14, right: 14 },
         theme: 'grid', styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 45 }, 2: { cellWidth: 20, halign: 'center' }, 3: { cellWidth: 20, halign: 'center' }, 4: { cellWidth: 30 }, 5: { cellWidth: 25, halign: 'center' }, 6: { cellWidth: 'auto', halign: 'left' } },
-        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, alternateRowStyles: { fillColor: [248, 250, 252] },
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
         didDrawPage: function (data) {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
@@ -358,14 +387,14 @@ export default function AgendaKanban() {
           doc.line(14, 28, pageWidth - 14, 28);
 
           const today = new Date();
+          const dia = String(today.getDate()).padStart(2, '0');
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-          const textoData = `Belém, ${String(today.getDate()).padStart(2, '0')} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(100, 100, 100);
-          doc.text(textoData, pageWidth - 14, 25, { align: "right" });
+          doc.text(`Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`, pageWidth - 14, 25, { align: "right" });
 
-          doc.setFillColor(0, 0, 0); 
+          doc.setFillColor(0, 0, 0);
           doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
@@ -386,6 +415,8 @@ export default function AgendaKanban() {
     } catch (error) { alert("Erro ao gerar PDF."); } finally { setExportando(false); }
   };
 
+  const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
+
   const exportarExcel = async () => {
     setExportando(true);
     try {
@@ -403,7 +434,13 @@ export default function AgendaKanban() {
       worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
       worksheet.getRow(startRow).font = { bold: true };
       
-      getExportData().forEach(item => worksheet.addRow([item.etapa, item.titulo, item.responsavel, item.prioridade, item.vencimento, item.workflow, item.status_global, item.descricao]));
+      cards.forEach((item) => {
+        worksheet.addRow([
+          item.kanban_colunas?.nome || "-", item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", 
+          formatarData(item.data_vencimento), item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
+        ]);
+      });
+      
       worksheet.columns.forEach(column => { column.width = 20; });
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");
@@ -414,7 +451,7 @@ export default function AgendaKanban() {
     <AppLayout>
       <div className="flex h-[calc(100vh-6rem)] max-w-[1600px] mx-auto overflow-hidden bg-slate-50 rounded-xl border shadow-sm">
         
-        {/* MENU LATERAL: WORKFLOWS */}
+        {/* MENU LATERAL */}
         <div className="w-64 bg-slate-900 text-slate-300 flex flex-col">
           <div className="p-5 border-b border-slate-800">
             <h2 className="text-white font-bold flex items-center gap-2 text-lg"><KanbanSquare className="w-5 h-5 text-indigo-400"/> Agenda Kanban</h2>
@@ -445,7 +482,6 @@ export default function AgendaKanban() {
 
         {/* ÁREA DO KANBAN */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header do Quadro */}
           <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-800">
@@ -463,54 +499,47 @@ export default function AgendaKanban() {
               <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || cards.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
                 {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} PDF
               </Button>
-              
               <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
-              
               {workflowAtivo !== "global" && (
-                <Button onClick={() => { setColunaSendoEditada(null); setNomeColuna(""); setStatusGlobalColuna("Backlog"); setModalColuna(true); }} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Coluna</Button>
+                <Button onClick={() => { setColunaSendoEditada(null); setNomeColuna(""); setStatusGlobalColuna("Backlog"); setModalColuna(true); }} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Etapa</Button>
               )}
               <Button onClick={() => abrirModalCard()} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Novo Card</Button>
             </div>
           </div>
 
-          {/* O Board de Fato */}
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6">
             {colunasAtivas.map(col => (
-              <div 
-                key={col.id} 
-                className="w-80 shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full"
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => handleDrop(e, col.id, col.isGlobal)}
-              >
+              <div key={col.id} className="w-80 shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full" onDragOver={e => e.preventDefault()} onDrop={e => handleDrop(e, col.id, col.isGlobal)}>
+                
                 {/* Header da Coluna */}
                 <div className="p-3 border-b border-slate-200/60 bg-slate-100 rounded-t-xl flex justify-between items-center group">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-700">{col.nome}</h3>
                     <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{col.cards.length}</span>
                   </div>
-                  {!col.isGlobal && (
-                    <div className="flex items-center">
+                  
+                  <div className="flex items-center gap-1">
+                    {!col.isGlobal && (
                       <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded group-hover:hidden">{col.statusBadge}</span>
-                      <div className="hidden group-hover:flex items-center gap-1.5 bg-slate-100 pl-2">
-                         <button onClick={() => moverColuna(col.id, -1)} title="Mover para esquerda"><ArrowLeft className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
-                         <button onClick={() => moverColuna(col.id, 1)} title="Mover para direita"><ArrowRight className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
-                         <button onClick={() => abrirModalEditarColuna(col)} title="Editar Coluna"><Edit2 className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
-                         <button onClick={() => deletarColuna(col.id)} title="Excluir Coluna"><Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500"/></button>
+                    )}
+                    
+                    {!col.isGlobal && (
+                      <div className="hidden group-hover:flex items-center ml-1">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100" onClick={() => abrirEditarColuna(col as Coluna)}>
+                          <Settings className="w-3 h-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => deletarColuna(col.id, col.cards.length)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 {/* Área de Drop dos Cards */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
                   {col.cards.map(card => (
-                    <div 
-                      key={card.id} 
-                      draggable 
-                      onDragStart={(e) => handleDragStart(e, card)}
-                      onClick={() => abrirModalCard(card)}
-                      className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md cursor-grab active:cursor-grabbing transition-all"
-                    >
+                    <div key={card.id} draggable onDragStart={(e) => handleDragStart(e, card)} onClick={() => abrirModalCard(card)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md cursor-grab active:cursor-grabbing transition-all">
                       <div className="flex justify-between items-start mb-2">
                         <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${card.prioridade === 'Emergência' || card.prioridade === 'Urgente' ? 'bg-red-50 text-red-600 border border-red-100' : card.prioridade === 'Alta' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
                           {card.prioridade}
@@ -539,9 +568,7 @@ export default function AgendaKanban() {
                   ))}
                   
                   {col.cards.length === 0 && (
-                    <div className="h-24 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">
-                      Solte cards aqui
-                    </div>
+                    <div className="h-24 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">Solte cards aqui</div>
                   )}
                 </div>
 
@@ -575,7 +602,7 @@ export default function AgendaKanban() {
       {modalColuna && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
           <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
-            <h3 className="font-bold text-lg mb-1">{colunaSendoEditada ? "Editar Coluna" : "Nova Coluna (Etapa)"}</h3>
+            <h3 className="font-bold text-lg mb-1">{colunaSendoEditada ? "Editar Etapa" : "Nova Coluna (Etapa)"}</h3>
             <p className="text-xs text-slate-500 mb-4">Vincule a etapa a um Status Global para a visão da Programação.</p>
             <div className="space-y-4 mb-6">
               <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome da Etapa</label><Input value={nomeColuna} onChange={e => setNomeColuna(e.target.value)} placeholder="Ex: Cotar Preços" autoFocus/></div>
@@ -589,7 +616,10 @@ export default function AgendaKanban() {
                 </Select>
               </div>
             </div>
-            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setModalColuna(false)}>Cancelar</Button><Button className="bg-indigo-600 text-white" onClick={salvarColuna}>{colunaSendoEditada ? "Salvar" : "Adicionar"}</Button></div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setModalColuna(false); setColunaSendoEditada(null); setNomeColuna(""); }}>Cancelar</Button>
+              <Button className="bg-indigo-600 text-white" onClick={salvarColuna}>{colunaSendoEditada ? "Atualizar" : "Adicionar"}</Button>
+            </div>
           </div>
         </div>
       )}
@@ -615,14 +645,10 @@ export default function AgendaKanban() {
                   <Select value={cardForm.coluna_id} onValueChange={v => setCardForm({...cardForm, coluna_id: v})}>
                     <SelectTrigger className="bg-white z-[99999]"><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
                     <SelectContent className="bg-white z-[99999]">
-                      {workflowAtivo === "global" && !cardSendoEditado ? (
-                        // Apenas 4 colunas globais na criação
+                      {workflowAtivo === "global" ? (
+                        /* APENAS as 4 opções globais quando editando/criando na Visão Global */
                         STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
-                      ) : workflowAtivo === "global" && cardSendoEditado ? (
-                        // Visão estendida de todos os processos caso esteja mudando um card existente na visão global
-                        colunas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome} (Mapeado: {c.status_global})</SelectItem>)
                       ) : (
-                        // Visão restrita do workflow atual
                         colunas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)
                       )}
                     </SelectContent>
