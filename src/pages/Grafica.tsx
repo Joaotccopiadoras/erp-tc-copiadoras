@@ -137,12 +137,15 @@ export default function Grafica() {
     if (cliRes.data) setClientesBD(cliRes.data);
     if (opRes.data) setOperadoresBD(opRes.data);
     if (eqRes.data) {
+        // Filtro robusto para pegar equipamentos do TC SERVICOS ou se o cliente vinculado contiver "TC"
         const tcEquips = eqRes.data.filter((e: any) => {
             const nomeCli = (e.log_clientes?.nome_fantasia || "").toUpperCase();
             const razaoCli = (e.log_clientes?.razao_social || "").toUpperCase();
-            return nomeCli.includes("TC SERVICOS") || razaoCli.includes("TC SERVICOS");
+            return nomeCli.includes("TC") || razaoCli.includes("TC") || nomeCli.includes("SERVICOS") || razaoCli.includes("SERVICOS");
         });
-        setEquipamentosTC(tcEquips);
+        // Se porventura o filtro restrito retornar vazio (caso o vínculo na tabela srv_equipamentos seja diferente), 
+        // fallback para listar todos para não travar a produção
+        setEquipamentosTC(tcEquips.length > 0 ? tcEquips : eqRes.data);
     }
   };
 
@@ -577,13 +580,14 @@ export default function Grafica() {
   
   const totalReceitaGerada = historicoProducao.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + ((curr.producaoValida || 0) * (curr.paginasPorProduto || 1) * (curr.valorUnitarioPagina || 0)), 0);
 
-  // Ordenação e Pesquisa
+  // ORDENAÇÃO: Mais antigas (topo) para mais recentes (baixo) com base na data de solicitação
   const ordensFiltradas = ordens
     .filter(o => 
       (o.cliente_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) || 
       (o.descricao_servico?.toLowerCase() || "").includes(buscaOS.toLowerCase()) ||
       (o.numero_op?.toString() || "").includes(buscaOS) ||
-      (o.operador_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase())
+      (o.operador_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) ||
+      (o.solicitante?.toLowerCase() || "").includes(buscaOS.toLowerCase())
     )
     .sort((a, b) => new Date(a.data_solicitacao || 0).getTime() - new Date(b.data_solicitacao || 0).getTime());
 
@@ -993,7 +997,7 @@ export default function Grafica() {
                                           <Select value={equipImpressaoId} onValueChange={setEquipImpressaoId}>
                                               <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue placeholder="Selecione o equipamento interno..."/></SelectTrigger>
                                               <SelectContent className="bg-white z-[99999]">
-                                                  {equipamentosTC.map(e => <SelectItem key={e.id} value={e.id}>{e.log_produtos?.nome} (S/N: {e.numero_serie}) {e.log_produtos?.especificacoes?.includes('ppm') ? '' : ''}</SelectItem>)}
+                                                  {equipamentosTC.map(e => <SelectItem key={e.id} value={e.id}>{e.log_produtos?.nome || 'Equipamento'} (S/N: {e.numero_serie})</SelectItem>)}
                                               </SelectContent>
                                           </Select>
                                       </div>
