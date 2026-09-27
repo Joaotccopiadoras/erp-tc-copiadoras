@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileText,
-  KanbanSquare, 
-  Plus, MoreVertical, Clock, AlertTriangle, Calendar as CalendarIcon, User, Search, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2 } from "lucide-react";
+  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, 
+  Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, 
+  Loader2, ArrowLeft, ArrowRight, Edit2 
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 import jsPDF from "jspdf";
@@ -28,11 +29,12 @@ export default function AgendaKanban() {
   const [workflowAtivo, setWorkflowAtivo] = useState<string>("global");
   const [exportando, setExportando] = useState(false);
   
-  // Modais
+  // Modais e Estados de Edição
   const [modalWF, setModalWF] = useState(false);
   const [modalColuna, setModalColuna] = useState(false);
   const [modalCard, setModalCard] = useState(false);
   const [cardSendoEditado, setCardSendoEditado] = useState<Card | null>(null);
+  const [colunaSendoEditada, setColunaSendoEditada] = useState<Coluna | null>(null);
 
   // Forms
   const [nomeWf, setNomeWf] = useState("");
@@ -94,23 +96,93 @@ export default function AgendaKanban() {
     }
   };
 
-  const criarColuna = async () => {
+  const salvarColuna = async () => {
     if (!nomeColuna || workflowAtivo === "global") return;
-    const ordem = colunas.length;
-    const { error } = await supabase.from('kanban_colunas').insert([{ workflow_id: workflowAtivo, nome: nomeColuna, status_global: statusGlobalColuna, ordem }]);
-    if (!error) { setModalColuna(false); setNomeColuna(""); fetchQuadro(); }
+    
+    if (colunaSendoEditada) {
+      const { error } = await supabase.from('kanban_colunas').update({ nome: nomeColuna, status_global: statusGlobalColuna }).eq('id', colunaSendoEditada.id);
+      if (!error) {
+        setModalColuna(false);
+        setNomeColuna("");
+        setColunaSendoEditada(null);
+        fetchQuadro();
+      }
+    } else {
+      const ordem = colunas.length;
+      const { error } = await supabase.from('kanban_colunas').insert([{ workflow_id: workflowAtivo, nome: nomeColuna, status_global: statusGlobalColuna, ordem }]);
+      if (!error) { 
+        setModalColuna(false); 
+        setNomeColuna(""); 
+        fetchQuadro(); 
+      }
+    }
+  };
+
+  const moverColuna = async (id: string, direcao: number) => {
+    const index = colunas.findIndex(c => c.id === id);
+    if (index < 0) return;
+    const newIndex = index + direcao;
+    if (newIndex < 0 || newIndex >= colunas.length) return;
+    
+    const novaLista = [...colunas];
+    const temp = novaLista[index];
+    novaLista[index] = novaLista[newIndex];
+    novaLista[newIndex] = temp;
+    
+    const listaAtualizada = novaLista.map((c, i) => ({ ...c, ordem: i }));
+    setColunas(listaAtualizada); // Atualização Otimista
+    
+    for (const u of listaAtualizada) {
+      await supabase.from('kanban_colunas').update({ ordem: u.ordem }).eq('id', u.id);
+    }
+  };
+
+  const abrirModalEditarColuna = (col: Coluna) => {
+    setColunaSendoEditada(col);
+    setNomeColuna(col.nome);
+    setStatusGlobalColuna(col.status_global);
+    setModalColuna(true);
+  };
+
+  const deletarColuna = async (id: string) => {
+    const temCards = cards.some(c => c.coluna_id === id);
+    if (temCards) return alert("Não é possível excluir uma etapa que contém cards. Mova-os primeiro para outra etapa.");
+    if (!window.confirm("Tem certeza que deseja excluir esta etapa?")) return;
+    
+    await supabase.from('kanban_colunas').delete().eq('id', id);
+    fetchQuadro();
   };
 
   const salvarCard = async () => {
     if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna são obrigatórios.");
     
-    //vincula coluna a wf
-    const colSelecionada = colunas.find(c => c.id === cardForm.coluna_id);
-    const wfId = colSelecionada?.workflow_id || workflowAtivo;
+    let finalColunaId = cardForm.coluna_id;
+    let finalWfId = workflowAtivo;
+
+    // Se estivermos criando um card NOVO direto na visão global, ele organiza numa pasta oculta "Tarefas Avulsas"
+    if (workflowAtivo === "global" && !cardSendoEditado) {
+      let wfGeral = workflows.find(w => w.nome === "Tarefas Avulsas");
+      if (!wfGeral) {
+        const { data: newWf } = await supabase.from('kanban_workflows').insert([{ nome: "Tarefas Avulsas" }]).select().single();
+        if (newWf) { wfGeral = newWf; setWorkflows([...workflows, newWf]); }
+      }
+      if (wfGeral) {
+        finalWfId = wfGeral.id;
+        let colGeral = colunas.find(c => c.workflow_id === wfGeral!.id && c.status_global === cardForm.coluna_id);
+        if (!colGeral) {
+          const { data: newCol } = await supabase.from('kanban_colunas').insert([{ workflow_id: wfGeral.id, nome: cardForm.coluna_id, status_global: cardForm.coluna_id, ordem: STATUS_GLOBAIS.indexOf(cardForm.coluna_id) }]).select().single();
+          if (newCol) { colGeral = newCol; }
+        }
+        if (colGeral) finalColunaId = colGeral.id;
+      }
+    } else {
+      const colSelecionada = colunas.find(c => c.id === cardForm.coluna_id);
+      finalWfId = colSelecionada?.workflow_id || workflowAtivo;
+    }
 
     const payload = {
-      workflow_id: wfId,
-      coluna_id: cardForm.coluna_id,
+      workflow_id: finalWfId,
+      coluna_id: finalColunaId,
       titulo: cardForm.titulo,
       descricao: cardForm.descricao,
       responsavel_nome: cardForm.responsavel || usuarioAtual?.user_metadata?.full_name || "Usuário",
@@ -137,7 +209,7 @@ export default function AgendaKanban() {
       setCardForm({ titulo: card.titulo, descricao: card.descricao || "", responsavel: card.responsavel_nome || "", prioridade: card.prioridade || "Normal", vencimento: card.data_vencimento ? card.data_vencimento.split('T')[0] : "", coluna_id: card.coluna_id });
     } else {
       setCardSendoEditado(null);
-      setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: defaultColId || (colunas[0]?.id || "") });
+      setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: workflowAtivo === "global" ? "Backlog" : (defaultColId || (colunas[0]?.id || "")) });
     }
     setModalCard(true);
   };
@@ -194,9 +266,7 @@ export default function AgendaKanban() {
 
   const colunasAtivas = getColunasRenderizacao();
 
-  // ==========================================
-  // EXPORTAÇÕES (NOVO)
-  // ==========================================
+  // EXPORTAÇÕES
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
       const res = await fetch(imageUrl);
@@ -208,9 +278,7 @@ export default function AgendaKanban() {
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(blob);
       });
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   };
 
   const formatarData = (dataStr: string) => {
@@ -223,14 +291,7 @@ export default function AgendaKanban() {
     colunasAtivas.forEach(col => {
       col.cards.forEach(card => {
         exportData.push({
-          etapa: col.nome,
-          titulo: card.titulo,
-          responsavel: card.responsavel_nome || "-",
-          prioridade: card.prioridade,
-          vencimento: formatarData(card.data_vencimento),
-          workflow: card.kanban_workflows?.nome || "-",
-          status_global: card.kanban_colunas?.status_global || "-",
-          descricao: card.descricao || "-"
+          etapa: col.nome, titulo: card.titulo, responsavel: card.responsavel_nome || "-", prioridade: card.prioridade, vencimento: formatarData(card.data_vencimento), workflow: card.kanban_workflows?.nome || "-", status_global: card.kanban_colunas?.status_global || "-", descricao: card.descricao || "-"
         });
       });
     });
@@ -242,25 +303,18 @@ export default function AgendaKanban() {
     try {
       const doc = new jsPDF("landscape");
       const logoData = await getBase64ImageFromUrl("/logo.png");
-      
       const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3, "BACKLOG": 4 };
 
-      // ORDENAÇÃO: Agrupamento padrão por Responsável, seguido pelo Status e Data
       const dadosOrdenados = [...cards].sort((a, b) => {
-        // 1. Agrupamento por Responsável
         const respA = a.responsavel_nome || "Sem Responsável";
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
         if (respA > respB) return 1;
-        
-        // 2. Status
         const stA = (a.kanban_colunas?.status_global || 'BACKLOG').toUpperCase();
         const stB = (b.kanban_colunas?.status_global || 'BACKLOG').toUpperCase();
         const ordemA = pesoStatus[stA] || 99;
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
-        
-        // 3. Vencimento
         return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
       });
 
@@ -270,58 +324,29 @@ export default function AgendaKanban() {
 
       dadosOrdenados.forEach(item => {
         let valGrupo = item.responsavel_nome || "Sem Responsável";
-
         if (valGrupo !== grupoAtual) {
-          tableRows.push([{
-            content: `Responsável: ${valGrupo}`, colSpan: 7, 
-            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
-          }]);
+          tableRows.push([{ content: `Responsável: ${valGrupo}`, colSpan: 7, styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' } }]);
           grupoAtual = valGrupo;
         }
-        
         tableRows.push([
-          item.kanban_colunas?.nome || "-", 
-          item.titulo || "-",
-          item.prioridade || "-",
-          formatarData(item.data_vencimento), 
-          item.kanban_workflows?.nome || "-", 
-          item.kanban_colunas?.status_global || "-", 
-          item.descricao || "-"
+          item.kanban_colunas?.nome || "-", item.titulo || "-", item.prioridade || "-", formatarData(item.data_vencimento), 
+          item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
         ]);
       });
 
       autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: 40,
-        margin: { top: 40, bottom: 40, left: 14, right: 14 },
-        theme: 'grid', 
-        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: { 
-          0: { cellWidth: 30 }, 
-          1: { cellWidth: 45 }, 
-          2: { cellWidth: 20, halign: 'center' }, 
-          3: { cellWidth: 20, halign: 'center' }, 
-          4: { cellWidth: 30 }, 
-          5: { cellWidth: 25, halign: 'center' }, 
-          6: { cellWidth: 'auto', halign: 'left' } 
-        },
-        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        
+        head: [tableColumn], body: tableRows, startY: 40, margin: { top: 40, bottom: 40, left: 14, right: 14 },
+        theme: 'grid', styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 45 }, 2: { cellWidth: 20, halign: 'center' }, 3: { cellWidth: 20, halign: 'center' }, 4: { cellWidth: 30 }, 5: { cellWidth: 25, halign: 'center' }, 6: { cellWidth: 'auto', halign: 'left' } },
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, alternateRowStyles: { fillColor: [248, 250, 252] },
         didDrawPage: function (data) {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
-
-          // Caixas de blindagem
           doc.setFillColor(255, 255, 255);
           doc.rect(0, 0, pageWidth, 38, "F"); 
           doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-          // --- CABEÇALHO ---
-          if (logoData) {
-            doc.addImage(logoData, "PNG", 14, 10, 40, 15);
-          }
+          if (logoData) doc.addImage(logoData, "PNG", 14, 10, 40, 15);
           
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
@@ -332,32 +357,22 @@ export default function AgendaKanban() {
           doc.setLineWidth(0.5);
           doc.line(14, 28, pageWidth - 14, 28);
 
-          // --- DATA ---
           const today = new Date();
-          const dia = String(today.getDate()).padStart(2, '0');
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-          const textoData = `Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
-          
+          const textoData = `Belém, ${String(today.getDate()).padStart(2, '0')} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(100, 100, 100);
           doc.text(textoData, pageWidth - 14, 25, { align: "right" });
 
-          // --- RODAPÉ PRETO ---
           doc.setFillColor(0, 0, 0); 
           doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
-
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
           doc.setTextColor(255, 255, 255);
-
-          const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
-          doc.text(textoRodapeEsq, 14, pageHeight - 16);
-
-          const textoRodapeDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
-          doc.text(textoRodapeDir, pageWidth - 14, pageHeight - 16, { align: "right" });
+          doc.text("Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0", 14, pageHeight - 16);
+          doc.text("(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br", pageWidth - 14, pageHeight - 16, { align: "right" });
         },
-        
         didParseCell: function (data) {
           if (data.section === 'body' && data.column.index === 5 && data.cell.raw) {
             const status = String(data.cell.raw).toUpperCase();
@@ -368,12 +383,7 @@ export default function AgendaKanban() {
         }
       });
       doc.save("Agenda_Kanban_TC_Copiadoras.pdf");
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Erro ao gerar PDF.");
-    } finally {
-      setExportando(false);
-    }
+    } catch (error) { alert("Erro ao gerar PDF."); } finally { setExportando(false); }
   };
 
   const exportarExcel = async () => {
@@ -382,7 +392,6 @@ export default function AgendaKanban() {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Kanban Cards");
       const logoBase64 = await getBase64ImageFromUrl("/logo.png");
-      
       let startRow = 1;
       
       if (logoBase64) {
@@ -394,22 +403,11 @@ export default function AgendaKanban() {
       worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
       worksheet.getRow(startRow).font = { bold: true };
       
-      const dadosExportacao = getExportData();
-      dadosExportacao.forEach((item) => {
-        worksheet.addRow([
-          item.etapa, item.titulo, item.responsavel, item.prioridade, item.vencimento, item.workflow, item.status_global, item.descricao
-        ]);
-      });
-      
+      getExportData().forEach(item => worksheet.addRow([item.etapa, item.titulo, item.responsavel, item.prioridade, item.vencimento, item.workflow, item.status_global, item.descricao]));
       worksheet.columns.forEach(column => { column.width = 20; });
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");
-    } catch (error) { 
-      console.error("Erro ao gerar Excel:", error); 
-      alert("Erro ao gerar Excel."); 
-    } finally {
-      setExportando(false);
-    }
+    } catch (error) { alert("Erro ao gerar Excel."); } finally { setExportando(false); }
   };
 
   return (
@@ -431,7 +429,7 @@ export default function AgendaKanban() {
               <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Seus Workflows</span>
             </div>
 
-            {workflows.map(wf => (
+            {workflows.filter(wf => wf.nome !== "Tarefas Avulsas").map(wf => (
               <button key={wf.id} onClick={() => setWorkflowAtivo(wf.id)} className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors text-sm ${workflowAtivo === wf.id ? "bg-slate-800 text-white font-semibold shadow-inner" : "hover:bg-slate-800 hover:text-white"}`}>
                 <FolderKanban className="w-4 h-4 opacity-70" /> <span className="truncate">{wf.nome}</span>
               </button>
@@ -458,7 +456,6 @@ export default function AgendaKanban() {
               </p>
             </div>
             
-            {/* BOTÕES DE EXPORTAÇÃO AQUI */}
             <div className="flex gap-2 items-center flex-wrap">
               <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || cards.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
                 {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Excel
@@ -470,7 +467,7 @@ export default function AgendaKanban() {
               <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
               
               {workflowAtivo !== "global" && (
-                <Button onClick={() => setModalColuna(true)} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Coluna</Button>
+                <Button onClick={() => { setColunaSendoEditada(null); setNomeColuna(""); setStatusGlobalColuna("Backlog"); setModalColuna(true); }} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Coluna</Button>
               )}
               <Button onClick={() => abrirModalCard()} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Novo Card</Button>
             </div>
@@ -486,13 +483,21 @@ export default function AgendaKanban() {
                 onDrop={e => handleDrop(e, col.id, col.isGlobal)}
               >
                 {/* Header da Coluna */}
-                <div className="p-3 border-b border-slate-200/60 bg-slate-100 rounded-t-xl flex justify-between items-center">
+                <div className="p-3 border-b border-slate-200/60 bg-slate-100 rounded-t-xl flex justify-between items-center group">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-700">{col.nome}</h3>
                     <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{col.cards.length}</span>
                   </div>
                   {!col.isGlobal && (
-                    <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded">{col.statusBadge}</span>
+                    <div className="flex items-center">
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded group-hover:hidden">{col.statusBadge}</span>
+                      <div className="hidden group-hover:flex items-center gap-1.5 bg-slate-100 pl-2">
+                         <button onClick={() => moverColuna(col.id, -1)} title="Mover para esquerda"><ArrowLeft className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                         <button onClick={() => moverColuna(col.id, 1)} title="Mover para direita"><ArrowRight className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                         <button onClick={() => abrirModalEditarColuna(col)} title="Editar Coluna"><Edit2 className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                         <button onClick={() => deletarColuna(col.id)} title="Excluir Coluna"><Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500"/></button>
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -566,10 +571,11 @@ export default function AgendaKanban() {
         </div>
       )}
 
+      {/* MODAL: NOVA/EDITAR COLUNA */}
       {modalColuna && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
           <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
-            <h3 className="font-bold text-lg mb-1">Nova Coluna (Etapa)</h3>
+            <h3 className="font-bold text-lg mb-1">{colunaSendoEditada ? "Editar Coluna" : "Nova Coluna (Etapa)"}</h3>
             <p className="text-xs text-slate-500 mb-4">Vincule a etapa a um Status Global para a visão da Programação.</p>
             <div className="space-y-4 mb-6">
               <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome da Etapa</label><Input value={nomeColuna} onChange={e => setNomeColuna(e.target.value)} placeholder="Ex: Cotar Preços" autoFocus/></div>
@@ -583,7 +589,7 @@ export default function AgendaKanban() {
                 </Select>
               </div>
             </div>
-            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setModalColuna(false)}>Cancelar</Button><Button className="bg-indigo-600 text-white" onClick={criarColuna}>Adicionar</Button></div>
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setModalColuna(false)}>Cancelar</Button><Button className="bg-indigo-600 text-white" onClick={salvarColuna}>{colunaSendoEditada ? "Salvar" : "Adicionar"}</Button></div>
           </div>
         </div>
       )}
@@ -603,14 +609,22 @@ export default function AgendaKanban() {
                 <Input value={cardForm.titulo} onChange={e => setCardForm({...cardForm, titulo: e.target.value})} placeholder="Título resumido..." className="text-base font-medium h-10" autoFocus/>
               </div>
 
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Coluna / Etapa Atual</label>
                   <Select value={cardForm.coluna_id} onValueChange={v => setCardForm({...cardForm, coluna_id: v})}>
-                    <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                    <SelectTrigger className="bg-white z-[99999]"><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
                     <SelectContent className="bg-white z-[99999]">
-                      {(workflowAtivo === "global" ? colunas : colunas.filter(c => c.workflow_id === workflowAtivo)).map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.nome} {workflowAtivo === "global" && `(Mapeado: ${c.status_global})`}</SelectItem>
-                      ))}
+                      {workflowAtivo === "global" && !cardSendoEditado ? (
+                        // Apenas 4 colunas globais na criação
+                        STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
+                      ) : workflowAtivo === "global" && cardSendoEditado ? (
+                        // Visão estendida de todos os processos caso esteja mudando um card existente na visão global
+                        colunas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome} (Mapeado: {c.status_global})</SelectItem>)
+                      ) : (
+                        // Visão restrita do workflow atual
+                        colunas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -657,6 +671,7 @@ export default function AgendaKanban() {
               </div>
             </div>
           </div>
+        </div>
       )}
 
     </AppLayout>

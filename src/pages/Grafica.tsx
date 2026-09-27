@@ -142,10 +142,10 @@ export default function Grafica() {
 
   const fetchDadosBase = async () => {
     const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
-      supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
-      supabase.from('log_clientes').select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
-      supabase.from('grafica_operadores').select('id, nome').order('nome'),
-      supabase.from('srv_equipamentos').select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
+      supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
+      supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
+      supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
+      supabase.from('srv_equipamentos' as any).select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
@@ -162,9 +162,9 @@ export default function Grafica() {
   };
 
   const fetchOrdens = async () => {
-    const { data } = await supabase.from('prd_ordens_producao').select('*').order('numero_op', { ascending: false });
+    const { data } = await supabase.from('prd_ordens_producao' as any).select('*').order('numero_op', { ascending: false });
     if (data) {
-      const dataNormalizada = data.map(os => ({
+      const dataNormalizada = data.map((os: any) => ({
         ...os,
         status: (STATUS_FLUXO_GRAFICA.includes(os.status) || os.status === "Cancelado") ? os.status : "Solicitação Recebida"
       }));
@@ -199,7 +199,7 @@ export default function Grafica() {
         historico_producao: []
       };
 
-      const { error } = await supabase.from('prd_ordens_producao').insert([payload]);
+      const { error } = await supabase.from('prd_ordens_producao' as any).insert([payload]);
       if (error) throw error;
 
       alert("Ordem de Serviço Gráfico enviada para a fila com sucesso!");
@@ -226,7 +226,7 @@ export default function Grafica() {
     try { hist = typeof os.historico_producao === 'string' ? JSON.parse(os.historico_producao) : (os.historico_producao || []); } catch(e){}
     setHistoricoProducao(hist);
 
-    const producaoAtiva = hist.find(h => h.status === 'imprimindo');
+    const producaoAtiva = hist.find((h: any) => h.status === 'imprimindo');
     
     if (producaoAtiva) {
         setStatusImpressao("imprimindo");
@@ -238,7 +238,7 @@ export default function Grafica() {
         setContadorInicial(producaoAtiva.contadorInicial.toString());
         setContadorFinal("");
     } else {
-        const totalProduzido = hist.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
+        const totalProduzido = hist.filter((h: any) => h.status === 'concluido').reduce((acc: number, curr: any) => acc + (curr.producaoValida || 0), 0);
         const pendente = Math.max(0, os.quantidade_produzir - totalProduzido);
 
         setStatusImpressao("pendente");
@@ -251,12 +251,12 @@ export default function Grafica() {
     }
 
     const [insumosRes, anexosRes] = await Promise.all([
-        supabase.from('prd_op_insumos').select('*').eq('op_id', os.id),
-        supabase.from('prd_op_anexos').select('*').eq('op_id', os.id).order('data_upload', { ascending: false })
+        supabase.from('prd_op_insumos' as any).select('*').eq('op_id', os.id),
+        supabase.from('prd_op_anexos' as any).select('*').eq('op_id', os.id).order('data_upload', { ascending: false })
     ]);
 
     if (insumosRes.data) {
-        setInsumos(insumosRes.data.map(i => ({
+        setInsumos(insumosRes.data.map((i: any) => ({
             id: i.id, produtoId: i.produto_id, nome: i.produto_nome, 
             quantidade: i.quantidade, custoUn: i.custo_unitario, estoqueAtual: 999 
         })));
@@ -279,7 +279,7 @@ export default function Grafica() {
           const { data: { publicUrl } } = supabase.storage.from('grafica_arquivos').getPublicUrl(fileName);
 
           const payload = { op_id: osSelecionada.id, nome_arquivo: file.name, url_arquivo: publicUrl, tamanho_bytes: file.size };
-          const { data: novoAnexo, error: dbError } = await supabase.from('prd_op_anexos').insert([payload]).select().single();
+          const { data: novoAnexo, error: dbError } = await supabase.from('prd_op_anexos' as any).insert([payload]).select().single();
           if (dbError) throw dbError;
 
           setAnexos([novoAnexo, ...anexos]);
@@ -292,7 +292,7 @@ export default function Grafica() {
 
   const deletarAnexo = async (id: string) => {
       if(!confirm("Tem certeza que deseja remover este arquivo da OS?")) return;
-      await supabase.from('prd_op_anexos').delete().eq('id', id);
+      await supabase.from('prd_op_anexos' as any).delete().eq('id', id);
       setAnexos(anexos.filter(a => a.id !== id));
   };
 
@@ -324,15 +324,15 @@ export default function Grafica() {
         paginas_por_produto: editPaginasPorProduto || 1
       };
 
-      const { error: updateError } = await supabase.from('prd_ordens_producao').update(payloadUpdate).eq('id', osSelecionada.id);
+      const { error: updateError } = await supabase.from('prd_ordens_producao' as any).update(payloadUpdate).eq('id', osSelecionada.id);
       if (updateError) throw new Error("Falha ao atualizar dados: " + updateError.message);
 
-      const { error: delError } = await supabase.from('prd_op_insumos').delete().eq('op_id', osSelecionada.id);
+      const { error: delError } = await supabase.from('prd_op_insumos' as any).delete().eq('op_id', osSelecionada.id);
       if (delError) throw new Error("Falha de comunicação: " + delError.message);
 
       if (insumos.length > 0) {
         const payloadInsumos = insumos.map(i => ({ op_id: osSelecionada.id, produto_id: i.produtoId, produto_nome: i.nome, quantidade: i.quantidade, custo_unitario: i.custoUn, custo_total: i.quantidade * i.custoUn }));
-        const { error: insError } = await supabase.from('prd_op_insumos').insert(payloadInsumos);
+        const { error: insError } = await supabase.from('prd_op_insumos' as any).insert(payloadInsumos);
         if (insError) throw new Error("Erro ao salvar insumos: " + insError.message);
       }
 
@@ -354,12 +354,12 @@ export default function Grafica() {
     try {
       await salvarAndamento('Concluído');
       for (const insumo of insumos) {
-        const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', insumo.produtoId).single();
+        const { data: prodData } = await supabase.from('log_produtos' as any).select('estoque_atual').eq('id', insumo.produtoId).single();
         if (prodData) {
             const novoEst = Math.max(0, prodData.estoque_atual - insumo.quantidade);
-            await supabase.from('log_produtos').update({ estoque_atual: novoEst }).eq('id', insumo.produtoId);
+            await supabase.from('log_produtos' as any).update({ estoque_atual: novoEst }).eq('id', insumo.produtoId);
         }
-        await supabase.from('log_movimentacoes').insert({
+        await supabase.from('log_movimentacoes' as any).insert({
             produto_id: insumo.produtoId, tipo: 'Saída', quantidade: insumo.quantidade, 
             documento: `OSG-${osSelecionada.numero_op}`, fornecedor_cliente: osSelecionada.cliente_nome, observacoes: 'Consumo Gráfica'
         });
@@ -396,7 +396,7 @@ export default function Grafica() {
       setStatusImpressao("imprimindo");
 
       try {
-          const { error } = await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+          const { error } = await supabase.from('prd_ordens_producao' as any).update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
           if (error) throw error;
       } catch (e: any) {
           alert("Erro ao persistir o início da produção no banco: " + e.message);
@@ -444,7 +444,7 @@ export default function Grafica() {
     setHistoricoProducao(novoHistorico);
 
     try {
-        const { error } = await supabase.from('prd_ordens_producao').update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
+        const { error } = await supabase.from('prd_ordens_producao' as any).update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
         if (error) throw error;
         
         const totalProduzidoAgora = novoHistorico.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
@@ -732,7 +732,7 @@ export default function Grafica() {
             </div>
 
             <div className="flex gap-4 pt-4">
-                <Button variant="outline" onClick={() => setAbaAtiva("painel")} className="h-12 w-1/3">Cancelar e Voltar</Button>
+                <Button variant="outline" onClick={() => setAbaAtiva("painel")} className="h-12 w-1/3 border-slate-300 text-slate-600">Cancelar e Voltar</Button>
                 <Button onClick={criarOS} disabled={salvandoOS} className="h-12 w-2/3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
                     {salvandoOS ? "Gerando..." : "Enviar para Fila de Produção"}
                 </Button>
@@ -741,7 +741,7 @@ export default function Grafica() {
         </div>
       ) : (
         <div className="flex h-[calc(100vh-6rem)] max-w-[1600px] mx-auto overflow-hidden bg-slate-50 rounded-xl border shadow-sm">
-          {/* KANBAN: ÁREA PRINCIPAL */}
+          
           <div className="flex-1 flex flex-col overflow-hidden">
             
             {/* Header da Tela */}
@@ -821,7 +821,7 @@ export default function Grafica() {
                                   <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
                                       <UserCheck className="w-3 h-3 text-indigo-400 shrink-0"/> {os.operador_nome || 'Não atribuído'}
                                   </div>
-                                  {os.observacoes?.includes("[Possui Impressão: Sim]") && <Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Requer Impressão"/>}
+                                  {os.observacoes?.includes("[Possui Impressão: Sim]") && <span title="Requer Impressão"><Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" /></span>}
                               </div>
                             </div>
                           </div>
@@ -1135,7 +1135,7 @@ export default function Grafica() {
             )}
 
           </div>
-        )}
+                </div>
     </AppLayout>
   );
 }
