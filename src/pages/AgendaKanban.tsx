@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, Edit
+  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2 
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -27,7 +27,7 @@ export default function AgendaKanban() {
   const [workflowAtivo, setWorkflowAtivo] = useState<string>("global");
   const [exportando, setExportando] = useState(false);
   
-  // Modais
+  // Modais e Estados de Edição
   const [modalWF, setModalWF] = useState(false);
   const [modalColuna, setModalColuna] = useState(false);
   const [modalCard, setModalCard] = useState(false);
@@ -142,6 +142,25 @@ export default function AgendaKanban() {
     }
   };
 
+  const moverColuna = async (id: string, direcao: number) => {
+    const index = colunas.findIndex(c => c.id === id);
+    if (index < 0) return;
+    const newIndex = index + direcao;
+    if (newIndex < 0 || newIndex >= colunas.length) return;
+    
+    const novaLista = [...colunas];
+    const temp = novaLista[index];
+    novaLista[index] = novaLista[newIndex];
+    novaLista[newIndex] = temp;
+    
+    const listaAtualizada = novaLista.map((c, i) => ({ ...c, ordem: i }));
+    setColunas(listaAtualizada);
+    
+    for (const u of listaAtualizada) {
+      await supabase.from('kanban_colunas').update({ ordem: u.ordem }).eq('id', u.id);
+    }
+  };
+
   const salvarCard = async () => {
     if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna/Etapa são obrigatórios.");
     
@@ -150,12 +169,10 @@ export default function AgendaKanban() {
 
     if (workflowAtivo === "global") {
       if (cardSendoEditado) {
-        // Editando na Visão Global
         const statusGlobalAlvo = cardForm.coluna_id;
         finalWfId = cardSendoEditado.workflow_id;
         let colunaEquivalente = colunas.find(c => c.workflow_id === finalWfId && c.status_global === statusGlobalAlvo);
 
-        // Se não existir, cria automaticamente para não travar o usuário
         if (!colunaEquivalente) {
           const ordem = colunas.filter(c => c.workflow_id === finalWfId).length;
           const { data: newCol } = await supabase.from('kanban_colunas').insert([{
@@ -166,7 +183,6 @@ export default function AgendaKanban() {
         
         if (colunaEquivalente) finalColunaId = colunaEquivalente.id;
       } else {
-        // Criando Novo na Visão Global
         let wfGeral = workflows.find(w => w.nome === "Tarefas Avulsas");
         if (!wfGeral) {
           const { data: newWf } = await supabase.from('kanban_workflows').insert([{ nome: "Tarefas Avulsas" }]).select().single();
@@ -213,10 +229,7 @@ export default function AgendaKanban() {
   const abrirModalCard = (card?: Card, defaultColId?: string) => {
     if (card) {
       setCardSendoEditado(card);
-      // Se estiver na visão global, o form carrega o nome do Status Global (ex: "Andamento"). 
-      // Se não, carrega o ID da coluna específica.
       const initialCol = workflowAtivo === "global" ? (card.kanban_colunas?.status_global || "Backlog") : card.coluna_id;
-      
       setCardForm({ 
         titulo: card.titulo, 
         descricao: card.descricao || "", 
@@ -246,12 +259,50 @@ export default function AgendaKanban() {
     setModalCard(false);
   };
 
+  // --- DRAG AND DROP NATIVO PARA CARDS E COLUNAS ---
   const handleDragStart = (e: React.DragEvent, card: Card) => {
+    e.stopPropagation(); // Evita que o evento suba e ative o arraste da coluna
     e.dataTransfer.setData("cardId", card.id);
+    e.dataTransfer.setData("type", "card");
+  };
+
+  const handleColumnDragStart = (e: React.DragEvent, colId: string) => {
+    e.stopPropagation();
+    e.dataTransfer.setData("colId", colId);
+    e.dataTransfer.setData("type", "column");
   };
 
   const handleDrop = async (e: React.DragEvent, dropTargetId: string, isGlobal: boolean) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    const type = e.dataTransfer.getData("type");
+    
+    // --- LÓGICA DE REORDENAR COLUNAS ---
+    if (type === "column") {
+      if (isGlobal) return; // Não reordena colunas na visão global
+      const draggedColId = e.dataTransfer.getData("colId");
+      if (!draggedColId || draggedColId === dropTargetId) return;
+
+      const colList = [...colunas];
+      const draggedIdx = colList.findIndex(c => c.id === draggedColId);
+      const targetIdx = colList.findIndex(c => c.id === dropTargetId);
+
+      if (draggedIdx < 0 || targetIdx < 0) return;
+
+      const [draggedCol] = colList.splice(draggedIdx, 1);
+      colList.splice(targetIdx, 0, draggedCol);
+
+      const updatedCols = colList.map((c, idx) => ({ ...c, ordem: idx }));
+      setColunas(updatedCols); // Atualização Otimista
+      
+      for (const c of updatedCols) {
+        supabase.from('kanban_colunas').update({ ordem: c.ordem }).eq('id', c.id).then();
+      }
+      return;
+    }
+
+    // --- LÓGICA DE MOVER CARDS ---
     const cardId = e.dataTransfer.getData("cardId");
     if (!cardId) return;
 
@@ -264,7 +315,6 @@ export default function AgendaKanban() {
       const statusGlobalAlvo = dropTargetId;
       let colunaEquivalente = colunas.find(c => c.workflow_id === cardMovido.workflow_id && c.status_global === statusGlobalAlvo);
       
-      // Criação Inteligente: Se não houver coluna equivalente, cria automaticamente em vez de bloquear
       if (!colunaEquivalente) {
         const ordem = colunas.filter(c => c.workflow_id === cardMovido.workflow_id).length;
         const { data: newCol } = await supabase.from('kanban_colunas').insert([{
@@ -273,7 +323,7 @@ export default function AgendaKanban() {
 
         if (newCol) {
            colunaEquivalente = newCol;
-           setColunas(prev => [...prev, newCol]); // Update local
+           setColunas(prev => [...prev, newCol]); 
         } else {
            return alert(`Erro ao mover: O fluxo original não possui etapa para "${statusGlobalAlvo}".`);
         }
@@ -301,7 +351,7 @@ export default function AgendaKanban() {
 
   const colunasAtivas = getColunasRenderizacao();
 
-  // EXPORTAÇÕES (MANTIDAS)
+  // EXPORTAÇÕES
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
       const res = await fetch(imageUrl);
@@ -313,9 +363,7 @@ export default function AgendaKanban() {
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(blob);
       });
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   };
 
   const formatarData = (dataStr: string) => {
@@ -509,10 +557,16 @@ export default function AgendaKanban() {
 
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6">
             {colunasAtivas.map(col => (
-              <div key={col.id} className="w-80 shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full" onDragOver={e => e.preventDefault()} onDrop={e => handleDrop(e, col.id, col.isGlobal)}>
-                
+              <div 
+                key={col.id} 
+                className="w-80 shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full" 
+                draggable={!col.isGlobal}
+                onDragStart={e => !col.isGlobal && handleColumnDragStart(e, col.id)}
+                onDragOver={e => e.preventDefault()} 
+                onDrop={e => handleDrop(e, col.id, col.isGlobal)}
+              >
                 {/* Header da Coluna */}
-                <div className="p-3 border-b border-slate-200/60 bg-slate-100 rounded-t-xl flex justify-between items-center group">
+                <div className={`p-3 border-b border-slate-200/60 bg-slate-100 rounded-t-xl flex justify-between items-center group ${!col.isGlobal ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-700">{col.nome}</h3>
                     <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{col.cards.length}</span>
@@ -525,12 +579,10 @@ export default function AgendaKanban() {
                     
                     {!col.isGlobal && (
                       <div className="hidden group-hover:flex items-center ml-1">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100" onClick={() => abrirEditarColuna(col as Coluna)}>
-                          <Settings className="w-3 h-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-600 hover:bg-red-50" onClick={() => deletarColuna(col.id, col.cards.length)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
+                        <button onClick={() => moverColuna(col.id, -1)} title="Mover para esquerda" className="p-1"><ArrowLeft className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                        <button onClick={() => moverColuna(col.id, 1)} title="Mover para direita" className="p-1"><ArrowRight className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                        <button onClick={() => abrirEditarColuna(col as Coluna)} title="Editar Coluna" className="p-1"><Edit2 className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                        <button onClick={() => deletarColuna(col.id, col.cards.length)} title="Excluir Coluna" className="p-1"><Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500"/></button>
                       </div>
                     )}
                   </div>
@@ -646,7 +698,6 @@ export default function AgendaKanban() {
                     <SelectTrigger className="bg-white z-[99999]"><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
                     <SelectContent className="bg-white z-[99999]">
                       {workflowAtivo === "global" ? (
-                        /* APENAS as 4 opções globais quando editando/criando na Visão Global */
                         STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
                       ) : (
                         colunas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)
