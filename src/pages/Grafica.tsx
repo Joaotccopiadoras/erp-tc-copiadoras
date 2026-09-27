@@ -79,6 +79,7 @@ export default function Grafica() {
   const [buscaOS, setBuscaOS] = useState("");
   const [osSelecionada, setOsSelecionada] = useState<any | null>(null);
   const [osSelecionadasLote, setOsSelecionadasLote] = useState<string[]>([]);
+  const [osSelecionadasFaturamento, setOsSelecionadasFaturamento] = useState<string[]>([]);
   
   const [statusOS, setStatusOS] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
@@ -152,7 +153,7 @@ export default function Grafica() {
   const fetchDadosBase = async () => {
     const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
-      supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
+      supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf, endereco').order('nome_fantasia'),
       supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
       supabase.from('srv_equipamentos' as any).select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
@@ -305,7 +306,6 @@ export default function Grafica() {
       setAnexos(anexos.filter(a => a.id !== id));
   };
 
-  // Nova função para adicionar insumo via Modal
   const selecionarInsumo = (prod: any) => {
     setInsumos([...insumos, { id: crypto.randomUUID(), produtoId: prod.id, nome: prod.nome, quantidade: 1, custoUn: prod.custo_base || 0, estoqueAtual: prod.estoque_atual || 0 }]);
     setModalInsumoOpen(false);
@@ -469,7 +469,7 @@ export default function Grafica() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO DE COMPROVANTE
+  // EXPORTAÇÃO DE PDFs (TIMBRADO CLÁSSICO E OFICIAL TC)
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -485,6 +485,64 @@ export default function Grafica() {
     } catch (e) {
       return null;
     }
+  };
+
+  const drawTimbrado = (doc: any, pageWidth: number, pageHeight: number, logoBase64: string | null) => {
+      // Background branco proteção
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, pageWidth, 42, "F"); 
+      doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
+
+      // --- CABEÇALHO (65% Preto / 35% Cinza) ---
+      const splitPoint = pageWidth * 0.65;
+      doc.setFillColor(0, 0, 0); 
+      doc.rect(0, 0, splitPoint, 15, "F"); 
+      
+      doc.setFillColor(128, 130, 133); // Cinza
+      doc.rect(splitPoint, 0, pageWidth - splitPoint, 15, "F");
+      
+      // Paralelogramo (O corte diagonal separando o preto do cinza)
+      doc.setFillColor(255, 255, 255);
+      doc.triangle(splitPoint - 5, 0, splitPoint + 5, 0, splitPoint - 2, 15, "F");
+      doc.triangle(splitPoint + 5, 0, splitPoint + 8, 15, splitPoint - 2, 15, "F");
+
+      if (logoBase64) {
+          doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
+      }
+
+      // --- RODAPÉ PRETO ---
+      doc.setFillColor(0, 0, 0);
+      doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
+
+      doc.setFont("times", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(255, 255, 255); 
+
+      const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
+      doc.text(textoRodapeEsq, 14, pageHeight - 17);
+
+      const rightX = pageWidth - 60;
+      doc.text("91 98156-6886", rightX, pageHeight - 17);
+      doc.text("(91) 3366-5100", rightX, pageHeight - 13);
+      doc.text("tcservicos@tccopiadoras.com.br", rightX, pageHeight - 9);
+
+      // Ícones vetoriais
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+
+      // WhatsApp
+      doc.circle(rightX - 4, pageHeight - 18, 1.5, "S");
+      doc.line(rightX - 5.2, pageHeight - 17, rightX - 5.5, pageHeight - 16);
+      doc.line(rightX - 5.5, pageHeight - 16, rightX - 4.5, pageHeight - 16.7);
+
+      // Telefone
+      doc.rect(rightX - 5, pageHeight - 14.5, 2, 3, "S");
+      doc.line(rightX - 4.5, pageHeight - 12, rightX - 3.5, pageHeight - 12);
+
+      // Email
+      doc.rect(rightX - 5.5, pageHeight - 10.5, 3, 2, "S");
+      doc.line(rightX - 5.5, pageHeight - 10.5, rightX - 4, pageHeight - 9.5);
+      doc.line(rightX - 4, pageHeight - 9.5, rightX - 2.5, pageHeight - 10.5);
   };
 
   const gerarComprovantePDF = async (osList: any[]) => {
@@ -572,47 +630,7 @@ export default function Grafica() {
                   4: { halign: 'center', cellWidth: 20 },
                   5: { halign: 'center', cellWidth: 25 }
               },
-              didDrawPage: function () {
-                  doc.setFillColor(255, 255, 255);
-                  doc.rect(0, 0, pageWidth, 42, "F"); 
-                  doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
-
-                  doc.setFillColor(128, 130, 133); 
-                  doc.rect(0, 0, pageWidth, 15, "F"); 
-
-                  if (logoBase64) {
-                      doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
-                  }
-
-                  doc.setFillColor(128, 130, 133);
-                  doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
-
-                  doc.setFont("times", "normal");
-                  doc.setFontSize(8.5);
-                  doc.setTextColor(255, 255, 255); 
-
-                  const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
-                  doc.text(textoRodapeEsq, 14, pageHeight - 17);
-
-                  const rightX = pageWidth - 60;
-                  doc.text("91 98156-6886", rightX, pageHeight - 17);
-                  doc.text("(91) 3366-5100", rightX, pageHeight - 13);
-                  doc.text("tcservicos@tccopiadoras.com.br", rightX, pageHeight - 9);
-
-                  doc.setDrawColor(255, 255, 255);
-                  doc.setLineWidth(0.3);
-
-                  doc.circle(rightX - 4, pageHeight - 18, 1.5, "S");
-                  doc.line(rightX - 5.2, pageHeight - 17, rightX - 5.5, pageHeight - 16);
-                  doc.line(rightX - 5.5, pageHeight - 16, rightX - 4.5, pageHeight - 16.7);
-
-                  doc.rect(rightX - 5, pageHeight - 14.5, 2, 3, "S");
-                  doc.line(rightX - 4.5, pageHeight - 12, rightX - 3.5, pageHeight - 12);
-
-                  doc.rect(rightX - 5.5, pageHeight - 10.5, 3, 2, "S");
-                  doc.line(rightX - 5.5, pageHeight - 10.5, rightX - 4, pageHeight - 9.5);
-                  doc.line(rightX - 4, pageHeight - 9.5, rightX - 2.5, pageHeight - 10.5);
-              }
+              didDrawPage: () => drawTimbrado(doc, pageWidth, pageHeight, logoBase64)
           });
 
           let finalY = (doc as any).lastAutoTable.finalY + 20;
@@ -643,6 +661,120 @@ export default function Grafica() {
           setExportando(false);
       }
   };
+
+  const gerarExtratoFaturamentoPDF = async (osList: any[]) => {
+    if (!osList || osList.length === 0) return;
+
+    const clienteNome = osList[0].cliente_nome;
+    const clientesDiferentes = osList.some(os => os.cliente_nome !== clienteNome);
+    if (clientesDiferentes) {
+        return alert("Atenção: Todas as OSGs selecionadas devem pertencer ao mesmo cliente.");
+    }
+
+    setExportando(true);
+    try {
+        const clienteObj = clientesBD.find(c => c.nome_fantasia === clienteNome || c.razao_social === clienteNome);
+        const razaoSocial = clienteObj?.razao_social || clienteNome;
+        const enderecoCliente = clienteObj?.endereco || "";
+
+        const doc = new jsPDF("p", "mm", "a4");
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const logoBase64 = await getBase64ImageFromUrl("/logo.png");
+
+        const hoje = new Date();
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+        const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+
+        // Obtendo o período dinâmico
+        const datasSolicitacao = osList.map(os => new Date(os.data_solicitacao).getTime()).filter(t => !isNaN(t));
+        const minData = new Date(Math.min(...datasSolicitacao));
+        const maxData = new Date(Math.max(...datasSolicitacao));
+        const periodoStr = `${minData.toLocaleDateString('pt-BR', {timeZone: 'UTC'})} ATÉ ${maxData.toLocaleDateString('pt-BR', {timeZone: 'UTC'})}`;
+
+        doc.setFont("times", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.text(dataEmissao, pageWidth - 14, 45, { align: "right" });
+
+        doc.setFont("times", "bold");
+        doc.text(`À (O) ${String(razaoSocial).toUpperCase()}`, 14, 55);
+        if (enderecoCliente) doc.text(`Endereço: ${enderecoCliente}`, 14, 60);
+
+        doc.setFontSize(14);
+        doc.text("DEMONSTRATIVO DE SOLICITAÇÕES", pageWidth / 2, 75, { align: "center" });
+        doc.setFontSize(10);
+        doc.text(`${String(razaoSocial).toUpperCase()} - DEMANDA DE IMPRESSÃO (${periodoStr})`, pageWidth / 2, 82, { align: "center" });
+
+        const tableColumn = ["DATA DA SOLICITAÇÃO", "SOLICITANTE", "PRODUTO", "QTD PRODUTOS", "P.P P/ PRODUTO", "TOTAL P.P IMPRESSAS", "VALOR UNT", "VALOR TOTAL"];
+        const tableRows: any[] = [];
+
+        let totalGeralPaginas = 0;
+        let totalGeralFinanceiro = 0;
+
+        osList.forEach(os => {
+            const dataSol = os.data_solicitacao ? new Date(os.data_solicitacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-";
+            const ppProduto = os.paginas_por_produto || 1;
+            const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
+            const valorUn = os.valor_unitario_pagina || 0;
+            const valorTotal = totalPaginas * valorUn;
+            
+            totalGeralPaginas += totalPaginas;
+            totalGeralFinanceiro += valorTotal;
+
+            const descProduto = osList.length > 1 
+                ? `[OSG-${String(os.numero_op).padStart(4, '0')}] ${os.descricao_servico || "-"}` 
+                : os.descricao_servico || "-";
+
+            tableRows.push([
+                dataSol,
+                os.solicitante || "-",
+                descProduto,
+                os.quantidade_produzir || 0,
+                ppProduto,
+                totalPaginas,
+                `R$ ${valorUn.toFixed(2).replace('.', ',')}`,
+                `R$ ${valorTotal.toFixed(2).replace('.', ',')}`
+            ]);
+        });
+
+        tableRows.push([
+            { content: "TOTAL DA SOLICITAÇÃO", colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: totalGeralPaginas.toString(), styles: { fontStyle: 'bold', halign: 'center' } },
+            { content: "", styles: { fillColor: [255,255,255] } },
+            { content: `R$ ${totalGeralFinanceiro.toFixed(2).replace('.', ',')}`, styles: { fontStyle: 'bold', halign: 'center' } }
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 90,
+            margin: { top: 45, bottom: 40, left: 10, right: 10 },
+            theme: 'grid',
+            styles: { font: 'times', fontSize: 8, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.1 },
+            headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 20 },
+                1: { halign: 'center', cellWidth: 25 },
+                2: { halign: 'left' },
+                3: { halign: 'center', cellWidth: 15 },
+                4: { halign: 'center', cellWidth: 15 },
+                5: { halign: 'center', cellWidth: 20 },
+                6: { halign: 'center', cellWidth: 20 },
+                7: { halign: 'center', cellWidth: 20 }
+            },
+            didDrawPage: () => drawTimbrado(doc, pageWidth, pageHeight, logoBase64)
+        });
+
+        doc.save(`Demonstrativo_Servicos_${clienteNome.replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+        console.error(error);
+        alert("Erro ao gerar Extrato PDF.");
+    } finally {
+        setExportando(false);
+    }
+};
 
   const eqPPM = 40;
   const tempoEstimado = Math.ceil((qtdImprimirServico * paginasPorProduto) / eqPPM);
@@ -921,11 +1053,19 @@ export default function Grafica() {
               </div>
               
               <div className="flex gap-2 items-center flex-wrap">
-                 {osSelecionadasLote.length > 0 && !osSelecionada && (
-                    <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" className="bg-slate-800 hover:bg-slate-900 text-white gap-2 shadow-sm mr-2">
-                        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
-                        {exportando ? "Gerando PDF..." : `Gerar Comprovante (${osSelecionadasLote.length})`}
-                    </Button>
+                {/* BOTÕES DE EXPORTAÇÃO (LOTE) */}
+                {osSelecionadasLote.length > 0 && !osSelecionada && (
+                    <div className="flex gap-2 mr-4 bg-blue-50 border border-blue-200 p-1 rounded-lg">
+                        <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" variant="ghost" className="text-blue-700 hover:bg-blue-100 gap-2">
+                            {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
+                            Comprovante
+                        </Button>
+                        <div className="w-px bg-blue-200"></div>
+                        <Button onClick={() => gerarExtratoFaturamentoPDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm gap-2">
+                            {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <Landmark className="w-4 h-4"/>} 
+                            Extrato Faturamento
+                        </Button>
+                    </div>
                 )}
                 <Button onClick={() => setAbaAtiva("abrir")} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Nova OSG</Button>
               </div>
@@ -1306,8 +1446,8 @@ export default function Grafica() {
             )}
 
           </div>
-        </div>
-      )}
+          </div>
+        )}
     </AppLayout>
   );
 }
