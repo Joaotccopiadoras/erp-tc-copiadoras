@@ -444,7 +444,7 @@ export default function AgendaKanban() {
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });
+          doc.text("Agenda/Programação TC Copiadoras", pageWidth / 2, 20, { align: "center" });
 
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
