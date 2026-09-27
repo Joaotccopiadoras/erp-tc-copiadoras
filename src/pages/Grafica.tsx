@@ -49,6 +49,7 @@ export default function Grafica() {
   const [valorUnitarioPaginaOS, setValorUnitarioPaginaOS] = useState("");
 
   const [salvandoOS, setSalvandoOS] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   // ESTADOS: PAINEL DE PRODUÇÃO
   const [ordens, setOrdens] = useState<any[]>([]);
@@ -122,7 +123,6 @@ export default function Grafica() {
   const fetchDadosBase = async () => {
     const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
       supabase.from('log_produtos').select('id, sku, nome, custo_base, estoque_atual').order('nome'),
-      // Buscando também o CNPJ para a emissão do PDF
       supabase.from('log_clientes').select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores').select('id, nome').order('nome'),
       supabase.from('srv_equipamentos').select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
@@ -400,9 +400,25 @@ export default function Grafica() {
   };
 
   // ==========================================
-  // EMISSÃO DE COMPROVANTE PDF (Individual ou Lote)
+  // EXPORTAÇÃO DE COMPROVANTE (TIMBRADO)
   // ==========================================
-  const gerarComprovantePDF = (osList: any[]) => {
+  const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
+    try {
+      const res = await fetch(imageUrl);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const gerarComprovantePDF = async (osList: any[]) => {
       if (!osList || osList.length === 0) return;
 
       const clienteNome = osList[0].cliente_nome;
@@ -411,88 +427,141 @@ export default function Grafica() {
           return alert("Atenção: Para emissão coletiva, todas as OSGs selecionadas devem pertencer ao mesmo cliente.");
       }
 
-      const clienteObj = clientesBD.find(c => c.nome_fantasia === clienteNome || c.razao_social === clienteNome);
-      const razaoSocial = clienteObj?.razao_social || clienteNome;
-      const cnpj = clienteObj?.cnpj_cpf || "Não informado";
-      const operador = osList[0].operador_nome || "Operador Não Informado";
+      setExportando(true);
+      try {
+          const clienteObj = clientesBD.find(c => c.nome_fantasia === clienteNome || c.razao_social === clienteNome);
+          const razaoSocial = clienteObj?.razao_social || clienteNome;
+          const cnpj = clienteObj?.cnpj_cpf || "Não informado";
+          const operador = osList[0].operador_nome || "Operador Não Informado";
 
-      const doc = new jsPDF("p", "mm", "a4");
+          const doc = new jsPDF("p", "mm", "a4");
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+          const logoBase64 = await getBase64ImageFromUrl("/logo.png");
 
-      const hoje = new Date();
-      const dia = String(hoje.getDate()).padStart(2, '0');
-      const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-      const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+          const hoje = new Date();
+          const dia = String(hoje.getDate()).padStart(2, '0');
+          const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+          const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(dataEmissao, 200 - 14, 20, { align: "right" });
+          // TEXTOS INICIAIS DA PÁGINA (Abaixo do Timbrado)
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.setTextColor(0, 0, 0);
+          doc.text(dataEmissao, pageWidth - 14, 45, { align: "right" });
 
-      doc.setFont("helvetica", "bold");
-      doc.text(`AO ${razaoSocial.toUpperCase()}`, 14, 30);
-      doc.text(`CNPJ: ${cnpj}`, 14, 35);
+          doc.setFont("helvetica", "bold");
+          doc.text(`AO ${String(razaoSocial).toUpperCase()}`, 14, 55);
+          doc.text(`CNPJ: ${cnpj}`, 14, 60);
 
-      const tituloOS = osList.length === 1 ? `COMPROVANTE DE ENTREGA – OSG-${String(osList[0].numero_op).padStart(4,'0')}` : `COMPROVANTE DE ENTREGA – MÚLTIPLAS OSGs`;
-      doc.setFontSize(12);
-      doc.text(tituloOS, 105, 50, { align: "center" });
+          const tituloOS = osList.length === 1 ? `COMPROVANTE DE ENTREGA – OSG-${String(osList[0].numero_op).padStart(4,'0')}` : `COMPROVANTE DE ENTREGA – MÚLTIPLAS OSGs`;
+          doc.setFontSize(12);
+          doc.text(tituloOS, pageWidth / 2, 75, { align: "center" });
 
-      const tableColumn = ["DATA DA SOLICITAÇÃO", "SOLICITANTE", "PRODUTO", "QTD PRODUTOS", "P.P P/ PRODUTO", "TOTAL P.P IMPRESSAS"];
-      const tableRows: any[] = [];
+          const tableColumn = ["DATA", "SOLICITANTE", "PRODUTO / SERVIÇO", "QTD", "PÁGS/UN", "TOTAL PÁGS"];
+          const tableRows: any[] = [];
 
-      let totalGeralPaginas = 0;
+          let totalGeralPaginas = 0;
 
-      osList.forEach(os => {
-          const dataSol = os.data_solicitacao ? new Date(os.data_solicitacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-";
-          const ppProduto = os.paginas_por_produto || 1;
-          const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
-          totalGeralPaginas += totalPaginas;
+          osList.forEach(os => {
+              const dataSol = os.data_solicitacao ? new Date(os.data_solicitacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-";
+              const ppProduto = os.paginas_por_produto || 1;
+              const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
+              totalGeralPaginas += totalPaginas;
+
+              tableRows.push([
+                  dataSol,
+                  os.solicitante || "-",
+                  os.descricao_servico || "-",
+                  os.quantidade_produzir || 0,
+                  ppProduto,
+                  totalPaginas
+              ]);
+          });
 
           tableRows.push([
-              dataSol,
-              os.solicitante || "-",
-              os.descricao_servico || "-",
-              os.quantidade_produzir || 0,
-              ppProduto,
-              totalPaginas
+              { content: "TOTAL DA SOLICITAÇÃO", colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
+              { content: totalGeralPaginas.toString(), styles: { fontStyle: 'bold', halign: 'center' } }
           ]);
-      });
 
-      tableRows.push([
-          { content: "TOTAL DA SOLICITAÇÃO", colSpan: 5, styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: totalGeralPaginas.toString(), styles: { fontStyle: 'bold' } }
-      ]);
+          autoTable(doc, {
+              head: [tableColumn],
+              body: tableRows,
+              startY: 85,
+              margin: { top: 45, bottom: 40, left: 14, right: 14 },
+              theme: 'grid',
+              styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
+              headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' },
+              columnStyles: {
+                  0: { halign: 'center', cellWidth: 22 },
+                  1: { halign: 'center', cellWidth: 30 },
+                  2: { halign: 'left' },
+                  3: { halign: 'center', cellWidth: 15 },
+                  4: { halign: 'center', cellWidth: 20 },
+                  5: { halign: 'center', cellWidth: 22 }
+              },
+              didDrawPage: function () {
+                  // BLINDAGEM DE BACKGROUND
+                  doc.setFillColor(255, 255, 255);
+                  doc.rect(0, 0, pageWidth, 42, "F"); 
+                  doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-      autoTable(doc, {
-          head: [tableColumn],
-          body: tableRows,
-          startY: 60,
-          theme: 'grid',
-          styles: { font: 'helvetica', fontSize: 8, cellPadding: 3 },
-          headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' },
-          columnStyles: {
-              0: { halign: 'center', cellWidth: 25 },
-              1: { halign: 'center', cellWidth: 30 },
-              2: { halign: 'left' },
-              3: { halign: 'center', cellWidth: 25 },
-              4: { halign: 'center', cellWidth: 25 },
-              5: { halign: 'center', cellWidth: 30 }
+                  // --- CABEÇALHO (Barra Preta) ---
+                  doc.setFillColor(0, 0, 0); 
+                  doc.rect(0, 0, pageWidth, 15, "F"); 
+
+                  if (logoBase64) {
+                      doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
+                  }
+                  
+                  doc.setDrawColor(200, 200, 200);
+                  doc.setLineWidth(0.5);
+                  doc.line(14, 38, pageWidth - 14, 38);
+
+                  // --- RODAPÉ TIMBRADO PRETO ---
+                  doc.setFillColor(0, 0, 0);
+                  doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
+
+                  doc.setFont("helvetica", "normal");
+                  doc.setFontSize(7.5);
+                  doc.setTextColor(255, 255, 255); 
+
+                  const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
+                  doc.text(textoRodapeEsq, 14, pageHeight - 16);
+
+                  const textoRodapeDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
+                  doc.text(textoRodapeDir, pageWidth - 14, pageHeight - 16, { align: "right" });
+              }
+          });
+
+          let finalY = (doc as any).lastAutoTable.finalY + 20;
+
+          // Se a assinatura for cair em cima do rodapé, cria nova página
+          if (finalY + 50 > pageHeight - 35) {
+              doc.addPage();
+              finalY = 50; 
           }
-      });
 
-      const finalY = (doc as any).lastAutoTable.finalY + 30;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.setTextColor(0, 0, 0);
+          doc.text("Cliente: ___________________________________________________", 14, finalY);
+          doc.text("Data da Entrega: __________________", 14, finalY + 10);
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text("Cliente: ___________________________________________________", 14, finalY);
-      doc.text("Data da Entrega: __________________", 14, finalY + 10);
+          doc.text("________________________________________", pageWidth / 2, finalY + 30, { align: "center" });
+          doc.setFont("helvetica", "bold");
+          doc.text(String(operador).toUpperCase(), pageWidth / 2, finalY + 35, { align: "center" });
+          doc.setFont("helvetica", "normal");
+          doc.text("TC COMÉRCIO DE SERVIÇOS E TECNOLOGIA LTDA", pageWidth / 2, finalY + 40, { align: "center" });
+          doc.text("CNPJ: 07.679.989/0001-50", pageWidth / 2, finalY + 45, { align: "center" });
 
-      doc.text("________________________________________", 105, finalY + 30, { align: "center" });
-      doc.setFont("helvetica", "bold");
-      doc.text(operador.toUpperCase(), 105, finalY + 35, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.text("TC COMÉRCIO DE SERVIÇOS E TECNOLOGIA LTDA", 105, finalY + 40, { align: "center" });
-      doc.text("CNPJ: 07.679.989/0001-50", 105, finalY + 45, { align: "center" });
-
-      doc.save(`Comprovante_Entrega_${clienteNome}.pdf`);
+          doc.save(`Comprovante_Entrega_${clienteNome.replace(/\s+/g, '_')}.pdf`);
+      } catch (error) {
+          console.error(error);
+          alert("Erro ao gerar Comprovante PDF.");
+      } finally {
+          setExportando(false);
+      }
   };
 
   const eqPPM = 40;
@@ -618,7 +687,10 @@ export default function Grafica() {
             {osSelecionadasLote.length > 0 && (
                 <div className="bg-blue-50 border-b border-blue-200 p-3 flex justify-between items-center px-4 animate-in slide-in-from-top-2">
                     <span className="text-sm text-blue-800 font-bold flex items-center gap-2"><CheckSquare className="w-4 h-4"/> {osSelecionadasLote.length} OSG(s) selecionada(s)</span>
-                    <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"><FileText className="w-4 h-4"/> Gerar Comprovante Coletivo</Button>
+                    <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">
+                        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
+                        {exportando ? "Gerando PDF..." : "Gerar Comprovante Coletivo"}
+                    </Button>
                 </div>
             )}
 
@@ -693,7 +765,10 @@ export default function Grafica() {
                     </div>
                 </div>
                 <div className="flex flex-col md:flex-row items-center gap-3">
-                    <Button variant="outline" size="sm" onClick={() => gerarComprovantePDF([osSelecionada])} className="text-slate-600 border-slate-300 gap-2"><FileText className="w-4 h-4"/> Imprimir Comprovante</Button>
+                    <Button variant="outline" size="sm" disabled={exportando} onClick={() => gerarComprovantePDF([osSelecionada])} className="text-slate-600 border-slate-300 gap-2">
+                        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
+                        {exportando ? "Gerando..." : "Imprimir Comprovante"}
+                    </Button>
                     <div className="flex items-center gap-2">
                         <Select value={statusOS} onValueChange={setStatusOS}>
                             <SelectTrigger className="w-44 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
