@@ -400,7 +400,7 @@ export default function Grafica() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO DE COMPROVANTE (TIMBRADO)
+  // EXPORTAÇÃO DE COMPROVANTE (TIMBRADO CLÁSSICO - TIMES NEW ROMAN)
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -444,13 +444,13 @@ export default function Grafica() {
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
           const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
-          // TEXTOS INICIAIS DA PÁGINA (Abaixo do Timbrado)
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
+          // TEXTOS INICIAIS DA PÁGINA
+          doc.setFont("times", "normal");
+          doc.setFontSize(11);
           doc.setTextColor(0, 0, 0);
           doc.text(dataEmissao, pageWidth - 14, 45, { align: "right" });
 
-          doc.setFont("helvetica", "bold");
+          doc.setFont("times", "bold");
           doc.text(`AO ${String(razaoSocial).toUpperCase()}`, 14, 55);
           doc.text(`CNPJ: ${cnpj}`, 14, 60);
 
@@ -469,7 +469,6 @@ export default function Grafica() {
               const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
               totalGeralPaginas += totalPaginas;
 
-              // Adicionando a identificação da OSG no produto se houver múltiplas OSGs selecionadas
               const descProduto = osList.length > 1 
                   ? `[OSG-${String(os.numero_op).padStart(4, '0')}] ${os.descricao_servico || "-"}` 
                   : os.descricao_servico || "-";
@@ -495,15 +494,15 @@ export default function Grafica() {
               startY: 85,
               margin: { top: 45, bottom: 40, left: 14, right: 14 },
               theme: 'grid',
-              styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
+              styles: { font: 'times', fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
               headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' },
               columnStyles: {
-                  0: { halign: 'center', cellWidth: 22 },
+                  0: { halign: 'center', cellWidth: 25 },
                   1: { halign: 'center', cellWidth: 30 },
                   2: { halign: 'left' },
                   3: { halign: 'center', cellWidth: 20 },
                   4: { halign: 'center', cellWidth: 20 },
-                  5: { halign: 'center', cellWidth: 22 }
+                  5: { halign: 'center', cellWidth: 25 }
               },
               didDrawPage: function () {
                   // BLINDAGEM DE BACKGROUND
@@ -511,31 +510,27 @@ export default function Grafica() {
                   doc.rect(0, 0, pageWidth, 42, "F"); 
                   doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-                  // --- CABEÇALHO (Barra Preta) ---
+                  // --- CABEÇALHO PRETO ---
                   doc.setFillColor(0, 0, 0); 
                   doc.rect(0, 0, pageWidth, 15, "F"); 
 
                   if (logoBase64) {
                       doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
                   }
-                  
-                  doc.setDrawColor(200, 200, 200);
-                  doc.setLineWidth(0.5);
-                  doc.line(14, 38, pageWidth - 14, 38);
 
                   // --- RODAPÉ TIMBRADO PRETO ---
                   doc.setFillColor(0, 0, 0);
                   doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
-                  doc.setFont("helvetica", "normal");
-                  doc.setFontSize(7.5);
+                  doc.setFont("times", "normal");
+                  doc.setFontSize(8.5);
                   doc.setTextColor(255, 255, 255); 
 
                   const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
                   doc.text(textoRodapeEsq, 14, pageHeight - 16);
 
                   const textoRodapeDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
-                  doc.text(textoRodapeDir, pageWidth - 14, pageHeight - 16, { align: "right" });
+                  doc.text(textoRodapeDir, pageWidth - 14, pageHeight - 13, { align: "right" });
               }
           });
 
@@ -547,16 +542,16 @@ export default function Grafica() {
               finalY = 50; 
           }
 
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
+          doc.setFont("times", "normal");
+          doc.setFontSize(11);
           doc.setTextColor(0, 0, 0);
           doc.text("Cliente: ___________________________________________________", 14, finalY);
           doc.text("Data da Entrega: __________________", 14, finalY + 10);
 
           doc.text("________________________________________", pageWidth / 2, finalY + 30, { align: "center" });
-          doc.setFont("helvetica", "bold");
+          doc.setFont("times", "bold");
           doc.text(String(operador).toUpperCase(), pageWidth / 2, finalY + 35, { align: "center" });
-          doc.setFont("helvetica", "normal");
+          doc.setFont("times", "normal");
           doc.text("TC COMÉRCIO DE SERVIÇOS E TECNOLOGIA LTDA", pageWidth / 2, finalY + 40, { align: "center" });
           doc.text("CNPJ: 07.679.989/0001-50", pageWidth / 2, finalY + 45, { align: "center" });
 
