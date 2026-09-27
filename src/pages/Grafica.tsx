@@ -458,7 +458,7 @@ export default function Grafica() {
           doc.setFontSize(12);
           doc.text(tituloOS, pageWidth / 2, 75, { align: "center" });
 
-          const tableColumn = ["DATA", "SOLICITANTE", "PRODUTO / SERVIÇO", "QTD", "PÁGS/UN", "TOTAL PÁGS"];
+          const tableColumn = ["DATA DA SOLICITAÇÃO", "SOLICITANTE", "PRODUTO", "QTD PRODUTOS", "P.P P/ PRODUTO", "TOTAL P.P IMPRESSAS"];
           const tableRows: any[] = [];
 
           let totalGeralPaginas = 0;
@@ -469,10 +469,15 @@ export default function Grafica() {
               const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
               totalGeralPaginas += totalPaginas;
 
+              // Adicionando a identificação da OSG no produto se houver múltiplas OSGs selecionadas
+              const descProduto = osList.length > 1 
+                  ? `[OSG-${String(os.numero_op).padStart(4, '0')}] ${os.descricao_servico || "-"}` 
+                  : os.descricao_servico || "-";
+
               tableRows.push([
                   dataSol,
                   os.solicitante || "-",
-                  os.descricao_servico || "-",
+                  descProduto,
                   os.quantidade_produzir || 0,
                   ppProduto,
                   totalPaginas
@@ -496,7 +501,7 @@ export default function Grafica() {
                   0: { halign: 'center', cellWidth: 22 },
                   1: { halign: 'center', cellWidth: 30 },
                   2: { halign: 'left' },
-                  3: { halign: 'center', cellWidth: 15 },
+                  3: { halign: 'center', cellWidth: 20 },
                   4: { halign: 'center', cellWidth: 20 },
                   5: { halign: 'center', cellWidth: 22 }
               },
