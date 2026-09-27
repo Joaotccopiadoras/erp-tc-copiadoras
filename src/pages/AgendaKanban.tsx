@@ -383,19 +383,22 @@ export default function AgendaKanban() {
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
         if (respA > respB) return 1;
+        
         const stA = formatarStatus(a.kanban_colunas?.status_global || "BACKLOG");
         const stB = formatarStatus(b.kanban_colunas?.status_global || "BACKLOG");
         const ordemA = pesoStatus[stA] || 99;
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
+        
         return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
       });
 
-      const tableColumn = ["Workflow / Etapa", "Título do Card", "Responsável", "Prioridade", "Vencimento", "Status Global", "Resumo/Obs"];
+      // Cabeçalhos atualizados conforme sua solicitação
+      const tableColumn = ["Data de Criação", "Título do Card", "Etapa", "Responsável", "Prazo/Previsão", "Status", "Observações"];
       const tableRows: any[] = [];
       let grupoAtual = null;
 
-      dadosOrdenados.forEach(item => {
+      dadosOrdenados.forEach((item: any) => {
         let valGrupo = item.responsavel_nome || "Sem Responsável";
         if (valGrupo !== grupoAtual) {
           tableRows.push([{
@@ -405,15 +408,28 @@ export default function AgendaKanban() {
           grupoAtual = valGrupo;
         }
         tableRows.push([
-          `${item.kanban_workflows?.nome || "-"} / ${item.kanban_colunas?.nome || "-"}`, 
-          item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", formatarData(item.data_vencimento), 
-          item.kanban_colunas?.status_global || "-", item.descricao || "-"
+          formatarData(item.created_at || item.atualizado_em), 
+          item.titulo || "-", 
+          item.kanban_colunas?.nome || "-", 
+          item.responsavel_nome || "-", 
+          formatarData(item.data_vencimento), 
+          item.kanban_colunas?.status_global || "-", 
+          item.descricao || "-"
         ]);
       });
 
       autoTable(doc, {
         head: [tableColumn], body: tableRows, startY: 40, margin: { top: 40, bottom: 40, left: 14, right: 14 },
         theme: 'grid', styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: { 
+            0: { cellWidth: 25, halign: 'center' }, 
+            1: { cellWidth: 45 }, 
+            2: { cellWidth: 35 }, 
+            3: { cellWidth: 35 }, 
+            4: { cellWidth: 25, halign: 'center' }, 
+            5: { cellWidth: 25, halign: 'center' }, 
+            6: { cellWidth: 'auto', halign: 'left' } 
+        },
         headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         didDrawPage: function (data) {
@@ -451,6 +467,7 @@ export default function AgendaKanban() {
           doc.text("(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br", pageWidth - 14, pageHeight - 16, { align: "right" });
         },
         didParseCell: function (data) {
+          // O índice agora é 5 para a coluna Status
           if (data.section === 'body' && data.column.index === 5 && data.cell.raw) {
             const status = String(data.cell.raw).toUpperCase();
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
@@ -460,7 +477,11 @@ export default function AgendaKanban() {
         }
       });
       doc.save("Agenda_Kanban_TC_Copiadoras.pdf");
-    } catch (error) { alert("Erro ao gerar PDF."); } finally { setExportando(false); }
+    } catch (error) { 
+        alert("Erro ao gerar PDF."); 
+    } finally { 
+        setExportando(false); 
+    }
   };
 
   const formatarStatus = (str: string) => str ? str.toUpperCase() : "";

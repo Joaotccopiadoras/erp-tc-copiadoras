@@ -81,6 +81,7 @@ export default function Grafica() {
   const [osSelecionadasLote, setOsSelecionadasLote] = useState<string[]>([]);
   
   const [statusOS, setStatusOS] = useState("");
+  const [buscaInsumo, setBuscaInsumo] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
   const [historicoProducao, setHistoricoProducao] = useState<ApontamentoProducao[]>([]);
 
