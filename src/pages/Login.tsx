@@ -18,18 +18,20 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validação do Captcha antes de processar o login
     if (!captchaToken) {
-      return toast({
+      toast({
         title: "Verificação de Segurança",
-        description: "Por favor, valide o Captcha para provar que não é um robô.",
+        description: "Por favor, confirme o reCAPTCHA para provar que não é um robô.",
         variant: "destructive",
       });
+      return;
     }
 
     setIsLoading(true);
 
     try {
-      // 1. Traduzir o Nome de Utilizador para o E-mail de Registo de forma segura
+      // 1. Traduzir o Nome de Utilizador para o E-mail correspondente através da função segura
       const { data: userEmail, error: rpcError } = await supabase.rpc('get_email_by_username', { 
         p_username: username.toLowerCase().trim() 
       });
@@ -38,7 +40,7 @@ const Login = () => {
         throw new Error("Nome de utilizador ou palavra-passe incorretos.");
       }
 
-      // 2. Fazer o Login com o E-mail encontrado e a Palavra-Passe fornecida
+      // 2. Efetuar o login no Supabase utilizando o e-mail encontrado e a palavra-passe
       const { data, error } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password,
@@ -47,17 +49,18 @@ const Login = () => {
       if (error) throw new Error("Nome de utilizador ou palavra-passe incorretos.");
 
       if (data.user) {
-        toast({ title: "Bem-vindo de volta!", description: "Autenticação realizada com sucesso." });
+        toast({
+          title: "Bem-vindo de volta!",
+          description: "Autenticação realizada com sucesso.",
+        });
         navigate("/interno");
       }
     } catch (error: any) {
       toast({
         title: "Acesso Negado",
-        description: error.message,
+        description: error.message || "Ocorreu um erro inesperado. Tente novamente.",
         variant: "destructive",
       });
-      // Recomenda-se resetar o captcha após uma tentativa falhada
-      // window.grecaptcha?.reset(); se usar a referência direta
     } finally {
       setIsLoading(false);
     }
@@ -67,17 +70,21 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md glass-card rounded-2xl p-8 shadow-xl border border-border">
         
-        <div className="flex flex-col items-center mb-8">
+        {/* Cabeçalho com a Logo da TC Copiadoras */}
+        <div className="flex flex-col items-center mb-6">
           <img 
             src="/logo.png" 
             alt="TC Copiadoras Logo" 
             className="h-16 w-auto object-contain mb-4 drop-shadow-sm"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
           />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">TC Copiadoras</h1>
           <p className="text-sm text-muted-foreground mt-1">Acesso ao ERP interno</p>
         </div>
 
+        {/* Formulário de Acesso */}
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Nome de Utilizador</label>
@@ -109,15 +116,25 @@ const Login = () => {
             </div>
           </div>
 
+          {/* Componente reCAPTCHA da Google */}
           <div className="flex justify-center pt-2">
             <ReCAPTCHA
-              sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" // Chave de teste pública da Google (substitua pela sua)
+              sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" // Chave de teste pública da Google
               onChange={(token) => setCaptchaToken(token)}
             />
           </div>
 
-          <Button type="submit" className="w-full font-semibold mt-6" size="lg" disabled={isLoading}>
-            {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Autenticando...</> : "Entrar no Sistema"}
+          <Button 
+            type="submit" 
+            className="w-full font-semibold mt-4" 
+            size="lg"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> A autenticar...</>
+            ) : (
+              "Entrar no Sistema"
+            )}
           </Button>
         </form>
       </div>
