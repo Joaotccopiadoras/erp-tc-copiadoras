@@ -31,7 +31,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // 1. Traduzir o Nome de Utilizador para o E-mail correspondente através da função segura
+      // 1. Traduzir o identificador (nome de utilizador ou e-mail) para o e-mail de acesso
       const { data: userEmail, error: rpcError } = await supabase.rpc('get_email_by_username', { 
         p_username: username.toLowerCase().trim() 
       });
@@ -40,7 +40,7 @@ const Login = () => {
         throw new Error("Nome de utilizador ou palavra-passe incorretos.");
       }
 
-      // 2. Efetuar o login no Supabase utilizando o e-mail encontrado e a palavra-passe
+      // 2. Efetuar o login no Supabase utilizando o e-mail resolvido e a palavra-passe
       const { data, error } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password,
@@ -87,12 +87,12 @@ const Login = () => {
         {/* Formulário de Acesso */}
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Nome de Utilizador</label>
+            <label className="text-sm font-medium text-foreground">Nome de Utilizador ou E-mail</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 type="text" 
-                placeholder="ex: joao.gaia" 
+                placeholder="ex: joao.gaia ou e-mail" 
                 className="pl-10"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
