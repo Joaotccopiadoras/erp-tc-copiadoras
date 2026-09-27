@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare, MessageSquare } from "lucide-react";
+import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare, MessageSquare, Edit2, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -25,7 +25,7 @@ type ApontamentoProducao = {
     valorUnitarioPagina: number; 
 };
 
-// ORDEM EXATA DOS STATUS SOLICITADA
+// ORDEM EXATA DOS STATUS
 const STATUS_FLUXO_GRAFICA = [
   "Solicitação Recebida",
   "Levantamento de Material",
@@ -74,6 +74,12 @@ export default function Grafica() {
   const [buscaInsumo, setBuscaInsumo] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
   const [historicoProducao, setHistoricoProducao] = useState<ApontamentoProducao[]>([]);
+
+  // ESTADOS: EDIÇÃO DINÂMICA DA OSG NA PRANCHETA
+  const [editDescServico, setEditDescServico] = useState("");
+  const [editQtdProduzir, setEditQtdProduzir] = useState(1);
+  const [editDataPrevista, setEditDataPrevista] = useState("");
+  const [editPaginasPorProduto, setEditPaginasPorProduto] = useState(1);
 
   // ESTADOS: FLUXO DE IMPRESSÃO
   const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo">("pendente");
@@ -158,9 +164,10 @@ export default function Grafica() {
   const fetchOrdens = async () => {
     const { data } = await supabase.from('prd_ordens_producao').select('*').order('numero_op', { ascending: false });
     if (data) {
+      // Mapeia visualmente para garantir que o Kanban identifique Cancelados também
       const dataNormalizada = data.map(os => ({
         ...os,
-        status: STATUS_FLUXO_GRAFICA.includes(os.status) ? os.status : "Solicitação Recebida"
+        status: (STATUS_FLUXO_GRAFICA.includes(os.status) || os.status === "Cancelado") ? os.status : "Solicitação Recebida"
       }));
       setOrdens(dataNormalizada);
     }
@@ -188,7 +195,7 @@ export default function Grafica() {
         data_prevista: dataPrevista,
         paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
         valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
-        status: 'Solicitação Recebida',
+        status: 'Solicitação Recebida', 
         observacoes: `[Possui Impressão: ${possuiImpressao}]`, 
         historico_producao: []
       };
@@ -208,6 +215,12 @@ export default function Grafica() {
     setOsSelecionada(os);
     setStatusOS(os.status);
     
+    // Popula campos de edição dinâmica
+    setEditDescServico(os.descricao_servico || "");
+    setEditQtdProduzir(os.quantidade_produzir || 1);
+    setEditDataPrevista(os.data_prevista || "");
+    setEditPaginasPorProduto(os.paginas_por_produto || 1);
+
     const obsLimpas = os.observacoes?.replace("[Possui Impressão: Sim]\n", "")?.replace("[Possui Impressão: Não]\n", "")?.replace("[Possui Impressão: Sim]", "")?.replace("[Possui Impressão: Não]", "") || "";
     setObsTemp(obsLimpas);
 
@@ -306,7 +319,11 @@ export default function Grafica() {
       await supabase.from('prd_ordens_producao').update({ 
         status: novoStatus, 
         custo_total_insumos: custoTotalInsumos,
-        observacoes: obsFinal
+        observacoes: obsFinal,
+        descricao_servico: editDescServico,
+        quantidade_produzir: editQtdProduzir,
+        data_prevista: editDataPrevista,
+        paginas_por_produto: editPaginasPorProduto
       }).eq('id', osSelecionada.id);
 
       await supabase.from('prd_op_insumos').delete().eq('op_id', osSelecionada.id);
@@ -315,7 +332,7 @@ export default function Grafica() {
         await supabase.from('prd_op_insumos').insert(payloadInsumos);
       }
 
-      alert("Apontamentos e status atualizados com sucesso!");
+      alert("Apontamentos e OSG atualizados com sucesso!");
       fetchOrdens(); setOsSelecionada(null);
     } catch (e: any) { alert(e.message); } finally { setSalvandoOS(false); }
   };
@@ -474,7 +491,6 @@ export default function Grafica() {
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
           const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
-          // TEXTOS INICIAIS DA PÁGINA (Livres do cabeçalho)
           doc.setFont("times", "normal");
           doc.setFontSize(11);
           doc.setTextColor(0, 0, 0);
@@ -535,20 +551,17 @@ export default function Grafica() {
                   5: { halign: 'center', cellWidth: 25 }
               },
               didDrawPage: function () {
-                  // BLINDAGEM DE BACKGROUND BRANCO (Proteção do Canvas)
                   doc.setFillColor(255, 255, 255);
                   doc.rect(0, 0, pageWidth, 42, "F"); 
                   doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-                  // --- CABEÇALHO OFICIAL (Barra Cinza) ---
-                  doc.setFillColor(128, 130, 133); // Cinza Grafite Oficial
+                  doc.setFillColor(128, 130, 133); 
                   doc.rect(0, 0, pageWidth, 15, "F"); 
 
                   if (logoBase64) {
                       doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
                   }
 
-                  // --- RODAPÉ OFICIAL (Barra Cinza) ---
                   doc.setFillColor(128, 130, 133);
                   doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
@@ -556,30 +569,24 @@ export default function Grafica() {
                   doc.setFontSize(8.5);
                   doc.setTextColor(255, 255, 255); 
 
-                  // Textos do Rodapé (Esquerda)
                   const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
                   doc.text(textoRodapeEsq, 14, pageHeight - 17);
 
-                  // Textos do Rodapé (Direita) - Exatamente igual à imagem fornecida
                   const rightX = pageWidth - 60;
                   doc.text("91 98156-6886", rightX, pageHeight - 17);
                   doc.text("(91) 3366-5100", rightX, pageHeight - 13);
                   doc.text("tcservicos@tccopiadoras.com.br", rightX, pageHeight - 9);
 
-                  // Desenhando os ícones no rodapé manualmente (Puro JS - Sem emojis quebrando)
                   doc.setDrawColor(255, 255, 255);
                   doc.setLineWidth(0.3);
 
-                  // Ícone WhatsApp (Círculo com rabinho)
                   doc.circle(rightX - 4, pageHeight - 18, 1.5, "S");
                   doc.line(rightX - 5.2, pageHeight - 17, rightX - 5.5, pageHeight - 16);
                   doc.line(rightX - 5.5, pageHeight - 16, rightX - 4.5, pageHeight - 16.7);
 
-                  // Ícone Telefone (Mini celular vertical)
                   doc.rect(rightX - 5, pageHeight - 14.5, 2, 3, "S");
                   doc.line(rightX - 4.5, pageHeight - 12, rightX - 3.5, pageHeight - 12);
 
-                  // Ícone Email (Envelope)
                   doc.rect(rightX - 5.5, pageHeight - 10.5, 3, 2, "S");
                   doc.line(rightX - 5.5, pageHeight - 10.5, rightX - 4, pageHeight - 9.5);
                   doc.line(rightX - 4, pageHeight - 9.5, rightX - 2.5, pageHeight - 10.5);
@@ -588,13 +595,11 @@ export default function Grafica() {
 
           let finalY = (doc as any).lastAutoTable.finalY + 20;
 
-          // Se a área de assinatura bater no rodapé, quebramos a página com segurança
           if (finalY + 50 > pageHeight - 35) {
               doc.addPage();
               finalY = 50; 
           }
 
-          // ASSINATURAS FINAIS
           doc.setFont("times", "normal");
           doc.setFontSize(11);
           doc.setTextColor(0, 0, 0);
@@ -652,7 +657,7 @@ export default function Grafica() {
             </div>
             
             <div className="flex gap-2 items-center flex-wrap">
-               {osSelecionadasLote.length > 0 && (
+               {osSelecionadasLote.length > 0 && !osSelecionada && (
                   <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} disabled={exportando} size="sm" className="bg-slate-800 hover:bg-slate-900 text-white gap-2 shadow-sm mr-2">
                       {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>} 
                       {exportando ? "Gerando PDF..." : `Gerar Comprovante (${osSelecionadasLote.length})`}
@@ -666,7 +671,10 @@ export default function Grafica() {
           {abaAtiva === "painel" && !osSelecionada && (
               <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6 bg-slate-100">
                 {STATUS_FLUXO_GRAFICA.map(colunaNome => {
-                  const cardsDaColuna = ordensFiltradas.filter(os => os.status === colunaNome);
+                  // A coluna "Concluído" vai renderizar as OSG concluídas E as canceladas
+                  const cardsDaColuna = ordensFiltradas.filter(os => 
+                    (colunaNome === "Concluído" && os.status === "Cancelado") || os.status === colunaNome
+                  );
 
                   return (
                   <div key={colunaNome} className="w-80 shrink-0 flex flex-col bg-slate-200/50 rounded-xl border border-slate-300/60 max-h-full">
@@ -680,11 +688,13 @@ export default function Grafica() {
 
                     {/* Área dos Cards */}
                     <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-                      {cardsDaColuna.map(os => (
+                      {cardsDaColuna.map(os => {
+                        const isCancelada = os.status === "Cancelado";
+                        return (
                         <div 
                           key={os.id} 
                           onClick={() => abrirPrancheta(os)}
-                          className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-purple-400 hover:shadow-md cursor-pointer transition-all relative group"
+                          className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-purple-400 hover:shadow-md cursor-pointer transition-all relative group flex flex-col"
                         >
                           <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                                 <input type="checkbox" className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer shadow-sm" 
@@ -698,22 +708,30 @@ export default function Grafica() {
 
                           <div className="flex justify-between items-start mb-2 pr-6">
                             <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">OSG-{String(os.numero_op).padStart(4,'0')}</span>
-                            <span className={`flex items-center gap-1 text-[9px] font-bold ${new Date(os.data_prevista) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
-                              <CalendarDays className="w-3 h-3"/> {new Date(os.data_prevista).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
-                            </span>
+                            <div className="flex gap-2 items-center">
+                                {isCancelada && <span className="text-[9px] uppercase tracking-wider font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded">Cancelada</span>}
+                                <span className={`flex items-center gap-1 text-[9px] font-bold ${new Date(os.data_prevista) < new Date() && !isCancelada ? 'text-red-500' : 'text-slate-400'}`}>
+                                  <CalendarDays className="w-3 h-3"/> {new Date(os.data_prevista).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                                </span>
+                            </div>
                           </div>
                           
                           <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1 line-clamp-2" title={os.cliente_nome}>{os.cliente_nome}</h4>
-                          <p className="text-[10px] text-slate-500 line-clamp-2 mb-3 leading-relaxed">{os.descricao_servico} <span className="font-semibold text-slate-700">(Qtd: {os.quantidade_produzir})</span></p>
+                          <p className="text-[10px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{os.descricao_servico} <span className="font-semibold text-slate-700">(Qtd: {os.quantidade_produzir})</span></p>
                           
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-auto">
+                          <div className="flex flex-col gap-1 pt-2 border-t border-slate-50 mt-auto">
                             <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
-                                <UserCheck className="w-3 h-3 text-indigo-400 shrink-0"/> {os.operador_nome || 'Não atribuído'}
+                                <User className="w-3 h-3 text-emerald-500 shrink-0"/> {os.solicitante || 'Não informado'}
                             </div>
-                            {os.observacoes?.includes("[Possui Impressão: Sim]") && <Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Requer Impressão"/>}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
+                                    <UserCheck className="w-3 h-3 text-indigo-400 shrink-0"/> {os.operador_nome || 'Não atribuído'}
+                                </div>
+                                {os.observacoes?.includes("[Possui Impressão: Sim]") && <Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Requer Impressão"/>}
+                            </div>
                           </div>
                         </div>
-                      ))}
+                      )})}
                       
                       {cardsDaColuna.length === 0 && (
                         <div className="h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">
@@ -754,14 +772,41 @@ export default function Grafica() {
                                 <SelectTrigger className="w-48 bg-white font-semibold border-purple-200 z-[99999]"><SelectValue/></SelectTrigger>
                                 <SelectContent className="bg-white z-[99999]">
                                     {STATUS_FLUXO_GRAFICA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    <SelectItem value="Cancelado" className="text-red-600 font-bold"><Ban className="w-4 h-4 inline mr-1"/> Cancelado</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar Prancheta</Button>
+                            <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm">Salvar</Button>
                         </div>
                     </div>
                 </div>
 
-                {/* NOVO BLOCO: OBSERVAÇÕES / FOLLOW-UP */}
+                {/* NOVO BLOCO: DETALHES E EDIÇÃO DA OSG */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mt-4">
+                    <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2"><Edit2 className="w-4 h-4 text-blue-500"/> Detalhes e Edição da OSG</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-2 md:col-span-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Serviço a ser Realizado</label>
+                            <Input value={editDescServico} onChange={e => setEditDescServico(e.target.value)} className="bg-slate-50 h-9 text-sm font-medium" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Qtd do Serviço</label>
+                            <Input type="number" value={editQtdProduzir} onChange={e => setEditQtdProduzir(Number(e.target.value))} className="bg-slate-50 h-9 text-sm font-bold" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Data Prevista</label>
+                            <Input type="date" value={editDataPrevista} onChange={e => setEditDataPrevista(e.target.value)} className="bg-slate-50 h-9 text-sm" />
+                        </div>
+                        {osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") && (
+                            <div className="space-y-2 md:col-span-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-center gap-4">
+                                <label className="text-xs font-bold text-blue-800 uppercase flex-shrink-0">Páginas por Produto:</label>
+                                <Input type="number" min="1" value={editPaginasPorProduto} onChange={e => setEditPaginasPorProduto(Number(e.target.value))} className="bg-white border-blue-200 h-8 w-24 text-sm font-bold text-center" />
+                                <span className="text-xs text-blue-600 italic">Isso afetará as estimativas de impressão.</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* BLOCO: OBSERVAÇÕES / FOLLOW-UP */}
                 <div className="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
                     <h4 className="text-sm font-bold text-amber-900 uppercase flex items-center gap-2 mb-3"><MessageSquare className="w-4 h-4 text-amber-600"/> Observações e Follow-up</h4>
                     <textarea 
@@ -782,7 +827,7 @@ export default function Grafica() {
                                 <div className="flex-1">
                                     <div className="flex justify-between text-xs font-bold text-slate-600 mb-1">
                                         <span>Progresso do Serviço ({percentualConclusao.toFixed(0)}%)</span>
-                                        <span>{totalProduzidoGeral} / {osSelecionada.quantidade_produzir} un</span>
+                                        <span>{totalProduzidoGeral} / {editQtdProduzir} un</span>
                                     </div>
                                     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                                         <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${percentualConclusao}%` }}></div>
@@ -833,7 +878,7 @@ export default function Grafica() {
                         )}
                         
                         {/* NOVO APONTAMENTO / OU RETORNO DE APONTAMENTO PENDENTE */}
-                        {statusImpressao === "pendente" && totalProduzidoGeral < osSelecionada.quantidade_produzir && statusOS !== "Faturamento" && statusOS !== "Concluído" && statusOS !== "Entregue" && (
+                        {statusImpressao === "pendente" && totalProduzidoGeral < editQtdProduzir && statusOS !== "Faturamento" && statusOS !== "Concluído" && statusOS !== "Entregue" && statusOS !== "Cancelado" && (
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
@@ -846,7 +891,7 @@ export default function Grafica() {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-blue-800">Qtd do Serviço a Imprimir</label>
-                                    <Input type="number" max={Math.max(0, osSelecionada.quantidade_produzir - totalProduzidoGeral)} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
+                                    <Input type="number" max={Math.max(0, editQtdProduzir - totalProduzidoGeral)} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="bg-white font-bold text-center border-blue-300" />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-blue-800">Páginas por Produto</label>
@@ -988,9 +1033,6 @@ export default function Grafica() {
                                     </div>
                                 )}
                             </div>
-                            <div className="w-full md:w-auto">
-                                <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS</Button>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1069,9 +1111,12 @@ export default function Grafica() {
                   </div>
                 </div>
 
-                <Button onClick={criarOS} disabled={salvandoOS} className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
-                    {salvandoOS ? "Gerando..." : "Enviar para Fila de Produção"}
-                </Button>
+                <div className="flex gap-4 pt-4">
+                    <Button variant="outline" onClick={() => setAbaAtiva("painel")} className="h-12 w-1/3">Cancelar e Voltar</Button>
+                    <Button onClick={criarOS} disabled={salvandoOS} className="h-12 w-2/3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-base shadow-md">
+                        {salvandoOS ? "Gerando..." : "Enviar para Fila de Produção"}
+                    </Button>
+                </div>
               </div>
             </div>
         )}
