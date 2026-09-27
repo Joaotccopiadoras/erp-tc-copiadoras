@@ -79,7 +79,6 @@ export default function Grafica() {
   const [buscaOS, setBuscaOS] = useState("");
   const [osSelecionada, setOsSelecionada] = useState<any | null>(null);
   const [osSelecionadasLote, setOsSelecionadasLote] = useState<string[]>([]);
-  const [osSelecionadasFaturamento, setOsSelecionadasFaturamento] = useState<string[]>([]);
   
   const [statusOS, setStatusOS] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
@@ -153,7 +152,7 @@ export default function Grafica() {
   const fetchDadosBase = async () => {
     const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
-      supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf, endereco').order('nome_fantasia'),
+      supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
       supabase.from('srv_equipamentos' as any).select('id, numero_serie, log_produtos(nome), log_clientes(nome_fantasia, razao_social)')
     ]);
@@ -469,7 +468,7 @@ export default function Grafica() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO DE PDFs (TIMBRADO CLÁSSICO E OFICIAL TC)
+  // EXPORTAÇÃO DE PDFs
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -530,16 +529,13 @@ export default function Grafica() {
       doc.setDrawColor(255, 255, 255);
       doc.setLineWidth(0.3);
 
-      // WhatsApp
       doc.circle(rightX - 4, pageHeight - 18, 1.5, "S");
       doc.line(rightX - 5.2, pageHeight - 17, rightX - 5.5, pageHeight - 16);
       doc.line(rightX - 5.5, pageHeight - 16, rightX - 4.5, pageHeight - 16.7);
 
-      // Telefone
       doc.rect(rightX - 5, pageHeight - 14.5, 2, 3, "S");
       doc.line(rightX - 4.5, pageHeight - 12, rightX - 3.5, pageHeight - 12);
 
-      // Email
       doc.rect(rightX - 5.5, pageHeight - 10.5, 3, 2, "S");
       doc.line(rightX - 5.5, pageHeight - 10.5, rightX - 4, pageHeight - 9.5);
       doc.line(rightX - 4, pageHeight - 9.5, rightX - 2.5, pageHeight - 10.5);
@@ -675,7 +671,7 @@ export default function Grafica() {
     try {
         const clienteObj = clientesBD.find(c => c.nome_fantasia === clienteNome || c.razao_social === clienteNome);
         const razaoSocial = clienteObj?.razao_social || clienteNome;
-        const enderecoCliente = clienteObj?.endereco || "";
+        const cnpj = clienteObj?.cnpj_cpf || "Não informado";
 
         const doc = new jsPDF("p", "mm", "a4");
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -687,8 +683,14 @@ export default function Grafica() {
         const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
         const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
-        // Obtendo o período dinâmico
-        const datasSolicitacao = osList.map(os => new Date(os.data_solicitacao).getTime()).filter(t => !isNaN(t));
+        // Obtendo o período e ordenando as OSGs da mais antiga para a mais recente
+        const sortedOsList = [...osList].sort((a, b) => {
+            const dataA = new Date(a.data_solicitacao || 0).getTime();
+            const dataB = new Date(b.data_solicitacao || 0).getTime();
+            return dataA - dataB;
+        });
+
+        const datasSolicitacao = sortedOsList.map(os => new Date(os.data_solicitacao).getTime()).filter(t => !isNaN(t));
         const minData = new Date(Math.min(...datasSolicitacao));
         const maxData = new Date(Math.max(...datasSolicitacao));
         const periodoStr = `${minData.toLocaleDateString('pt-BR', {timeZone: 'UTC'})} ATÉ ${maxData.toLocaleDateString('pt-BR', {timeZone: 'UTC'})}`;
@@ -698,9 +700,10 @@ export default function Grafica() {
         doc.setTextColor(0, 0, 0);
         doc.text(dataEmissao, pageWidth - 14, 45, { align: "right" });
 
+        // Inclusão do CNPJ abaixo da Razão Social conforme solicitado
         doc.setFont("times", "bold");
         doc.text(`À (O) ${String(razaoSocial).toUpperCase()}`, 14, 55);
-        if (enderecoCliente) doc.text(`Endereço: ${enderecoCliente}`, 14, 60);
+        doc.text(`CNPJ: ${cnpj}`, 14, 60);
 
         doc.setFontSize(14);
         doc.text("DEMONSTRATIVO DE SOLICITAÇÕES", pageWidth / 2, 75, { align: "center" });
@@ -713,7 +716,7 @@ export default function Grafica() {
         let totalGeralPaginas = 0;
         let totalGeralFinanceiro = 0;
 
-        osList.forEach(os => {
+        sortedOsList.forEach(os => {
             const dataSol = os.data_solicitacao ? new Date(os.data_solicitacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-";
             const ppProduto = os.paginas_por_produto || 1;
             const totalPaginas = (os.quantidade_produzir || 0) * ppProduto;
@@ -774,7 +777,7 @@ export default function Grafica() {
     } finally {
         setExportando(false);
     }
-};
+  };
 
   const eqPPM = 40;
   const tempoEstimado = Math.ceil((qtdImprimirServico * paginasPorProduto) / eqPPM);
