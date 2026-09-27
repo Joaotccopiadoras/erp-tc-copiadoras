@@ -451,7 +451,7 @@ export default function Grafica() {
           doc.text(dataEmissao, pageWidth - 14, 45, { align: "right" });
 
           doc.setFont("times", "bold");
-          doc.text(`AO ${String(razaoSocial).toUpperCase()}`, 14, 55);
+          doc.text(`À (O) ${String(razaoSocial).toUpperCase()}`, 14, 55);
           doc.text(`CNPJ: ${cnpj}`, 14, 60);
 
           const tituloOS = osList.length === 1 ? `COMPROVANTE DE ENTREGA – OSG-${String(osList[0].numero_op).padStart(4,'0')}` : `COMPROVANTE DE ENTREGA – MÚLTIPLAS OSGs`;
