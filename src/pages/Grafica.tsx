@@ -79,6 +79,7 @@ export default function Grafica() {
   const [buscaOS, setBuscaOS] = useState("");
   const [osSelecionada, setOsSelecionada] = useState<any | null>(null);
   const [osSelecionadasLote, setOsSelecionadasLote] = useState<string[]>([]);
+  const [mostrarConcluidos, setMostrarConcluidos] = useState(false); // NOVO ESTADO: Ocultar concluidos
   
   const [statusOS, setStatusOS] = useState("");
   const [buscaInsumo, setBuscaInsumo] = useState("");
@@ -567,20 +568,17 @@ export default function Grafica() {
   };
 
   const drawTimbrado = (doc: any, pageWidth: number, pageHeight: number, logoBase64: string | null) => {
-      // Background branco proteção
       doc.setFillColor(255, 255, 255);
       doc.rect(0, 0, pageWidth, 42, "F"); 
       doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-      // --- CABEÇALHO (65% Preto / 35% Cinza) ---
       const splitPoint = pageWidth * 0.65;
       doc.setFillColor(0, 0, 0); 
       doc.rect(0, 0, splitPoint, 15, "F"); 
       
-      doc.setFillColor(128, 130, 133); // Cinza
+      doc.setFillColor(128, 130, 133);
       doc.rect(splitPoint, 0, pageWidth - splitPoint, 15, "F");
       
-      // Paralelogramo (O corte diagonal separando o preto do cinza)
       doc.setFillColor(255, 255, 255);
       doc.triangle(splitPoint - 5, 0, splitPoint + 5, 0, splitPoint - 2, 15, "F");
       doc.triangle(splitPoint + 5, 0, splitPoint + 8, 15, splitPoint - 2, 15, "F");
@@ -589,7 +587,6 @@ export default function Grafica() {
           doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
       }
 
-      // --- RODAPÉ PRETO ---
       doc.setFillColor(0, 0, 0);
       doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
@@ -605,7 +602,6 @@ export default function Grafica() {
       doc.text("(91) 3366-5100", rightX, pageHeight - 13);
       doc.text("tcservicos@tccopiadoras.com.br", rightX, pageHeight - 9);
 
-      // Ícones vetoriais
       doc.setDrawColor(255, 255, 255);
       doc.setLineWidth(0.3);
 
@@ -1159,68 +1155,85 @@ export default function Grafica() {
                     const cardsDaColuna = ordensFiltradas.filter(os => 
                       (colunaNome === "Concluído" && os.status === "Cancelado") || os.status === colunaNome
                     );
+                    
+                    const isConcluido = colunaNome === "Concluído";
+                    const isCompactado = isConcluido && !mostrarConcluidos;
 
                     return (
-                    <div key={colunaNome} className="w-80 shrink-0 flex flex-col bg-slate-200/50 rounded-xl border border-slate-300/60 max-h-full">
+                    <div key={colunaNome} className={`shrink-0 flex flex-col bg-slate-200/50 rounded-xl border border-slate-300/60 max-h-full transition-all duration-300 ${isCompactado ? 'w-64' : 'w-80'}`}>
                       {/* Header da Coluna */}
                       <div className="p-3 border-b border-slate-300/60 bg-slate-200 rounded-t-xl flex justify-between items-center">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-slate-700 text-sm">{colunaNome}</h3>
+                          <h3 className="font-bold text-slate-700 text-sm">{isConcluido ? "Demandas Finalizadas" : colunaNome}</h3>
                           <span className="bg-slate-300 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{cardsDaColuna.length}</span>
                         </div>
+                        {isConcluido && mostrarConcluidos && (
+                            <Button variant="ghost" size="sm" onClick={() => setMostrarConcluidos(false)} className="h-6 text-[10px] px-2 text-slate-500 hover:text-slate-700">Ocultar</Button>
+                        )}
                       </div>
 
                       {/* Área dos Cards */}
-                      <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-                        {cardsDaColuna.map(os => {
-                          const isCancelada = os.status === "Cancelado";
-                          return (
-                          <div 
-                            key={os.id} 
-                            onClick={() => abrirPrancheta(os)}
-                            className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-purple-400 hover:shadow-md cursor-pointer transition-all relative group flex flex-col"
-                          >
-                            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                                  <input type="checkbox" className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer shadow-sm" 
-                                      checked={osSelecionadasLote.includes(os.id)} 
-                                      onChange={(e) => {
-                                          if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]);
-                                          else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id));
-                                      }} 
-                                  />
-                            </div>
+                      <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar flex flex-col">
+                        {isCompactado ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-center p-4 mt-8">
+                              <CheckCircle2 className="w-8 h-8 text-slate-400 mb-3" />
+                              <p className="text-xs text-slate-500 mb-1">Quantidade de cards finalizados</p>
+                              <h4 className="text-xl font-bold text-blue-600 mb-6">{cardsDaColuna.length} cards</h4>
+                              <Button onClick={() => setMostrarConcluidos(true)} className="bg-slate-800 hover:bg-slate-900 text-white w-full text-xs shadow-sm">Visualizar Todos</Button>
+                          </div>
+                        ) : (
+                          <>
+                            {cardsDaColuna.map(os => {
+                              const isCancelada = os.status === "Cancelado";
+                              return (
+                              <div 
+                                key={os.id} 
+                                onClick={() => abrirPrancheta(os)}
+                                className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-purple-400 hover:shadow-md cursor-pointer transition-all relative group flex flex-col"
+                              >
+                                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                      <input type="checkbox" className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer shadow-sm" 
+                                          checked={osSelecionadasLote.includes(os.id)} 
+                                          onChange={(e) => {
+                                              if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]);
+                                              else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id));
+                                          }} 
+                                      />
+                                </div>
 
-                            <div className="flex justify-between items-start mb-2 pr-6">
-                              <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">OSG-{String(os.numero_op).padStart(4,'0')}</span>
-                              <div className="flex gap-2 items-center">
-                                  {isCancelada && <span className="text-[9px] uppercase tracking-wider font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded">Cancelada</span>}
-                                  <span className={`flex items-center gap-1 text-[9px] font-bold ${new Date(os.data_prevista) < new Date() && !isCancelada ? 'text-red-500' : 'text-slate-400'}`}>
-                                    <CalendarDays className="w-3 h-3"/> {new Date(os.data_prevista).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
-                                  </span>
-                              </div>
-                            </div>
-                            
-                            <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1 line-clamp-2" title={os.cliente_nome}>{os.cliente_nome}</h4>
-                            <p className="text-[10px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{os.descricao_servico} <span className="font-semibold text-slate-700">(Qtd: {os.quantidade_produzir})</span></p>
-                            
-                            <div className="flex flex-col gap-1 pt-2 border-t border-slate-50 mt-auto">
-                              <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
-                                  <User className="w-3 h-3 text-emerald-500 shrink-0"/> {os.solicitante || 'Não informado'}
-                              </div>
-                              <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
-                                      <UserCheck className="w-3 h-3 text-indigo-400 shrink-0"/> {os.operador_nome || 'Não atribuído'}
+                                <div className="flex justify-between items-start mb-2 pr-6">
+                                  <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">OSG-{String(os.numero_op).padStart(4,'0')}</span>
+                                  <div className="flex gap-2 items-center">
+                                      {isCancelada && <span className="text-[9px] uppercase tracking-wider font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded">Cancelada</span>}
+                                      <span className={`flex items-center gap-1 text-[9px] font-bold ${new Date(os.data_prevista) < new Date() && !isCancelada ? 'text-red-500' : 'text-slate-400'}`}>
+                                        <CalendarDays className="w-3 h-3"/> {new Date(os.data_prevista).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                                      </span>
                                   </div>
-                                  {os.observacoes?.includes("[Possui Impressão: Sim]") && <span title="Requer Impressão"><Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" /></span>}
+                                </div>
+                                
+                                <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1 line-clamp-2" title={os.cliente_nome}>{os.cliente_nome}</h4>
+                                <p className="text-[10px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{os.descricao_servico} <span className="font-semibold text-slate-700">(Qtd: {os.quantidade_produzir})</span></p>
+                                
+                                <div className="flex flex-col gap-1 pt-2 border-t border-slate-50 mt-auto">
+                                  <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
+                                      <User className="w-3 h-3 text-emerald-500 shrink-0"/> {os.solicitante || 'Não informado'}
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-500 truncate max-w-[150px]">
+                                          <UserCheck className="w-3 h-3 text-indigo-400 shrink-0"/> {os.operador_nome || 'Não atribuído'}
+                                      </div>
+                                      {os.observacoes?.includes("[Possui Impressão: Sim]") && <span title="Requer Impressão"><Printer className="w-3.5 h-3.5 text-blue-500 shrink-0" /></span>}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        )})}
-                        
-                        {cardsDaColuna.length === 0 && (
-                          <div className="h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">
-                            Vazio
-                          </div>
+                            )})}
+                            
+                            {cardsDaColuna.length === 0 && (
+                              <div className="h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">
+                                Vazio
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
