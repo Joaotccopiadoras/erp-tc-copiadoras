@@ -3,7 +3,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare, MessageSquare, Edit2, Ban } from "lucide-react";
+import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, CheckSquare, MessageSquare, Edit2, Ban, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -64,6 +64,16 @@ export default function Grafica() {
   const [salvandoOS, setSalvandoOS] = useState(false);
   const [exportando, setExportando] = useState(false);
 
+  // ESTADOS: MODAIS DE BUSCA AVANÇADA
+  const [modalClienteOpen, setModalClienteOpen] = useState(false);
+  const [buscaModalCliente, setBuscaModalCliente] = useState("");
+
+  const [modalOperadorOpen, setModalOperadorOpen] = useState(false);
+  const [buscaModalOperador, setBuscaModalOperador] = useState("");
+
+  const [modalInsumoOpen, setModalInsumoOpen] = useState(false);
+  const [buscaModalInsumo, setBuscaModalInsumo] = useState("");
+
   // ESTADOS: PAINEL DE PRODUÇÃO
   const [ordens, setOrdens] = useState<any[]>([]);
   const [buscaOS, setBuscaOS] = useState("");
@@ -71,7 +81,6 @@ export default function Grafica() {
   const [osSelecionadasLote, setOsSelecionadasLote] = useState<string[]>([]);
   
   const [statusOS, setStatusOS] = useState("");
-  const [buscaInsumo, setBuscaInsumo] = useState("");
   const [insumos, setInsumos] = useState<InsumoOS[]>([]);
   const [historicoProducao, setHistoricoProducao] = useState<ApontamentoProducao[]>([]);
 
@@ -296,13 +305,11 @@ export default function Grafica() {
       setAnexos(anexos.filter(a => a.id !== id));
   };
 
-  const adicionarInsumo = () => {
-    if (!buscaInsumo) return;
-    const prod = produtosBD.find(p => p.nome === buscaInsumo || `${p.sku || 'S/N'} - ${p.nome}` === buscaInsumo);
-    if (!prod) return alert("Insumo não encontrado no catálogo.");
-
+  // Nova função para adicionar insumo via Modal
+  const selecionarInsumo = (prod: any) => {
     setInsumos([...insumos, { id: crypto.randomUUID(), produtoId: prod.id, nome: prod.nome, quantidade: 1, custoUn: prod.custo_base || 0, estoqueAtual: prod.estoque_atual || 0 }]);
-    setBuscaInsumo("");
+    setModalInsumoOpen(false);
+    setBuscaModalInsumo("");
   };
 
   const salvarAndamento = async (statusFinal?: string) => {
@@ -462,7 +469,7 @@ export default function Grafica() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO DE COMPROVANTE (TIMBRADO CLÁSSICO E OFICIAL TC)
+  // EXPORTAÇÃO DE COMPROVANTE
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -659,9 +666,155 @@ export default function Grafica() {
 
   return (
     <AppLayout>
-      <datalist id="grafica-clientes">{clientesBD.map((c) => <option key={c.id} value={c.nome_fantasia || c.razao_social} />)}</datalist>
-      <datalist id="grafica-operadores">{operadoresBD.map((op) => <option key={op.id} value={op.nome} />)}</datalist>
-      <datalist id="grafica-insumos">{produtosBD.map((p) => <option key={p.id} value={`${p.sku || 'S/N'} - ${p.nome}`} />)}</datalist>
+      {/* MODAL: SELECIONAR CLIENTE */}
+      {modalClienteOpen && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><Search className="w-5 h-5 text-purple-600"/> Localizar Cliente</h3>
+              <Button variant="ghost" size="sm" onClick={() => setModalClienteOpen(false)} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-5 h-5"/></Button>
+            </div>
+            <div className="p-4 border-b border-slate-100 bg-white">
+              <Input 
+                placeholder="Pesquise por Razão Social, Nome Fantasia ou CNPJ/CPF..." 
+                value={buscaModalCliente} 
+                onChange={e => setBuscaModalCliente(e.target.value)}
+                className="bg-slate-50 font-medium border-purple-200 focus-visible:ring-purple-500"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 p-0 custom-scrollbar bg-white">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-100 text-slate-500 text-[10px] uppercase sticky top-0 shadow-sm">
+                  <tr>
+                    <th className="p-3 font-semibold">Cliente</th>
+                    <th className="p-3 font-semibold">CNPJ / CPF</th>
+                    <th className="p-3 font-semibold text-center w-28">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {clientesBD.filter(c => 
+                    (c.nome_fantasia || "").toLowerCase().includes(buscaModalCliente.toLowerCase()) || 
+                    (c.razao_social || "").toLowerCase().includes(buscaModalCliente.toLowerCase()) ||
+                    (c.cnpj_cpf || "").includes(buscaModalCliente)
+                  ).slice(0, 50).map(c => (
+                    <tr key={c.id} className="hover:bg-purple-50 transition-colors">
+                      <td className="p-3">
+                        <p className="font-bold text-slate-800 text-sm leading-tight">{c.nome_fantasia || c.razao_social}</p>
+                        {c.nome_fantasia && c.razao_social !== c.nome_fantasia && <p className="text-[10px] text-slate-500 mt-0.5">{c.razao_social}</p>}
+                      </td>
+                      <td className="p-3 text-slate-600 font-mono text-xs">{c.cnpj_cpf || '-'}</td>
+                      <td className="p-3 text-center">
+                        <Button size="sm" onClick={() => { setClienteBusca(c.nome_fantasia || c.razao_social); setModalClienteOpen(false); setBuscaModalCliente(""); }} className="bg-purple-100 text-purple-700 hover:bg-purple-200 shadow-none">Selecionar</Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {clientesBD.length > 0 && clientesBD.filter(c => (c.nome_fantasia || "").toLowerCase().includes(buscaModalCliente.toLowerCase()) || (c.razao_social || "").toLowerCase().includes(buscaModalCliente.toLowerCase()) || (c.cnpj_cpf || "").includes(buscaModalCliente)).length === 0 && (
+                    <tr><td colSpan={3} className="p-8 text-center text-slate-400 text-sm">Nenhum cliente encontrado com estes critérios.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SELECIONAR OPERADOR */}
+      {modalOperadorOpen && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><UserCheck className="w-5 h-5 text-indigo-600"/> Localizar Operador</h3>
+              <Button variant="ghost" size="sm" onClick={() => setModalOperadorOpen(false)} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-5 h-5"/></Button>
+            </div>
+            <div className="p-4 border-b border-slate-100 bg-white">
+              <Input 
+                placeholder="Pesquise pelo nome do operador..." 
+                value={buscaModalOperador} 
+                onChange={e => setBuscaModalOperador(e.target.value)}
+                className="bg-slate-50 font-medium border-indigo-200 focus-visible:ring-indigo-500"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 p-0 custom-scrollbar bg-white">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-100 text-slate-500 text-[10px] uppercase sticky top-0 shadow-sm">
+                  <tr>
+                    <th className="p-3 font-semibold">Nome do Operador</th>
+                    <th className="p-3 font-semibold text-center w-28">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {operadoresBD.filter(o => 
+                    (o.nome || "").toLowerCase().includes(buscaModalOperador.toLowerCase())
+                  ).map(o => (
+                    <tr key={o.id} className="hover:bg-indigo-50 transition-colors">
+                      <td className="p-3 font-bold text-slate-800 text-sm">{o.nome}</td>
+                      <td className="p-3 text-center">
+                        <Button size="sm" onClick={() => { setOperadorNome(o.nome); setModalOperadorOpen(false); setBuscaModalOperador(""); }} className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-none">Selecionar</Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {operadoresBD.length === 0 && (
+                    <tr><td colSpan={2} className="p-8 text-center text-slate-400 text-sm">Nenhum operador cadastrado nas Configurações.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SELECIONAR INSUMO */}
+      {modalInsumoOpen && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><PaintBucket className="w-5 h-5 text-purple-600"/> Localizar Insumo / Matéria-Prima</h3>
+              <Button variant="ghost" size="sm" onClick={() => setModalInsumoOpen(false)} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-5 h-5"/></Button>
+            </div>
+            <div className="p-4 border-b border-slate-100 bg-white">
+              <Input 
+                placeholder="Pesquise por Nome ou Código SKU do Insumo..." 
+                value={buscaModalInsumo} 
+                onChange={e => setBuscaModalInsumo(e.target.value)}
+                className="bg-slate-50 font-medium border-purple-200 focus-visible:ring-purple-500"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 p-0 custom-scrollbar bg-white">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-100 text-slate-500 text-[10px] uppercase sticky top-0 shadow-sm">
+                  <tr>
+                    <th className="p-3 font-semibold">SKU / Código</th>
+                    <th className="p-3 font-semibold">Nome do Insumo</th>
+                    <th className="p-3 font-semibold text-right">Custo Base</th>
+                    <th className="p-3 font-semibold text-center w-28">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {produtosBD.filter(p => 
+                    (p.nome || "").toLowerCase().includes(buscaModalInsumo.toLowerCase()) || 
+                    (p.sku || "").toLowerCase().includes(buscaModalInsumo.toLowerCase())
+                  ).slice(0, 50).map(p => (
+                    <tr key={p.id} className="hover:bg-purple-50 transition-colors">
+                      <td className="p-3 text-slate-500 font-mono text-xs">{p.sku || 'S/N'}</td>
+                      <td className="p-3 font-bold text-slate-800 text-sm leading-tight">{p.nome}</td>
+                      <td className="p-3 text-right text-emerald-600 font-medium text-xs">R$ {Number(p.custo_base || 0).toFixed(4).replace('.',',')}</td>
+                      <td className="p-3 text-center">
+                        <Button size="sm" onClick={() => selecionarInsumo(p)} className="bg-purple-100 text-purple-700 hover:bg-purple-200 shadow-none">Adicionar</Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {produtosBD.length > 0 && produtosBD.filter(p => (p.nome || "").toLowerCase().includes(buscaModalInsumo.toLowerCase()) || (p.sku || "").toLowerCase().includes(buscaModalInsumo.toLowerCase())).length === 0 && (
+                    <tr><td colSpan={4} className="p-8 text-center text-slate-400 text-sm">Nenhum insumo encontrado.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {abaAtiva === "abrir" ? (
         <div className="max-w-3xl mx-auto mt-6 mb-12 animate-in fade-in zoom-in-95 duration-200">
@@ -674,7 +827,15 @@ export default function Grafica() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-bold text-slate-700">Cliente Autorizador <span className="text-red-500">*</span></label>
-                  <Input list="grafica-clientes" value={clienteBusca} onChange={e => setClienteBusca(e.target.value)} placeholder="Nome do cliente ou empresa..." className="bg-slate-50" />
+                  <div 
+                    onClick={() => setModalClienteOpen(true)}
+                    className="bg-slate-50 border border-slate-200 p-2.5 rounded-md cursor-pointer flex items-center justify-between hover:border-purple-300 transition-colors"
+                  >
+                    <span className={clienteBusca ? "text-slate-800 font-bold" : "text-slate-400 font-medium"}>
+                      {clienteBusca || "Clique para selecionar o cliente..."}
+                    </span>
+                    <Search className="w-4 h-4 text-slate-400" />
+                  </div>
               </div>
               
               <div className="space-y-2">
@@ -688,7 +849,15 @@ export default function Grafica() {
 
               <div className="space-y-2 md:col-span-2 pt-2 border-t border-slate-100">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><UserCheck className="w-4 h-4 text-indigo-500"/> Operador Gráfico Responsável <span className="text-red-500">*</span></label>
-                  <Input list="grafica-operadores" value={operadorNome} onChange={e => setOperadorNome(e.target.value)} placeholder="Selecione ou digite o nome do operador..." className="bg-indigo-50 border-indigo-200 text-indigo-900 font-medium" />
+                  <div 
+                    onClick={() => setModalOperadorOpen(true)}
+                    className="bg-indigo-50 border border-indigo-200 p-2.5 rounded-md cursor-pointer flex items-center justify-between hover:border-indigo-300 transition-colors"
+                  >
+                    <span className={operadorNome ? "text-indigo-900 font-bold" : "text-indigo-400 font-medium"}>
+                      {operadorNome || "Clique para selecionar o operador..."}
+                    </span>
+                    <Search className="w-4 h-4 text-indigo-400" />
+                  </div>
               </div>
 
               <div className="space-y-2 md:col-span-2 mt-2 pt-4 border-t border-slate-100">
@@ -1082,8 +1251,7 @@ export default function Grafica() {
                                   <h4 className="text-sm font-bold text-purple-900 uppercase flex items-center gap-2"><PaintBucket className="w-4 h-4 text-purple-600"/> Insumos Consumidos</h4>
                               </div>
                               <div className="flex gap-2">
-                                  <Input list="grafica-insumos" value={buscaInsumo} onChange={e => setBuscaInsumo(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') adicionarInsumo() }} placeholder="Buscar insumo..." className="h-9 text-xs w-48 bg-white border-purple-200" />
-                                  <Button size="sm" onClick={adicionarInsumo} className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white"><Plus className="w-4 h-4"/></Button>
+                                  <Button size="sm" onClick={() => setModalInsumoOpen(true)} className="h-9 px-4 bg-purple-600 hover:bg-purple-700 text-white gap-2"><Search className="w-4 h-4"/> Pesquisar Insumo</Button>
                               </div>
                           </div>
                           
@@ -1099,6 +1267,9 @@ export default function Grafica() {
                                       </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
+                                      {insumos.length === 0 && (
+                                          <tr><td colSpan={5} className="p-8 text-center text-slate-400 text-sm">Nenhum insumo lançado.</td></tr>
+                                      )}
                                       {insumos.map((ins, idx) => (
                                           <tr key={ins.id} className="bg-white hover:bg-slate-50">
                                               <td className="p-3 font-semibold text-slate-700">{ins.nome}</td>
@@ -1135,8 +1306,8 @@ export default function Grafica() {
             )}
 
           </div>
-                </div>
-                        )}
+        </div>
+      )}
     </AppLayout>
   );
 }
