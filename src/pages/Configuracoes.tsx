@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Briefcase, CheckCircle, Fingerprint, Lock, Settings, Shield,
   ShieldAlert, Trash2, User, UserPlus, Landmark, Tags, MapPin,
-  Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness, Wrench, Printer
+  Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness, Wrench, Printer, Eye, EyeOff
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -22,10 +22,10 @@ export default function ConfiguracoesPage() {
   const [permissoes, setPermissoes] = useState<any[]>([]);
   const [colaboradoresDP, setColaboradoresDP] = useState<any[]>([]);
   
-  // Novos campos de registo corporativo
   const [novoNomeUsuario, setNovoNomeUsuario] = useState("");
   const [novoEmail, setNovoEmail] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
+  const [mostrarSenhaCadastro, setMostrarSenhaCadastro] = useState(false);
   
   const [loadingSeguranca, setLoadingSeguranca] = useState(true);
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState<boolean | null>(null);
@@ -71,9 +71,6 @@ export default function ConfiguracoesPage() {
     }
   }, [abaAtiva, isCurrentUserAdmin]);
 
-  // ==========================================
-  // LÓGICA: SEGURANÇA E REGISTO AVANÇADO
-  // ==========================================
   const verificarAcessoAdmin = async () => {
     setLoadingSeguranca(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -98,24 +95,25 @@ export default function ConfiguracoesPage() {
     if (!novoEmail.includes("@") || !novoNomeUsuario.trim() || !novaSenha.trim()) {
       return toast({ title: "Erro", description: "Preencha todos os campos obrigatórios.", variant: "destructive" });
     }
+    if (novaSenha.length < 6) {
+      return toast({ title: "Erro", description: "A palavra-passe deve ter pelo menos 6 caracteres.", variant: "destructive" });
+    }
 
     setSalvandoSeguranca(true);
     try {
-      // 1. Cria um cliente Supabase "fantasma" para não deslogar o Administrador
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
       const { error: authError } = await authGhost.auth.signUp({
-        email: novoEmail.toLowerCase(),
+        email: novoEmail.toLowerCase().trim(),
         password: novaSenha,
       });
 
-      if (authError) throw new Error("Erro ao registar login: " + authError.message);
+      if (authError) throw new Error("Erro no Auth: " + authError.message);
 
-      // 2. Insere a governação e o Nome de Utilizador na tabela de permissões
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
-        email: novoEmail.toLowerCase(), 
+        email: novoEmail.toLowerCase().trim(), 
         nome_usuario: novoNomeUsuario.toLowerCase().trim(),
         acesso_financeiro: false, 
         is_admin: false, 
@@ -123,7 +121,7 @@ export default function ConfiguracoesPage() {
         perfil_operacional: 'Nenhum' 
       }]);
       
-      if (dbError) throw new Error("Erro ao salvar permissões: O nome de utilizador já pode estar em uso.");
+      if (dbError) throw new Error("Erro ao salvar permissões: O nome de utilizador ou e-mail já pode estar em uso.");
 
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
       setNovoEmail(""); setNovoNomeUsuario(""); setNovaSenha("");
@@ -136,7 +134,7 @@ export default function ConfiguracoesPage() {
   };
 
   const removerUsuario = async (id: string) => {
-    if (!confirm("Tem certeza que deseja revogar o acesso deste utilizador? (Isto apaga as permissões, mas o login continuará no Supabase Auth)")) return;
+    if (!confirm("Tem certeza que deseja revogar o acesso deste utilizador?")) return;
     await supabase.from("permissoes").delete().eq("id", id);
     toast({ title: "Removido", description: "Acesso revogado com sucesso." }); carregarDadosSeguranca();
   };
@@ -150,7 +148,9 @@ export default function ConfiguracoesPage() {
         is_admin: usuarioEditando.is_admin, acesso_financeiro: usuarioEditando.acesso_financeiro,
         pode_editar_os: usuarioEditando.pode_editar_os, pode_ver_dp_global: usuarioEditando.pode_ver_dp_global
       };
-      await supabase.from('permissoes').update(payload).eq('id', usuarioEditando.id);
+      const { error } = await supabase.from('permissoes').update(payload).eq('id', usuarioEditando.id);
+      if (error) throw error;
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (user && user.email === usuarioEditando.email) await supabase.auth.updateUser({ data: { nome: usuarioEditando.nome } });
       toast({ title: "Sucesso", description: "Perfil e Permissões atualizados!" });
@@ -169,9 +169,6 @@ export default function ConfiguracoesPage() {
     </div>
   );
 
-  // ==========================================
-  // LÓGICA: TABELAS AUXILIARES E RESTANTE CÓDIGO
-  // ==========================================
   const getTabelaAtual = () => {
     switch (abaAtiva) {
       case "contas": return "fin_contas_bancarias";
@@ -214,27 +211,26 @@ export default function ConfiguracoesPage() {
   };
 
   const excluirAuxiliar = async (id: string) => {
-    if (!confirm("Excluir este registo? Pode falhar se já estiver em uso.")) return;
+    if (!confirm("Excluir este registo?")) return;
     try { await supabase.from(getTabelaAtual()).delete().eq("id", id); toast({ title: "Sucesso", description: "Registo excluído." }); fetchDadosAuxiliares(); } 
     catch (error: any) { alert("Erro ao excluir.\n" + error.message); }
   };
 
-  // --- Funções Restantes de Técnicos e Operadores ---
-  const fetchTecnicos = async () => { /* Código mantido (simplificado visualmente aqui) */ setCarregandoAuxiliares(true); try { const [tecRes, userRes] = await Promise.all([supabase.from("srv_tecnicos").select("*, permissoes(nome, email)").order("nome"), supabase.from("permissoes").select("id, nome, email").order("nome")]); if (tecRes.data) setTecnicosBD(tecRes.data); if (userRes.data) setPermissoes(userRes.data); } catch (error) {} finally { setCarregandoAuxiliares(false); } };
+  const fetchTecnicos = async () => { setCarregandoAuxiliares(true); try { const [tecRes, userRes] = await Promise.all([supabase.from("srv_tecnicos").select("*, permissoes(nome, email)").order("nome"), supabase.from("permissoes").select("id, nome, email").order("nome")]); if (tecRes.data) setTecnicosBD(tecRes.data); if (userRes.data) setPermissoes(userRes.data); } catch (error) {} finally { setCarregandoAuxiliares(false); } };
   const limparFormTecnico = () => { setMostrarFormTecnico(false); setEditandoAuxiliarId(null); setFormTecnico({ nome: "", cpf: "", idade: "", endereco: "", formacao: "", data_admissao: "", tipo_cnh: "Nenhuma", valor_hora: "", usuario_id: "nenhum" }); };
   const editarTecnico = (t: any) => { setEditandoAuxiliarId(t.id); setFormTecnico({ nome: t.nome || "", cpf: t.cpf || "", idade: t.idade ? String(t.idade) : "", endereco: t.endereco || "", formacao: t.formacao || "", data_admissao: t.data_admissao || "", tipo_cnh: t.tipo_cnh || "Nenhuma", valor_hora: t.valor_hora ? String(t.valor_hora) : "", usuario_id: t.usuario_id || "nenhum" }); setMostrarFormTecnico(true); };
-  const salvarTecnico = async () => { setSalvandoAuxiliar(true); try { const payload = { nome: formTecnico.nome.trim(), cpf: formTecnico.cpf.trim() || null, idade: formTecnico.idade ? parseInt(formTecnico.idade) : null, endereco: formTecnico.endereco.trim() || null, formacao: formTecnico.formacao.trim() || null, data_admissao: formTecnico.data_admissao || null, tipo_cnh: formTecnico.tipo_cnh === "Nenhuma" ? null : (formTecnico.tipo_cnh || null), valor_hora: formTecnico.valor_hora ? parseFloat(formTecnico.valor_hora.replace(',', '.')) : null, usuario_id: formTecnico.usuario_id === "nenhum" ? null : formTecnico.usuario_id }; if (editandoAuxiliarId) { await supabase.from("srv_tecnicos").update(payload).eq("id", editandoAuxiliarId); } else { await supabase.from("srv_tecnicos").insert([payload]); } toast({ title: "Sucesso", description: "Ficha salva." }); limparFormTecnico(); fetchTecnicos(); } catch (error) {} finally { setSalvandoAuxiliar(false); } };
+  const salvarTecnico = async () => { setSalvandoAuxiliar(true); try { const payload = { nome: formTecnico.nome.trim(), cpf: formTecnico.cpf.trim() || null, idade: formTecnico.idade ? parseInt(formTecnico.idade) : null, endereco: formTecnico.endereco.trim() || null, formacao: formTecnico.formacao.trim() || null, data_admissao: formTecnico.data_admissao || null, tipo_cnh: formTecnico.tipo_cnh === "Nenhuma" ? null : formTecnico.tipo_cnh, valor_hora: formTecnico.valor_hora ? parseFloat(formTecnico.valor_hora.replace(',', '.')) : null, usuario_id: formTecnico.usuario_id === "nenhum" ? null : formTecnico.usuario_id }; if (editandoAuxiliarId) { const { error } = await supabase.from("srv_tecnicos").update(payload).eq("id", editandoAuxiliarId); if (error) throw error; } else { const { error } = await supabase.from("srv_tecnicos").insert([payload]); if (error) throw error; } toast({ title: "Sucesso", description: "Ficha salva." }); limparFormTecnico(); fetchTecnicos(); } catch (error: any) { alert("Erro: " + error.message); } finally { setSalvandoAuxiliar(false); } };
   const excluirTecnico = async (id: string) => { if (!confirm("Excluir técnico?")) return; await supabase.from("srv_tecnicos").delete().eq("id", id); fetchTecnicos(); };
 
   const fetchOperadores = async () => { setCarregandoAuxiliares(true); try { const [opRes, userRes] = await Promise.all([supabase.from("grafica_operadores").select("*").order("nome"), supabase.from("permissoes").select("id, nome, email").order("nome")]); if (opRes.data) setOperadoresBD(opRes.data); if (userRes.data) setPermissoes(userRes.data); } catch (error) {} finally { setCarregandoAuxiliares(false); } };
   const limparFormOperador = () => { setMostrarFormOperador(false); setEditandoAuxiliarId(null); setFormOperador({ nome: "", cpf: "", idade: "", endereco: "", data_admissao: "", valor_hora: "", login_vinculado: "nenhum" }); };
   const editarOperador = (op: any) => { setEditandoAuxiliarId(op.id); setFormOperador({ nome: op.nome || "", cpf: op.cpf || "", idade: op.idade ? String(op.idade) : "", endereco: op.endereco || "", data_admissao: op.data_admissao || "", valor_hora: op.valor_hora ? String(op.valor_hora) : "", login_vinculado: op.login_vinculado || "nenhum" }); setMostrarFormOperador(true); };
-  const salvarOperador = async () => { setSalvandoAuxiliar(true); try { const payload = { nome: formOperador.nome.trim(), cpf: formOperador.cpf.trim() || null, idade: formOperador.idade ? parseInt(formOperador.idade) : null, endereco: formOperador.endereco.trim() || null, data_admissao: formOperador.data_admissao || null, valor_hora: formOperador.valor_hora ? parseFloat(formOperador.valor_hora.replace(',', '.')) : null, login_vinculado: formOperador.login_vinculado === "nenhum" ? null : formOperador.login_vinculado }; if (editandoAuxiliarId) { await supabase.from("grafica_operadores").update(payload).eq("id", editandoAuxiliarId); } else { await supabase.from("grafica_operadores").insert([payload]); } toast({ title: "Sucesso", description: "Ficha salva." }); limparFormOperador(); fetchOperadores(); } catch (error) {} finally { setSalvandoAuxiliar(false); } };
+  const salvarOperador = async () => { setSalvandoAuxiliar(true); try { const payload = { nome: formOperador.nome.trim(), cpf: formOperador.cpf.trim() || null, idade: formOperador.idade ? parseInt(formOperador.idade) : null, endereco: formOperador.endereco.trim() || null, data_admissao: formOperador.data_admissao || null, valor_hora: formOperador.valor_hora ? parseFloat(formOperador.valor_hora.replace(',', '.')) : null, login_vinculado: formOperador.login_vinculado === "nenhum" ? null : formOperador.login_vinculado }; if (editandoAuxiliarId) { const { error } = await supabase.from("grafica_operadores").update(payload).eq("id", editandoAuxiliarId); if (error) throw error; } else { const { error } = await supabase.from("grafica_operadores").insert([payload]); if (error) throw error; } toast({ title: "Sucesso", description: "Ficha salva." }); limparFormOperador(); fetchOperadores(); } catch (error: any) { alert("Erro: " + error.message); } finally { setSalvandoAuxiliar(false); } };
   const excluirOperador = async (id: string) => { if (!confirm("Excluir operador?")) return; await supabase.from("grafica_operadores").delete().eq("id", id); fetchOperadores(); };
 
   if (isCurrentUserAdmin === false) {
     return (
-    <AppLayout>
+      <AppLayout>
         <div className="flex flex-col justify-center items-center h-[70vh] max-w-md mx-auto text-center space-y-4">
           <div className="bg-red-50 p-4 rounded-full"><ShieldAlert className="w-16 h-16 text-red-500" /></div>
           <h1 className="text-2xl font-bold text-slate-800">Acesso Restrito</h1>
@@ -290,7 +286,22 @@ export default function ConfiguracoesPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Input placeholder="Nome de Utilizador (ex: joao.silva)" value={novoNomeUsuario} onChange={(e) => setNovoNomeUsuario(e.target.value)} className="bg-slate-50 font-medium text-indigo-700" />
                             <Input type="email" placeholder="E-mail (ex: joao@empresa.com)" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} className="bg-slate-50" />
-                            <Input type="password" placeholder="Palavra-passe (Mínimo 6 carateres)" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} className="bg-slate-50" />
+                            <div className="relative">
+                              <Input 
+                                type={mostrarSenhaCadastro ? "text" : "password"} 
+                                placeholder="Palavra-passe (Mín. 6 carateres)" 
+                                value={novaSenha} 
+                                onChange={(e) => setNovaSenha(e.target.value)} 
+                                className="bg-slate-50 pr-10" 
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setMostrarSenhaCadastro(!mostrarSenhaCadastro)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                              >
+                                {mostrarSenhaCadastro ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
                         </div>
                         <div className="flex justify-end pt-2">
                             <Button onClick={adicionarUsuario} disabled={salvandoSeguranca} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
@@ -393,7 +404,7 @@ export default function ConfiguracoesPage() {
                 </div>
             )}
 
-            {/* ABAS RESTANTES OCULTADAS PARA BREVIDADE (Mantêm o funcionamento idêntico ao original) */}
+            {/* ABAS RESTANTES */}
             {abaAtiva !== "seguranca" && abaAtiva !== "tecnicos" && abaAtiva !== "operadores" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
@@ -440,7 +451,7 @@ export default function ConfiguracoesPage() {
                 </div>
             )}
             
-            {/* ABAS TÉCNICOS E OPERADORES */}
+            {/* ABA TÉCNICOS */}
             {abaAtiva === "tecnicos" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
@@ -494,6 +505,7 @@ export default function ConfiguracoesPage() {
                 </div>
             )}
 
+            {/* ABA OPERADORES */}
             {abaAtiva === "operadores" && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50">
@@ -532,7 +544,7 @@ export default function ConfiguracoesPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                         {carregandoAuxiliares ? (<tr><td colSpan={4} className="p-12 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>) : operadoresBD.length === 0 ? (<tr><td colSpan={4} className="p-12 text-center text-slate-500">Nenhum operador registado.</td></tr>) : (operadoresBD.map((item) => {
-                                const vinculado = permissoes.find(p => p.id === item.login_vinculado);
+                                const vinculado = permissoes.get ? null : permissoes.find(p => p.id === item.login_vinculado);
                                 return (
                                 <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
                                     <td className="p-4"><p className="font-semibold text-slate-800 text-sm">{item.nome}</p><p className="text-xs text-slate-400 font-medium mt-0.5">{vinculado ? `Login: ${vinculado.nome || vinculado.email}` : 'Sem acesso ao sistema'}</p></td>

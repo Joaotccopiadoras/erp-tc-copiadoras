@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Lock, User, Loader2 } from "lucide-react";
+import { Lock, User, Loader2, Eye, EyeOff } from "lucide-react";
 import ReCAPTCHA from "react-google-recaptcha";
 
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -18,7 +19,6 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validação do Captcha antes de processar o login
     if (!captchaToken) {
       toast({
         title: "Verificação de Segurança",
@@ -31,7 +31,6 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // 1. Traduzir o identificador (nome de utilizador ou e-mail) para o e-mail de acesso
       const { data: userEmail, error: rpcError } = await supabase.rpc('get_email_by_username', { 
         p_username: username.toLowerCase().trim() 
       });
@@ -40,7 +39,6 @@ const Login = () => {
         throw new Error("Nome de utilizador ou palavra-passe incorretos.");
       }
 
-      // 2. Efetuar o login no Supabase utilizando o e-mail resolvido e a palavra-passe
       const { data, error } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password,
@@ -70,7 +68,6 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md glass-card rounded-2xl p-8 shadow-xl border border-border">
         
-        {/* Cabeçalho com a Logo da TC Copiadoras */}
         <div className="flex flex-col items-center mb-6">
           <img 
             src="/logo.png" 
@@ -84,7 +81,6 @@ const Login = () => {
           <p className="text-sm text-muted-foreground mt-1">Acesso ao ERP interno</p>
         </div>
 
-        {/* Formulário de Acesso */}
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Nome de Utilizador ou E-mail</label>
@@ -92,7 +88,7 @@ const Login = () => {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 type="text" 
-                placeholder="ex: joao.gaia ou e-mail" 
+                placeholder="ex: joao.gaia" 
                 className="pl-10"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -106,20 +102,26 @@ const Login = () => {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
-                type="password" 
+                type={mostrarSenha ? "text" : "password"} 
                 placeholder="••••••••" 
-                className="pl-10"
+                className="pl-10 pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <button
+                type="button"
+                onClick={() => setMostrarSenha(!mostrarSenha)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {mostrarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
-          {/* Componente reCAPTCHA da Google */}
           <div className="flex justify-center pt-2">
             <ReCAPTCHA
-              sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" // Chave de teste pública da Google
+              sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
               onChange={(token) => setCaptchaToken(token)}
             />
           </div>
