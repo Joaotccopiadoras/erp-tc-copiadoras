@@ -158,7 +158,6 @@ export default function Grafica() {
   const fetchOrdens = async () => {
     const { data } = await supabase.from('prd_ordens_producao').select('*').order('numero_op', { ascending: false });
     if (data) {
-      // Caso haja ordens com status antigo, mapeamos visualmente para a nova estrutura sem perder o dado
       const dataNormalizada = data.map(os => ({
         ...os,
         status: STATUS_FLUXO_GRAFICA.includes(os.status) ? os.status : "Solicitação Recebida"
@@ -189,7 +188,7 @@ export default function Grafica() {
         data_prevista: dataPrevista,
         paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
         valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
-        status: 'Solicitação Recebida', // Inicia na primeira coluna do Kanban
+        status: 'Solicitação Recebida',
         observacoes: `[Possui Impressão: ${possuiImpressao}]`, 
         historico_producao: []
       };
@@ -209,7 +208,6 @@ export default function Grafica() {
     setOsSelecionada(os);
     setStatusOS(os.status);
     
-    // Limpamos o lixo da tag de impressão para exibir só os comentários reais no follow-up
     const obsLimpas = os.observacoes?.replace("[Possui Impressão: Sim]\n", "")?.replace("[Possui Impressão: Não]\n", "")?.replace("[Possui Impressão: Sim]", "")?.replace("[Possui Impressão: Não]", "") || "";
     setObsTemp(obsLimpas);
 
@@ -302,7 +300,6 @@ export default function Grafica() {
       const novoStatus = statusFinal || statusOS;
       const custoTotalInsumos = insumos.reduce((a, b) => a + (b.quantidade * b.custoUn), 0);
 
-      // Reconstrói a observação garantindo que a tag de impressão fique escondida lá no banco
       const flagImpressao = osSelecionada.observacoes?.includes("[Possui Impressão: Sim]") ? "[Possui Impressão: Sim]\n" : "[Possui Impressão: Não]\n";
       const obsFinal = flagImpressao + obsTemp;
 
@@ -321,6 +318,27 @@ export default function Grafica() {
       alert("Apontamentos e status atualizados com sucesso!");
       fetchOrdens(); setOsSelecionada(null);
     } catch (e: any) { alert(e.message); } finally { setSalvandoOS(false); }
+  };
+
+  const concluirServico = async () => {
+    if (!confirm("Atenção: Ao concluir a OS, a matéria-prima listada será baixada do estoque. Confirmar?")) return;
+    setSalvandoOS(true);
+    try {
+      await salvarAndamento('Concluído');
+      for (const insumo of insumos) {
+        const { data: prodData } = await supabase.from('log_produtos').select('estoque_atual').eq('id', insumo.produtoId).single();
+        if (prodData) {
+            const novoEst = Math.max(0, prodData.estoque_atual - insumo.quantidade);
+            await supabase.from('log_produtos').update({ estoque_atual: novoEst }).eq('id', insumo.produtoId);
+        }
+        await supabase.from('log_movimentacoes').insert({
+            produto_id: insumo.produtoId, tipo: 'Saída', quantidade: insumo.quantidade, 
+            documento: `OSG-${osSelecionada.numero_op}`, fornecedor_cliente: osSelecionada.cliente_nome, observacoes: 'Consumo Gráfica'
+        });
+      }
+      alert("Serviço Concluído! A ordem de serviço está pronta para ser faturada.");
+      fetchOrdens(); setOsSelecionada(null);
+    } catch (e: any) { alert("Erro ao concluir: " + e.message); } finally { setSalvandoOS(false); }
   };
 
   // --- INICIAR IMPRESSÃO ---
@@ -412,7 +430,7 @@ export default function Grafica() {
   };
 
   // ==========================================
-  // EXPORTAÇÃO DE COMPROVANTE (TIMBRADO CLÁSSICO - TIMES NEW ROMAN)
+  // EXPORTAÇÃO DE COMPROVANTE (TIMBRADO CLÁSSICO E OFICIAL TC)
   // ==========================================
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
@@ -456,7 +474,7 @@ export default function Grafica() {
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
           const dataEmissao = `Belém/PA, ${dia} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
-          // TEXTOS INICIAIS DA PÁGINA
+          // TEXTOS INICIAIS DA PÁGINA (Livres do cabeçalho)
           doc.setFont("times", "normal");
           doc.setFontSize(11);
           doc.setTextColor(0, 0, 0);
@@ -466,7 +484,7 @@ export default function Grafica() {
           doc.text(`À (O) ${String(razaoSocial).toUpperCase()}`, 14, 55);
           doc.text(`CNPJ: ${cnpj}`, 14, 60);
 
-          const tituloOS = osList.length === 1 ? `COMPROVANTE DE ENTREGA – OSG-${String(osList[0].numero_op).padStart(4,'0')}` : `COMPROVANTE DE ENTREGA – MÚLTIPLAS OSGs`;
+          const tituloOS = osList.length === 1 ? `COMPROVANTE DE ENTREGA - OSG-${String(osList[0].numero_op).padStart(4,'0')}` : `COMPROVANTE DE ENTREGA - MÚLTIPLAS OSGs`;
           doc.setFontSize(12);
           doc.text(tituloOS, pageWidth / 2, 75, { align: "center" });
 
@@ -517,42 +535,66 @@ export default function Grafica() {
                   5: { halign: 'center', cellWidth: 25 }
               },
               didDrawPage: function () {
-                  // BLINDAGEM DE BACKGROUND
+                  // BLINDAGEM DE BACKGROUND BRANCO (Proteção do Canvas)
                   doc.setFillColor(255, 255, 255);
                   doc.rect(0, 0, pageWidth, 42, "F"); 
                   doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
 
-                  // --- CABEÇALHO PRETO ---
-                  doc.setFillColor(0, 0, 0); 
+                  // --- CABEÇALHO OFICIAL (Barra Cinza) ---
+                  doc.setFillColor(128, 130, 133); // Cinza Grafite Oficial
                   doc.rect(0, 0, pageWidth, 15, "F"); 
 
                   if (logoBase64) {
                       doc.addImage(logoBase64, "PNG", 14, 18, 40, 15);
                   }
 
-                  // --- RODAPÉ TIMBRADO PRETO ---
-                  doc.setFillColor(0, 0, 0);
+                  // --- RODAPÉ OFICIAL (Barra Cinza) ---
+                  doc.setFillColor(128, 130, 133);
                   doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
 
                   doc.setFont("times", "normal");
                   doc.setFontSize(8.5);
                   doc.setTextColor(255, 255, 255); 
 
+                  // Textos do Rodapé (Esquerda)
                   const textoRodapeEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
-                  doc.text(textoRodapeEsq, 14, pageHeight - 16);
+                  doc.text(textoRodapeEsq, 14, pageHeight - 17);
 
-                  const textoRodapeDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
-                  doc.text(textoRodapeDir, pageWidth - 14, pageHeight - 13, { align: "right" });
+                  // Textos do Rodapé (Direita) - Exatamente igual à imagem fornecida
+                  const rightX = pageWidth - 60;
+                  doc.text("91 98156-6886", rightX, pageHeight - 17);
+                  doc.text("(91) 3366-5100", rightX, pageHeight - 13);
+                  doc.text("tcservicos@tccopiadoras.com.br", rightX, pageHeight - 9);
+
+                  // Desenhando os ícones no rodapé manualmente (Puro JS - Sem emojis quebrando)
+                  doc.setDrawColor(255, 255, 255);
+                  doc.setLineWidth(0.3);
+
+                  // Ícone WhatsApp (Círculo com rabinho)
+                  doc.circle(rightX - 4, pageHeight - 18, 1.5, "S");
+                  doc.line(rightX - 5.2, pageHeight - 17, rightX - 5.5, pageHeight - 16);
+                  doc.line(rightX - 5.5, pageHeight - 16, rightX - 4.5, pageHeight - 16.7);
+
+                  // Ícone Telefone (Mini celular vertical)
+                  doc.rect(rightX - 5, pageHeight - 14.5, 2, 3, "S");
+                  doc.line(rightX - 4.5, pageHeight - 12, rightX - 3.5, pageHeight - 12);
+
+                  // Ícone Email (Envelope)
+                  doc.rect(rightX - 5.5, pageHeight - 10.5, 3, 2, "S");
+                  doc.line(rightX - 5.5, pageHeight - 10.5, rightX - 4, pageHeight - 9.5);
+                  doc.line(rightX - 4, pageHeight - 9.5, rightX - 2.5, pageHeight - 10.5);
               }
           });
 
           let finalY = (doc as any).lastAutoTable.finalY + 20;
 
+          // Se a área de assinatura bater no rodapé, quebramos a página com segurança
           if (finalY + 50 > pageHeight - 35) {
               doc.addPage();
               finalY = 50; 
           }
 
+          // ASSINATURAS FINAIS
           doc.setFont("times", "normal");
           doc.setFontSize(11);
           doc.setTextColor(0, 0, 0);
@@ -945,6 +987,9 @@ export default function Grafica() {
                                         <p className="text-2xl font-black text-emerald-400">R$ {totalReceitaGerada.toFixed(2).replace('.',',')}</p>
                                     </div>
                                 )}
+                            </div>
+                            <div className="w-full md:w-auto">
+                                <Button onClick={concluirServico} disabled={salvandoOS} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold h-12 px-6 gap-2 shadow-md"><PlayCircle className="w-5 h-5"/> Concluir OS</Button>
                             </div>
                         </div>
                     </div>
