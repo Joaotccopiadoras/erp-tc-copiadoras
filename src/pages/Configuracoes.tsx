@@ -279,136 +279,61 @@ export default function ConfiguracoesPage() {
 
           {/* CONTEÚDO PRINCIPAL */}
           <div className="flex-1 w-full space-y-6">
+      </div>
             
-            {/* ABA: SEGURANÇA */}
-            {abaAtiva === "seguranca" && (
-                <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-                    
-                    <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4 border-l-4 border-l-indigo-600">
-                        <div>
-                            <h2 className="text-sm font-bold text-slate-800">Cadastrar Novo Utilizador</h2>
-                            <p className="text-xs text-slate-500">Defina o nome de utilizador, o e-mail associado e a palavra-passe inicial do colaborador.</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <Input placeholder="Nome de Utilizador (ex: joao.silva)" value={novoNomeUsuario} onChange={(e) => setNovoNomeUsuario(e.target.value)} className="bg-slate-50 font-medium text-indigo-700" />
-                            <Input type="email" placeholder="E-mail (ex: joao@empresa.com)" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} className="bg-slate-50" />
-                            <div className="relative">
-                              <Input 
-                                type={mostrarSenhaCadastro ? "text" : "password"} 
-                                placeholder="Palavra-passe (Mín. 6 carateres)" 
-                                value={novaSenha} 
-                                onChange={(e) => setNovaSenha(e.target.value)} 
-                                className="bg-slate-50 pr-10" 
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setMostrarSenhaCadastro(!mostrarSenhaCadastro)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                              >
-                                {mostrarSenhaCadastro ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                            </div>
-                        </div>
-                        <div className="flex justify-end pt-2">
-                            <Button onClick={adicionarUsuario} disabled={salvandoSeguranca} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-                                {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} Cadastrar Sistema
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                        <div className="p-4 border-b flex justify-between items-center bg-slate-50"><h2 className="font-bold text-slate-800 flex items-center gap-2"><Shield className="w-4 h-4 text-indigo-600"/> Governança e Hierarquia</h2></div>
-                        <div className="overflow-x-auto min-h-[300px]">
-                            <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-100 border-b text-slate-600 text-[11px] uppercase tracking-wider">
-                                  <th className="px-4 py-4 font-semibold">Utilizador</th>
-                                  <th className="px-4 py-4 font-semibold">Departamento</th>
-                                  <th className="px-4 py-4 font-semibold text-center">Acesso</th>
-                                  <th className="px-4 py-4 font-semibold text-center w-36">Configurar</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {loadingSeguranca ? ( <tr><td colSpan={4} className="p-8 text-center text-slate-500"><Loader2 className="w-6 h-6 animate-spin mx-auto"/></td></tr>
-                                ) : permissoes.map((p) => (
-                                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                                      <td className="px-4 py-4 align-top">
-                                          <p className="font-bold text-slate-800 text-sm">{p.nome || 'Não definido'}</p>
-                                          <p className="text-xs font-mono text-indigo-600 font-semibold mt-0.5">@{p.nome_usuario || 'legado'}</p>
-                                          <p className="text-[10px] text-slate-400 mt-0.5">{p.email}</p>
-                                      </td>
-                                      <td className="px-4 py-4 align-top"><span className="text-[10px] font-bold uppercase text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">{p.departamento || 'Geral'}</span></td>
-                                      <td className="px-4 py-4 text-center align-top">{p.is_admin ? <span className="text-[10px] font-bold uppercase px-3 py-1 rounded-full bg-slate-800 text-white shadow-sm inline-flex items-center gap-1"><Shield className="w-3 h-3"/> Admin</span> : <span className="text-[10px] font-bold uppercase px-3 py-1 rounded-full bg-slate-100 text-slate-500 border">Padrão</span>}</td>
-                                      <td className="px-4 py-4 text-center align-top">
-                                          <div className="flex justify-center gap-2">
-                                              <Button variant="outline" size="sm" onClick={() => setUsuarioEditando({ ...p })} className="h-8 text-xs font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50 gap-1 shadow-sm"><Settings className="w-3 h-3"/> Acessos</Button>
-                                              <button onClick={() => removerUsuario(p.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4"/></button>
-                                          </div>
-                                      </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* MODAL UTILIZADOR */}
-                    {usuarioEditando && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
-                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <div><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Settings className="w-5 h-5 text-indigo-600"/> Configurar Perfil e Acessos</h2><p className="text-xs text-slate-500 font-mono mt-1">Utilizador: {usuarioEditando.nome_usuario || usuarioEditando.email}</p></div>
-                            <Button variant="ghost" onClick={() => setUsuarioEditando(null)}><X className="w-5 h-5"/></Button>
-                        </div>
-                        <div className="p-6 overflow-y-auto space-y-8 flex-1 custom-scrollbar">
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><User className="w-4 h-4"/> 1. Identidade e Setor</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2"><label className="text-sm font-bold text-slate-700">Nome de Exibição</label><Input value={usuarioEditando.nome || ""} onChange={e => setUsuarioEditando({...usuarioEditando, nome: e.target.value})} placeholder="Ex: João Gaia" /></div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold text-slate-700">Departamento Principal</label>
-                                        <Select value={usuarioEditando.departamento || "Geral"} onValueChange={v => setUsuarioEditando({...usuarioEditando, departamento: v})}>
-                                            <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Geral">Geral / Sem Setor</SelectItem><SelectItem value="Diretoria">Diretoria</SelectItem><SelectItem value="Administrativo">Administrativo</SelectItem><SelectItem value="Financeiro">Financeiro</SelectItem><SelectItem value="Comercial">Comercial</SelectItem><SelectItem value="Licitações">Licitações</SelectItem><SelectItem value="Técnico">Assistência Técnica</SelectItem><SelectItem value="Gráfica">Produção Gráfica</SelectItem></SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-4 pt-4 border-t border-slate-100">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Briefcase className="w-4 h-4"/> 2. Vínculos Operacionais</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold text-slate-700">Perfil Operacional (Atuação)</label>
-                                        <Select value={usuarioEditando.perfil_operacional || "Nenhum"} onValueChange={v => setUsuarioEditando({...usuarioEditando, perfil_operacional: v})}>
-                                            <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Nenhum">Nenhum / Apenas Administrativo</SelectItem><SelectItem value="Vendedor">Vendedor (Comercial)</SelectItem><SelectItem value="Técnico Externo">Técnico Externo (Rua)</SelectItem><SelectItem value="Técnico Laboratório">Técnico de Laboratório</SelectItem><SelectItem value="Operador Gráfico">Operador Gráfico</SelectItem></SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold text-slate-700">Vínculo com Ficha do RH (DP)</label>
-                                        <Select value={usuarioEditando.colaborador_id || "nenhum"} onValueChange={v => setUsuarioEditando({...usuarioEditando, colaborador_id: v})}>
-                                            <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o funcionário..."/></SelectTrigger>
-                                            <SelectContent className="bg-white z-[99999]"><SelectItem value="nenhum">Sem vínculo com o RH</SelectItem>{colaboradoresDP.map(c => <SelectItem key={c.id} value={c.id}>{c.nome} ({c.cargo})</SelectItem>)}</SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-4 pt-4 border-t border-slate-100">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Lock className="w-4 h-4"/> 3. Restrições e Acessos</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <TogglePermission label="Acesso de Administrador" desc="Controlo total sobre o sistema." checked={usuarioEditando.is_admin} onChange={(v:any) => setUsuarioEditando({...usuarioEditando, is_admin: v})} />
-                                    <TogglePermission label="Módulo Financeiro" desc="Permite visualizar caixa e contas." checked={usuarioEditando.acesso_financeiro} onChange={(v:any) => setUsuarioEditando({...usuarioEditando, acesso_financeiro: v})} />
-                                    <TogglePermission label="Editar Ordens de Serviço" desc="Permite alterar peças e status de OS." checked={usuarioEditando.pode_editar_os} onChange={(v:any) => setUsuarioEditando({...usuarioEditando, pode_editar_os: v})} />
-                                    <TogglePermission label="Visualizar Todo o DP" desc="Se desligado, verá apenas a própria ficha." checked={usuarioEditando.pode_ver_dp_global} onChange={(v:any) => setUsuarioEditando({...usuarioEditando, pode_ver_dp_global: v})} />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end">
-                            <Button onClick={salvarConfiguracoesUsuario} disabled={salvandoSeguranca} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 shadow-md">{salvandoSeguranca ? <Loader2 className="w-5 h-5 animate-spin"/> : "Salvar Perfil e Permissões"}</Button>
-                        </div>
-                        </div>
-                    </div>
-                    )}
-                </div>
-            )}
+            {/* ABA: SEGURANÇA - CADASTRAR UTILIZADOR */}
+<div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
+    
+    <form onSubmit={adicionarUsuario} className="bg-white p-6 rounded-xl border shadow-sm space-y-4 border-l-4 border-l-indigo-600">
+        <div>
+            <h2 className="text-sm font-bold text-slate-800">Cadastrar Novo Utilizador</h2>
+            <p className="text-xs text-slate-500">Defina o nome de utilizador, o e-mail associado e a palavra-passe inicial do colaborador.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input 
+              placeholder="Nome de Utilizador (ex: joao.silva)" 
+              value={novoNomeUsuario} 
+              onChange={(e) => setNovoNomeUsuario(e.target.value)} 
+              className="bg-slate-50 font-medium text-indigo-700" 
+              required
+            />
+            <Input 
+              type="email" 
+              placeholder="E-mail (ex: joao@empresa.com)" 
+              value={novoEmail} 
+              onChange={(e) => setNovoEmail(e.target.value)} 
+              className="bg-slate-50" 
+              required
+            />
+            <div className="relative">
+              <Input 
+                type={mostrarSenhaCadastro ? "text" : "password"} 
+                placeholder="Palavra-passe (Mín. 6 carateres)" 
+                value={novaSenha} 
+                onChange={(e) => setNovaSenha(e.target.value)} 
+                className="bg-slate-50 pr-10" 
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarSenhaCadastro(!mostrarSenhaCadastro)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {mostrarSenhaCadastro ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+        </div>
+        <div className="flex justify-end pt-2">
+            <Button 
+              type="submit" 
+              disabled={salvandoSeguranca} 
+              className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+            >
+                {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} 
+                Cadastrar Sistema
+            </Button>
+        </div>
+    </form>
 
             {/* ABAS RESTANTES */}
             {abaAtiva !== "seguranca" && abaAtiva !== "tecnicos" && abaAtiva !== "operadores" && (
@@ -427,7 +352,8 @@ export default function ConfiguracoesPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome do Registo *</label><Input value={nomeAuxiliar} onChange={(e) => setNomeAuxiliar(e.target.value)} className="bg-white border-emerald-200" /></div>
                         {abaAtiva === "transacoes" && (
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Tipo *</label><Select value={tipoCategoria} onValueChange={setTipoCategoria}><SelectTrigger className="bg-white border-emerald-200"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Despesa">Despesa (Contas a Pagar)</SelectItem><SelectItem value="Receita">Receita (Contas a Receber)</SelectItem></SelectContent></Select></div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase">Tipo *</label><Select value={tipoCategoria} onValueChange={setTipoCategoria}><SelectTrigger className="bg-white border-emerald-200"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Despesa">Despesa (Contas a Pagar)</SelectItem><SelectItem value="Receita">Receita (Contas a Receber)</SelectItem></SelectContent></Select></div>
                         )}
                         </div>
                         <div className="flex justify-end pt-2"><Button onClick={salvarAuxiliar} disabled={salvandoAuxiliar} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm">{salvandoAuxiliar ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} Salvar</Button></div>
