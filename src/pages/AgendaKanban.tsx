@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2 
+  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -26,6 +26,7 @@ export default function AgendaKanban() {
   const [cards, setCards] = useState<Card[]>([]);
   const [workflowAtivo, setWorkflowAtivo] = useState<string>("global");
   const [exportando, setExportando] = useState(false);
+  const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   
   // Modais e Estados de Edição
   const [modalWF, setModalWF] = useState(false);
@@ -259,9 +260,8 @@ export default function AgendaKanban() {
     setModalCard(false);
   };
 
-  // --- DRAG AND DROP NATIVO PARA CARDS E COLUNAS ---
   const handleDragStart = (e: React.DragEvent, card: Card) => {
-    e.stopPropagation(); // Evita que o evento suba e ative o arraste da coluna
+    e.stopPropagation();
     e.dataTransfer.setData("cardId", card.id);
     e.dataTransfer.setData("type", "card");
   };
@@ -278,9 +278,8 @@ export default function AgendaKanban() {
     
     const type = e.dataTransfer.getData("type");
     
-    // --- LÓGICA DE REORDENAR COLUNAS ---
     if (type === "column") {
-      if (isGlobal) return; // Não reordena colunas na visão global
+      if (isGlobal) return;
       const draggedColId = e.dataTransfer.getData("colId");
       if (!draggedColId || draggedColId === dropTargetId) return;
 
@@ -294,7 +293,7 @@ export default function AgendaKanban() {
       colList.splice(targetIdx, 0, draggedCol);
 
       const updatedCols = colList.map((c, idx) => ({ ...c, ordem: idx }));
-      setColunas(updatedCols); // Atualização Otimista
+      setColunas(updatedCols);
       
       for (const c of updatedCols) {
         supabase.from('kanban_colunas').update({ ordem: c.ordem }).eq('id', c.id).then();
@@ -302,7 +301,6 @@ export default function AgendaKanban() {
       return;
     }
 
-    // --- LÓGICA DE MOVER CARDS ---
     const cardId = e.dataTransfer.getData("cardId");
     if (!cardId) return;
 
@@ -340,7 +338,7 @@ export default function AgendaKanban() {
   const getColunasRenderizacao = () => {
     if (workflowAtivo === "global") {
       return STATUS_GLOBAIS.map(status => ({
-        id: status, nome: status, isGlobal: true, cards: cards.filter(c => c.kanban_colunas?.status_global === status)
+        id: status, nome: status, isGlobal: true, statusBadge: status, cards: cards.filter(c => c.kanban_colunas?.status_global === status)
       }));
     } else {
       return colunas.map(col => ({
@@ -351,7 +349,6 @@ export default function AgendaKanban() {
 
   const colunasAtivas = getColunasRenderizacao();
 
-  // EXPORTAÇÕES
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
       const res = await fetch(imageUrl);
@@ -393,7 +390,6 @@ export default function AgendaKanban() {
         return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
       });
 
-      // Cabeçalhos atualizados conforme sua solicitação
       const tableColumn = ["Data de Criação", "Título do Card", "Etapa", "Responsável", "Prazo/Previsão", "Status", "Observações"];
       const tableRows: any[] = [];
       let grupoAtual = null;
@@ -467,7 +463,6 @@ export default function AgendaKanban() {
           doc.text("(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br", pageWidth - 14, pageHeight - 16, { align: "right" });
         },
         didParseCell: function (data) {
-          // O índice agora é 5 para a coluna Status
           if (data.section === 'body' && data.column.index === 5 && data.cell.raw) {
             const status = String(data.cell.raw).toUpperCase();
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
@@ -577,10 +572,14 @@ export default function AgendaKanban() {
           </div>
 
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6">
-            {colunasAtivas.map(col => (
+            {colunasAtivas.map(col => {
+              const isConcluido = col.statusBadge === "Concluído" || col.id === "Concluído" || col.nome.toLowerCase() === "concluído";
+              const isCompactado = isConcluido && !mostrarConcluidos;
+
+              return (
               <div 
                 key={col.id} 
-                className="w-80 shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full" 
+                className={`shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full transition-all duration-300 ${isCompactado ? 'w-64' : 'w-80'}`} 
                 draggable={!col.isGlobal}
                 onDragStart={e => !col.isGlobal && handleColumnDragStart(e, col.id)}
                 onDragOver={e => e.preventDefault()} 
@@ -594,7 +593,11 @@ export default function AgendaKanban() {
                   </div>
                   
                   <div className="flex items-center gap-1">
-                    {!col.isGlobal && (
+                    {isConcluido && mostrarConcluidos && (
+                      <Button variant="ghost" size="sm" onClick={() => setMostrarConcluidos(false)} className="h-6 text-[10px] px-2 text-slate-500 hover:text-slate-700">Ocultar</Button>
+                    )}
+
+                    {!col.isGlobal && !isConcluido && (
                       <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded group-hover:hidden">{col.statusBadge}</span>
                     )}
                     
@@ -611,41 +614,52 @@ export default function AgendaKanban() {
 
                 {/* Área de Drop dos Cards */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-                  {col.cards.map(card => (
-                    <div key={card.id} draggable onDragStart={(e) => handleDragStart(e, card)} onClick={() => abrirModalCard(card)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md cursor-grab active:cursor-grabbing transition-all">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${card.prioridade === 'Emergência' || card.prioridade === 'Urgente' ? 'bg-red-50 text-red-600 border border-red-100' : card.prioridade === 'Alta' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
-                          {card.prioridade}
-                        </span>
-                        {card.data_vencimento && (
-                          <span className={`flex items-center gap-1 text-[10px] font-bold ${new Date(card.data_vencimento) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
-                            <CalendarIcon className="w-3 h-3"/> {new Date(card.data_vencimento).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1">{card.titulo}</h4>
-                      {workflowAtivo === "global" && card.kanban_workflows?.nome && (
-                        <p className="text-[10px] text-indigo-600 font-semibold mb-2">De: {card.kanban_workflows.nome}</p>
-                      )}
-                      
-                      {card.descricao && <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">{card.descricao}</p>}
-                      
-                      <div className="flex items-center gap-2 pt-2 border-t border-slate-50 mt-auto">
-                        <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[9px]">
-                          {card.responsavel_nome.substring(0,2).toUpperCase()}
-                        </div>
-                        <span className="text-[10px] font-medium text-slate-500 truncate">{card.responsavel_nome}</span>
-                      </div>
+                  {isCompactado ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4 mt-8">
+                      <CheckCircle2 className="w-8 h-8 text-slate-400 mb-3" />
+                      <p className="text-xs text-slate-500 mb-1">Cards concluídos</p>
+                      <h4 className="text-xl font-bold text-indigo-600 mb-6">{col.cards.length} card(s)</h4>
+                      <Button onClick={() => setMostrarConcluidos(true)} className="bg-slate-800 hover:bg-slate-900 text-white w-full text-xs shadow-sm">Visualizar Todos</Button>
                     </div>
-                  ))}
-                  
-                  {col.cards.length === 0 && (
-                    <div className="h-24 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">Solte cards aqui</div>
+                  ) : (
+                    <>
+                      {col.cards.map(card => (
+                        <div key={card.id} draggable onDragStart={(e) => handleDragStart(e, card)} onClick={() => abrirModalCard(card)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md cursor-grab active:cursor-grabbing transition-all">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${card.prioridade === 'Emergência' || card.prioridade === 'Urgente' ? 'bg-red-50 text-red-600 border border-red-100' : card.prioridade === 'Alta' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+                              {card.prioridade}
+                            </span>
+                            {card.data_vencimento && (
+                              <span className={`flex items-center gap-1 text-[10px] font-bold ${new Date(card.data_vencimento) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
+                                <CalendarIcon className="w-3 h-3"/> {new Date(card.data_vencimento).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1">{card.titulo}</h4>
+                          {workflowAtivo === "global" && card.kanban_workflows?.nome && (
+                            <p className="text-[10px] text-indigo-600 font-semibold mb-2">De: {card.kanban_workflows.nome}</p>
+                          )}
+                          
+                          {card.descricao && <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">{card.descricao}</p>}
+                          
+                          <div className="flex items-center gap-2 pt-2 border-t border-slate-50 mt-auto">
+                            <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[9px]">
+                              {card.responsavel_nome.substring(0,2).toUpperCase()}
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-500 truncate">{card.responsavel_nome}</span>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {col.cards.length === 0 && (
+                        <div className="h-24 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">Solte cards aqui</div>
+                      )}
+                    </>
                   )}
                 </div>
 
-                {!col.isGlobal && (
+                {!col.isGlobal && !isCompactado && (
                   <div className="p-2 bg-slate-100 border-t border-slate-200/60 rounded-b-xl">
                     <Button variant="ghost" className="w-full text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 h-8 gap-2 text-xs" onClick={() => abrirModalCard(undefined, col.id)}>
                       <Plus className="w-3 h-3"/> Adicionar Card
@@ -653,7 +667,7 @@ export default function AgendaKanban() {
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </div>
         </div>
       </div>

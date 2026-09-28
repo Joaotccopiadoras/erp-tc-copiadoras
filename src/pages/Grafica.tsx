@@ -180,7 +180,8 @@ if (triggersData) setEmailTriggers(triggersData);
             wf = newWf;
         }
 
-        const statusNome = os.status || "Solicitação Recebida";
+        const statusRaw = os.status || "Solicitação Recebida";
+        const statusNome = statusRaw === "Cancelado" ? "Concluído" : statusRaw;
         let { data: col } = await supabase.from('kanban_colunas').select('id').eq('workflow_id', wf.id).ilike('nome', statusNome).single();
         
         if (!col) {
