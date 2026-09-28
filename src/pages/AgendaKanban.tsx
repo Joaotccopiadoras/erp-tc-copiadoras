@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
+  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2, Filter, ChevronDown, ArrowUpDown
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -33,6 +33,44 @@ type Card = {
 
 const STATUS_GLOBAIS = ["Backlog", "Andamento", "Aguardando", "Concluído"];
 
+function MultiSelectDropdown({ title, options, selected, onChange }: { title: string, options: string[], selected: string[], onChange: (val: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button variant="outline" onClick={() => setOpen(!open)} className="w-full justify-between bg-white text-left font-normal h-10 px-3 border-slate-200 hover:bg-slate-50 transition-colors">
+        <span className="truncate text-slate-600 text-xs">
+          {selected.length === 0 ? title : <span className="font-bold text-indigo-600">{title} ({selected.length})</span>}
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </Button>
+      {open && (
+        <div className="absolute z-[9999] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
+          {options.length === 0 ? (
+            <div className="p-2 text-xs text-slate-400 text-center italic">Nenhum dado...</div>
+          ) : (
+            options.map(opt => (
+              <label key={opt} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
+                <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={selected.includes(opt)} onChange={(e) => { if (e.target.checked) onChange([...selected, opt]); else onChange(selected.filter(x => x !== opt)); }} />
+                <span className="text-xs text-slate-700 truncate font-medium">{opt}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AgendaKanban() {
   const [usuarioAtual, setUsuarioAtual] = useState<any>(null);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -42,6 +80,22 @@ export default function AgendaKanban() {
   const [exportando, setExportando] = useState(false);
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   
+  // FILTROS AVANÇADOS (Padrão AgendaUmmense)
+  const [filterLideres, setFilterLideres] = useState<string[]>([]);
+  const [filterDepartamentos, setFilterDepartamentos] = useState<string[]>([]);
+  const [filterSolicitantes, setFilterSolicitantes] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+
+  const [dataEntradaInicio, setDataEntradaInicio] = useState("");
+  const [dataEntradaFim, setDataEntradaFim] = useState("");
+  const [dataPrevisaoInicio, setDataPrevisaoInicio] = useState("");
+  const [dataPrevisaoFim, setDataPrevisaoFim] = useState("");
+  const [dataConclusaoInicio, setDataConclusaoInicio] = useState("");
+  const [dataConclusaoFim, setDataConclusaoFim] = useState("");
+
+  // ORDENAÇÃO DE EXPORTAÇÃO DO PDF
+  const [ordenacaoPDF, setOrdenacaoPDF] = useState<"criacao" | "previsao">("criacao");
+
   // Modais e Estados de Edição
   const [modalWF, setModalWF] = useState(false);
   const [modalColuna, setModalColuna] = useState(false);
@@ -86,7 +140,6 @@ export default function AgendaKanban() {
       ]);
       if (colsRes.data) setColunas(colsRes.data);
       if (cardsRes.data) {
-        // Na visão global ("Programação"), trazemos todos os cards de todos os workflows mapeados por status global
         setCards(cardsRes.data);
       }
     } else {
@@ -98,6 +151,67 @@ export default function AgendaKanban() {
       if (cardsRes.data) setCards(cardsRes.data);
     }
   };
+
+  // Helper para identificar solicitante em OSG
+  const getSolicitante = (card: Card) => {
+    if (!card.titulo) return "";
+    const partes = card.titulo.split(" - ");
+    if (partes.length >= 3) {
+      return partes[2].trim();
+    }
+    return "";
+  };
+
+  // Opções únicas para os dropdowns de filtro
+  const uniqueLideres = useMemo(() => [...new Set(cards.map(c => c.responsavel_nome).filter(Boolean))].sort(), [cards]);
+  const uniqueDepartamentos = useMemo(() => [...new Set(cards.map(c => c.kanban_workflows?.nome).filter(Boolean) as string[])].sort(), [cards]);
+  const uniqueSolicitantes = useMemo(() => [...new Set(cards.map(c => getSolicitante(c)).filter(Boolean))].sort(), [cards]);
+  const uniqueStatus = STATUS_GLOBAIS;
+
+  const hasFilters = filterLideres.length > 0 || filterDepartamentos.length > 0 || filterSolicitantes.length > 0 || filterStatus.length > 0 || dataEntradaInicio || dataEntradaFim || dataPrevisaoInicio || dataPrevisaoFim || dataConclusaoInicio || dataConclusaoFim;
+
+  const clearFilters = () => {
+    setFilterLideres([]);
+    setFilterDepartamentos([]);
+    setFilterSolicitantes([]);
+    setFilterStatus([]);
+    setDataEntradaInicio("");
+    setDataEntradaFim("");
+    setDataPrevisaoInicio("");
+    setDataPrevisaoFim("");
+    setDataConclusaoInicio("");
+    setDataConclusaoFim("");
+  };
+
+  // Aplicação dos filtros em tempo real
+  const filteredCards = useMemo(() => {
+    return cards.filter(c => {
+      if (filterLideres.length > 0 && !filterLideres.includes(c.responsavel_nome)) return false;
+      
+      const wfNome = c.kanban_workflows?.nome || "";
+      if (filterDepartamentos.length > 0 && !filterDepartamentos.includes(wfNome)) return false;
+
+      const sol = getSolicitante(c);
+      if (filterSolicitantes.length > 0 && (!sol || !filterSolicitantes.includes(sol))) return false;
+
+      const stGlobal = c.kanban_colunas?.status_global || "Backlog";
+      if (filterStatus.length > 0 && !filterStatus.includes(stGlobal)) return false;
+
+      const dtEntrada = c.created_at ? c.created_at.split('T')[0] : "";
+      if (dataEntradaInicio && dtEntrada && dtEntrada < dataEntradaInicio) return false;
+      if (dataEntradaFim && dtEntrada && dtEntrada > dataEntradaFim) return false;
+
+      const dtPrev = c.data_vencimento ? c.data_vencimento.split('T')[0] : "";
+      if (dataPrevisaoInicio && dtPrev && dtPrev < dataPrevisaoInicio) return false;
+      if (dataPrevisaoFim && dtPrev && dtPrev > dataPrevisaoFim) return false;
+
+      const dtConc = (stGlobal === "Concluído" && c.atualizado_em) ? c.atualizado_em.split('T')[0] : "";
+      if (dataConclusaoInicio && dtConc && dtConc < dataConclusaoInicio) return false;
+      if (dataConclusaoFim && dtConc && dtConc > dataConclusaoFim) return false;
+
+      return true;
+    });
+  }, [cards, filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
 
   const criarWorkflow = async () => {
     if (!nomeWf) return;
@@ -352,11 +466,11 @@ export default function AgendaKanban() {
   const getColunasRenderizacao = () => {
     if (workflowAtivo === "global") {
       return STATUS_GLOBAIS.map(status => ({
-        id: status, nome: status, isGlobal: true, statusBadge: status, cards: cards.filter(c => c.kanban_colunas?.status_global === status)
+        id: status, nome: status, isGlobal: true, statusBadge: status, cards: filteredCards.filter(c => c.kanban_colunas?.status_global === status)
       }));
     } else {
       return colunas.map(col => ({
-        id: col.id, nome: col.nome, isGlobal: false, statusBadge: col.status_global, cards: cards.filter(c => c.coluna_id === col.id)
+        id: col.id, nome: col.nome, isGlobal: false, statusBadge: col.status_global, cards: filteredCards.filter(c => c.coluna_id === col.id)
       }));
     }
   };
@@ -377,13 +491,16 @@ export default function AgendaKanban() {
     } catch (e) { return null; }
   };
 
-  const formatarData = (dataStr: string) => {
+  const formatarData = (dataStr?: string) => {
     if (!dataStr) return "—";
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
   const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
 
+  // ========================================================
+  // EXPORTAÇÃO PDF (Com exclusão de OSGs Canceladas + Ordenação)
+  // ========================================================
   const exportarPDF = async () => {
     setExportando(true);
     try {
@@ -391,19 +508,63 @@ export default function AgendaKanban() {
       const logoData = await getBase64ImageFromUrl("/logo.png");
       const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3, "BACKLOG": 4 };
 
-      const dadosOrdenados = [...cards].sort((a, b) => {
+      // 1. Busca números de OSG que estão Canceladas no banco para filtrar com precisão
+      const cancelledOpsSet = new Set<string>();
+      try {
+        const { data: cancelledOps } = await supabase
+          .from('prd_ordens_producao')
+          .select('numero_op')
+          .eq('status', 'Cancelado');
+        
+        if (cancelledOps) {
+          cancelledOps.forEach((op: any) => {
+            cancelledOpsSet.add(String(op.numero_op).padStart(4, '0'));
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao verificar OSGs canceladas:", e);
+      }
+
+      // 2. Filtra removendo cards cujo status da OSG seja "Cancelado"
+      const cardsValidosPDF = filteredCards.filter(card => {
+        const match = card.titulo?.match(/OSG-(\d+)/i);
+        if (match) {
+          const numOp = match[1].padStart(4, '0');
+          if (cancelledOpsSet.has(numOp)) return false;
+        }
+
+        const texto = `${card.titulo || ''} ${card.descricao || ''}`.toUpperCase();
+        if (texto.includes("[CANCELADA]") || texto.includes("[STATUS: CANCELADO]")) return false;
+
+        return true;
+      });
+
+      // 3. Aplica a ordenação especificada mantendo a separação por Responsável
+      const dadosOrdenados = [...cardsValidosPDF].sort((a, b) => {
+        // A. Primazia: Agrupamento por Responsável
         const respA = a.responsavel_nome || "Sem Responsável";
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
         if (respA > respB) return 1;
-        
-        const stA = formatarStatus(a.kanban_colunas?.status_global || "BACKLOG");
-        const stB = formatarStatus(b.kanban_colunas?.status_global || "BACKLOG");
-        const ordemA = pesoStatus[stA] || 99;
-        const ordemB = pesoStatus[stB] || 99;
-        if (ordemA !== ordemB) return ordemA - ordemB;
-        
-        return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
+
+        // B. Timestamps para comparação (mais antigo primeiro = menor valor numérico)
+        const tCriacaoA = new Date(a.created_at || a.atualizado_em || 0).getTime();
+        const tCriacaoB = new Date(b.created_at || b.atualizado_em || 0).getTime();
+
+        const tPrevA = a.data_vencimento ? new Date(a.data_vencimento).getTime() : Infinity;
+        const tPrevB = b.data_vencimento ? new Date(b.data_vencimento).getTime() : Infinity;
+
+        if (ordenacaoPDF === "criacao") {
+          // Primário: Data de Criação mais antiga primeiro
+          if (tCriacaoA !== tCriacaoB) return tCriacaoA - tCriacaoB;
+          // Secundário (desempate): Data de Previsão mais antiga primeiro
+          return tPrevA - tPrevB;
+        } else {
+          // Primário: Data de Previsão mais antiga primeiro
+          if (tPrevA !== tPrevB) return tPrevA - tPrevB;
+          // Secundário (desempate): Data de Criação mais antiga primeiro
+          return tCriacaoA - tCriacaoB;
+        }
       });
 
       const tableColumn = ["Data de Criação", "Título do Card", "Etapa", "Responsável", "Prazo/Previsão", "Status", "Observações"];
@@ -444,7 +605,7 @@ export default function AgendaKanban() {
         },
         headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
-        didDrawPage: function (data) {
+        didDrawPage: function () {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
           doc.setFillColor(255, 255, 255);
@@ -456,7 +617,7 @@ export default function AgendaKanban() {
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });
+          doc.text("Agenda/Programação TC Copiadoras", pageWidth / 2, 20, { align: "center" });
 
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
@@ -512,7 +673,7 @@ export default function AgendaKanban() {
       worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
       worksheet.getRow(startRow).font = { bold: true };
       
-      cards.forEach((item) => {
+      filteredCards.forEach((item) => {
         worksheet.addRow([
           item.kanban_colunas?.nome || "-", item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", 
           formatarData(item.data_vencimento), item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
@@ -530,7 +691,7 @@ export default function AgendaKanban() {
       <div className="flex h-[calc(100vh-6rem)] max-w-[1600px] mx-auto overflow-hidden bg-slate-50 rounded-xl border shadow-sm">
         
         {/* MENU LATERAL */}
-        <div className="w-64 bg-slate-900 text-slate-300 flex flex-col">
+        <div className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
           <div className="p-5 border-b border-slate-800">
             <h2 className="text-white font-bold flex items-center gap-2 text-lg"><KanbanSquare className="w-5 h-5 text-indigo-400"/> Agenda Kanban</h2>
           </div>
@@ -560,6 +721,8 @@ export default function AgendaKanban() {
 
         {/* ÁREA DO KANBAN */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          
+          {/* HEADER PRINCIPAL */}
           <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-800">
@@ -571,20 +734,89 @@ export default function AgendaKanban() {
             </div>
             
             <div className="flex gap-2 items-center flex-wrap">
-              <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || cards.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+              {/* SELETOR DE ORDENAÇÃO DO PDF */}
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-[11px] font-semibold text-slate-500">PDF por:</span>
+                <Select value={ordenacaoPDF} onValueChange={(v: "criacao" | "previsao") => setOrdenacaoPDF(v)}>
+                  <SelectTrigger className="h-7 text-xs border-0 bg-transparent shadow-none p-1 font-bold text-slate-700 focus:ring-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white z-[99999]">
+                    <SelectItem value="criacao">Data de Criação</SelectItem>
+                    <SelectItem value="previsao">Data de Previsão</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || filteredCards.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm h-9">
                 {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Excel
               </Button>
-              <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || cards.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+              <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || filteredCards.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm h-9">
                 {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} PDF
               </Button>
               <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
               {workflowAtivo !== "global" && (
-                <Button onClick={() => { setColunaSendoEditada(null); setNomeColuna(""); setStatusGlobalColuna("Backlog"); setModalColuna(true); }} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Etapa</Button>
+                <Button onClick={() => { setColunaSendoEditada(null); setNomeColuna(""); setStatusGlobalColuna("Backlog"); setModalColuna(true); }} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 h-9"><Plus className="w-4 h-4"/> Nova Etapa</Button>
               )}
-              <Button onClick={() => abrirModalCard()} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Novo Card</Button>
+              <Button onClick={() => abrirModalCard()} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md h-9"><Plus className="w-4 h-4"/> Novo Card</Button>
             </div>
           </div>
 
+          {/* PAINEL DE FILTROS AVANÇADOS (Idêntico ao da AgendaUmmense) */}
+          <div className="bg-white border-b border-slate-200 p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+                <Filter className="w-3.5 h-3.5 text-indigo-500"/> Filtros Avançados
+              </h3>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                  <strong className="text-slate-800">{filteredCards.length}</strong> cards listados
+                </span>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7 px-2 text-xs">
+                    <X className="h-3 w-3 mr-1" /> Limpar Tudo
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <MultiSelectDropdown title="Líder" options={uniqueLideres} selected={filterLideres} onChange={setFilterLideres} />
+              <MultiSelectDropdown title="Departamento" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
+              <MultiSelectDropdown title="Solicitante" options={uniqueSolicitantes} selected={filterSolicitantes} onChange={setFilterSolicitantes} />
+              <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div className="flex flex-col space-y-1 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Período de Entrada</span>
+                <div className="flex gap-2 items-center">
+                  <Input type="date" className="text-xs h-7 bg-white" value={dataEntradaInicio} onChange={e => setDataEntradaInicio(e.target.value)} />
+                  <span className="text-xs text-slate-400 font-medium">até</span>
+                  <Input type="date" className="text-xs h-7 bg-white" value={dataEntradaFim} onChange={e => setDataEntradaFim(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-col space-y-1 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Período de Previsão</span>
+                <div className="flex gap-2 items-center">
+                  <Input type="date" className="text-xs h-7 bg-white" value={dataPrevisaoInicio} onChange={e => setDataPrevisaoInicio(e.target.value)} />
+                  <span className="text-xs text-slate-400 font-medium">até</span>
+                  <Input type="date" className="text-xs h-7 bg-white" value={dataPrevisaoFim} onChange={e => setDataPrevisaoFim(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-col space-y-1 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Período de Conclusão</span>
+                <div className="flex gap-2 items-center">
+                  <Input type="date" className="text-xs h-7 bg-white" value={dataConclusaoInicio} onChange={e => setDataConclusaoInicio(e.target.value)} />
+                  <span className="text-xs text-slate-400 font-medium">até</span>
+                  <Input type="date" className="text-xs h-7 bg-white" value={dataConclusaoFim} onChange={e => setDataConclusaoFim(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ÁREA DOS CARDS DO KANBAN */}
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6">
             {colunasAtivas.map(col => {
               const isConcluido = col.statusBadge === "Concluído" || col.id === "Concluído" || col.nome.toLowerCase() === "concluído";
