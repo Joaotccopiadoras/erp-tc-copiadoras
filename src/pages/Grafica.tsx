@@ -130,15 +130,19 @@ export default function Grafica() {
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
-      supabase.from('srv_equipamentos' as any).select('id, numero_serie, especificacoes, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
+      // CORREÇÃO AQUI: Removida a coluna 'especificacoes' do corpo principal, pois ela só existe em log_produtos
+      supabase.from('srv_equipamentos' as any).select('id, numero_serie, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (opRes.data) setOperadoresBD(opRes.data);
+    
     if (eqRes.data) {
-        // Carrega todos os equipamentos do módulo de Gestão de Equipamentos sem filtros restritivos
+        // Carrega todos os equipamentos sem restrição
         setEquipamentosTC(eqRes.data);
+    } else if (eqRes.error) {
+        console.error("Erro ao buscar equipamentos: ", eqRes.error);
     }
   };
 
@@ -551,15 +555,14 @@ export default function Grafica() {
       } catch (error) { console.error(error); alert("Erro ao gerar Comprovante PDF."); } finally { setExportando(false); }
   };
 
-  // PPM DINÂMICO Baseado no Equipamento
+  // PPM DINÂMICO Baseado no Equipamento (Corrigido para evitar crash)
   let eqPPM = 40;
   if (equipImpressaoId) {
       const eq = equipamentosTC.find(e => e.id === equipImpressaoId);
       if (eq) {
           try {
-              const eqSpecs = typeof eq.especificacoes === 'string' ? JSON.parse(eq.especificacoes) : (eq.especificacoes || {});
               const prodSpecs = typeof eq.log_produtos?.especificacoes === 'string' ? JSON.parse(eq.log_produtos.especificacoes) : (eq.log_produtos?.especificacoes || {});
-              const foundPPM = eqSpecs.ppm || prodSpecs.ppm;
+              const foundPPM = prodSpecs?.ppm;
               if (foundPPM) eqPPM = Number(foundPPM);
           } catch(e) {}
       }
@@ -573,7 +576,7 @@ export default function Grafica() {
   
   const totalReceitaGerada = historicoProducao.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + ((curr.producaoValida || 0) * (curr.paginasPorProduto || 1) * (curr.valorUnitarioPagina || 0)), 0);
 
-  // ORDENAÇÃO: Mais antigas (topo) para mais recentes (baixo) utilizando localeCompare seguro nas strings de data
+  // ORDENAÇÃO: Mais antigas (topo) para mais recentes (baixo)
   const ordensFiltradas = ordens
     .filter(o => 
       (o.cliente_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) || 
@@ -585,9 +588,7 @@ export default function Grafica() {
     .sort((a, b) => {
       const dataA = a.data_solicitacao || '';
       const dataB = b.data_solicitacao || '';
-      if (dataA !== dataB) {
-        return dataA.localeCompare(dataB); // Mais antigas no topo, mais recentes embaixo
-      }
+      if (dataA !== dataB) return dataA.localeCompare(dataB); 
       return (a.numero_op || 0) - (b.numero_op || 0);
     });
 
