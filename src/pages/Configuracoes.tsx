@@ -307,13 +307,9 @@ export default function ConfiguracoesPage() {
                             </div>
                         </div>
                         <div className="flex justify-end pt-2">
-                            <Button 
-  type="button" 
-  onClick={() => alert("O SISTEMA ESTÁ A LER O FICHEIRO CERTO!")} 
-  className="bg-indigo-600 text-white"
->
-  Teste de Ficheiro
-</Button>
+                            <Button type="submit" disabled={salvandoSeguranca} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                                {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} Cadastrar Sistema
+                            </Button>
                         </div>
                     </form>
 
