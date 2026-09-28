@@ -58,6 +58,8 @@ export default function Grafica() {
   const [dataPrevista, setDataPrevista] = useState("");
   const [possuiImpressao, setPossuiImpressao] = useState("Não");
   const [modoImpressaoOS, setModoImpressaoOS] = useState("Simplex");
+  const [telefoneClienteOS, setTelefoneClienteOS] = useState("");
+  const [emailClienteOS, setEmailClienteOS] = useState("");
   
   // CAMPOS CONDICIONAIS SE HOUVER IMPRESSÃO
   const [paginasPorProdutoOS, setPaginasPorProdutoOS] = useState(1);
@@ -245,6 +247,8 @@ if (triggersData) setEmailTriggers(triggersData);
       
       const payload = {
         cliente_nome: clienteBusca, solicitante: solicitante, data_solicitacao: dataSolicitacao,
+        telefone_cliente: telefoneClienteOS,
+        email_cliente: emailClienteOS,
         operador_nome: operadorNome, descricao_servico: descServico, quantidade_produzir: qtdProduzir,
         data_prevista: dataPrevista || null, paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
         valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
@@ -828,6 +832,14 @@ if (triggersData) setEmailTriggers(triggersData);
               <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><User className="w-4 h-4 text-slate-400"/> Nome do Solicitante <span className="text-red-500">*</span></label>
                   <Input value={solicitante} onChange={e => setSolicitante(e.target.value)} placeholder="Ex: Tais Santos" className="bg-slate-50" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Telefone de Contato</label>
+                 <Input value={telefoneClienteOS} onChange={e => setTelefoneClienteOS(e.target.value)} placeholder="Ex: (91) 98123-4567" className="bg-slate-50" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">E-mail de Contato</label>
+                 <Input type="email" value={emailClienteOS} onChange={e => setEmailClienteOS(e.target.value)} placeholder="Ex: cliente@empresa.com" className="bg-slate-50" />
               </div>
               <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400"/> Data da Solicitação <span className="text-red-500">*</span></label>
