@@ -17,7 +17,7 @@ export default function ConfiguracoesPage() {
   const { toast } = useToast();
 
   // ==========================================
-  // ESTADOS DA ABA: SEGURANÇA E USUÁRIOS
+  // ESTADOS DA ABA: SEGURANÇA E USUÁRIO
   // ==========================================
   const [permissoes, setPermissoes] = useState<any[]>([]);
   const [colaboradoresDP, setColaboradoresDP] = useState<any[]>([]);
