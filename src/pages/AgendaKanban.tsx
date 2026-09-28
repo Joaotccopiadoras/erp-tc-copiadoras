@@ -13,9 +13,23 @@ import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-type Workflow = { id: string; nome: string; descricao: string };
+type Workflow = { id: string; nome: string; descricao?: string };
 type Coluna = { id: string; workflow_id: string; nome: string; ordem: number; status_global: string };
-type Card = { id: string; workflow_id: string; coluna_id: string; titulo: string; descricao: string; responsavel_nome: string; responsavel_email: string; prioridade: string; data_vencimento: string; kanban_colunas?: { status_global: string, nome: string }; kanban_workflows?: { nome: string } };
+type Card = { 
+  id: string; 
+  workflow_id: string; 
+  coluna_id: string; 
+  titulo: string; 
+  descricao: string; 
+  responsavel_nome: string; 
+  responsavel_email: string; 
+  prioridade: string; 
+  data_vencimento: string; 
+  created_at?: string;
+  atualizado_em?: string;
+  kanban_colunas?: { status_global: string, nome: string }; 
+  kanban_workflows?: { nome: string } 
+};
 
 const STATUS_GLOBAIS = ["Backlog", "Andamento", "Aguardando", "Concluído"];
 
@@ -72,8 +86,8 @@ export default function AgendaKanban() {
       ]);
       if (colsRes.data) setColunas(colsRes.data);
       if (cardsRes.data) {
-        const meusCards = cardsRes.data.filter(c => c.responsavel_email === currentUser?.email || !c.responsavel_email);
-        setCards(meusCards);
+        // Na visão global ("Programação"), trazemos todos os cards de todos os workflows mapeados por status global
+        setCards(cardsRes.data);
       }
     } else {
       const [colsRes, cardsRes] = await Promise.all([
@@ -368,6 +382,8 @@ export default function AgendaKanban() {
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
+  const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
+
   const exportarPDF = async () => {
     setExportando(true);
     try {
@@ -440,7 +456,7 @@ export default function AgendaKanban() {
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          doc.text("Agenda/Programação TC Copiadoras", pageWidth / 2, 20, { align: "center" });
+          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });
 
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
@@ -478,8 +494,6 @@ export default function AgendaKanban() {
         setExportando(false); 
     }
   };
-
-  const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
 
   const exportarExcel = async () => {
     setExportando(true);
@@ -552,7 +566,7 @@ export default function AgendaKanban() {
                 {workflowAtivo === "global" ? "Programação da Semana" : workflows.find(w => w.id === workflowAtivo)?.nome}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                {workflowAtivo === "global" ? "Visão unificada mapeada por status global. Mostrando suas tarefas." : "Gerencie as etapas e cards deste processo."}
+                {workflowAtivo === "global" ? "Visão unificada mapeada por status global. Mostrando todos os cards." : "Gerencie as etapas e cards deste processo."}
               </p>
             </div>
             
@@ -645,9 +659,9 @@ export default function AgendaKanban() {
                           
                           <div className="flex items-center gap-2 pt-2 border-t border-slate-50 mt-auto">
                             <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[9px]">
-                              {card.responsavel_nome.substring(0,2).toUpperCase()}
+                              {(card.responsavel_nome || "U").substring(0,2).toUpperCase()}
                             </div>
-                            <span className="text-[10px] font-medium text-slate-500 truncate">{card.responsavel_nome}</span>
+                            <span className="text-[10px] font-medium text-slate-500 truncate">{card.responsavel_nome || "Sem responsável"}</span>
                           </div>
                         </div>
                       ))}
