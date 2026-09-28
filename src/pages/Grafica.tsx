@@ -639,7 +639,7 @@ if (triggersData) setEmailTriggers(triggersData);
   const dispararEmailCliente = async () => {
     if (!dadosEmailPendente) return;
     try {
-        const respostaWebhook = await fetch('https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook-test/disparo-osg', {
+        const respostaWebhook = await fetch('https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook/disparo-osg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dadosEmailPendente)
