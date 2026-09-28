@@ -130,21 +130,15 @@ export default function Grafica() {
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
-      supabase.from('srv_equipamentos' as any).select('id, numero_serie, cliente_id, proprietario, especificacoes, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
+      supabase.from('srv_equipamentos' as any).select('id, numero_serie, especificacoes, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (opRes.data) setOperadoresBD(opRes.data);
     if (eqRes.data) {
-        // Filtro robusto: inclui equipamentos em estoque/TC (sem cliente ou proprietário TC) ou vinculados à TC Serviços
-        const tcEquips = eqRes.data.filter((e: any) => {
-            const nomeCli = (e.log_clientes?.nome_fantasia || "").toUpperCase();
-            const razaoCli = (e.log_clientes?.razao_social || "").toUpperCase();
-            const isInternoTC = !e.cliente_id || e.proprietario === "TC Copiadoras";
-            return isInternoTC || nomeCli.includes("TC") || razaoCli.includes("TC") || nomeCli.includes("SERVICOS") || razaoCli.includes("SERVICOS");
-        });
-        setEquipamentosTC(tcEquips.length > 0 ? tcEquips : eqRes.data);
+        // Carrega todos os equipamentos do módulo de Gestão de Equipamentos sem filtros restritivos
+        setEquipamentosTC(eqRes.data);
     }
   };
 

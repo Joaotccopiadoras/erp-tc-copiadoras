@@ -492,7 +492,6 @@ export default function ConfiguracoesPage() {
             )}
           </div>
         </div>
-      </div>
     </AppLayout>
   );
 }
