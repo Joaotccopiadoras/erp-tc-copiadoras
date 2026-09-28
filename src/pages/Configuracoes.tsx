@@ -87,23 +87,27 @@ export default function ConfiguracoesPage() {
     setLoadingSeguranca(false);
   };
 
-  // LÓGICA DE CADASTRO BLINDADA
-  const adicionarUsuario = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!novoEmail.includes("@") || !novoNomeUsuario.trim() || !novaSenha.trim()) {
-      return toast({ title: "Erro", description: "Preencha todos os campos obrigatórios.", variant: "destructive" });
-    }
-    if (novaSenha.length < 6) {
-      return toast({ title: "Erro", description: "A palavra-passe deve ter pelo menos 6 caracteres.", variant: "destructive" });
-    }
-
-    setSalvandoSeguranca(true);
+  // LÓGICA DE CADASTRO BLINDADA COM ALERTS
+  const adicionarUsuario = async () => {
     try {
+      if (!novoEmail.includes("@") || !novoNomeUsuario.trim() || !novaSenha.trim()) {
+        alert("Preencha todos os campos obrigatórios (Nome, E-mail com @ e Senha).");
+        return;
+      }
+      if (novaSenha.length < 6) {
+        alert("A palavra-passe deve ter pelo menos 6 caracteres.");
+        return;
+      }
+
+      setSalvandoSeguranca(true);
+
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       
-      if (!supabaseUrl || !supabaseKey) throw new Error("Credenciais de ambiente ausentes.");
+      if (!supabaseUrl || !supabaseKey) {
+        alert("Erro Crítico: Chaves do Supabase não encontradas no arquivo .env");
+        return;
+      }
       
       const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
@@ -112,7 +116,7 @@ export default function ConfiguracoesPage() {
         password: novaSenha,
       });
 
-      if (authError) throw new Error("Erro no Auth do Supabase: " + authError.message);
+      if (authError) throw new Error("Erro no Supabase Auth: " + authError.message);
 
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
         email: novoEmail.toLowerCase().trim(), 
@@ -125,10 +129,12 @@ export default function ConfiguracoesPage() {
       
       if (dbError) throw new Error("Erro na tabela de permissões: " + dbError.message);
 
+      alert("🎉 Utilizador criado com sucesso no sistema!");
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
       setNovoEmail(""); setNovoNomeUsuario(""); setNovaSenha("");
       carregarDadosSeguranca();
     } catch (e: any) { 
+      alert("Falha ao cadastrar: " + e.message);
       toast({ title: "Erro no Cadastro", description: e.message, variant: "destructive" }); 
     } finally {
       setSalvandoSeguranca(false);
@@ -276,18 +282,15 @@ export default function ConfiguracoesPage() {
           {/* CONTEÚDO PRINCIPAL */}
           <div className="flex-1 w-full space-y-6">
             
-            {/* ABA: SEGURANÇA */}
-            {abaAtiva === "seguranca" && (
-                <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-                    
-                    <form onSubmit={adicionarUsuario} className="bg-white p-6 rounded-xl border shadow-sm space-y-4 border-l-4 border-l-indigo-600">
+            {/* ABA: SEGURANÇA - CAIXA DE CADASTRO */}
+                    <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4 border-l-4 border-l-indigo-600">
                         <div>
                             <h2 className="text-sm font-bold text-slate-800">Cadastrar Novo Utilizador</h2>
                             <p className="text-xs text-slate-500">Defina o nome de utilizador, o e-mail associado e a palavra-passe inicial do colaborador.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <Input placeholder="Nome de Utilizador (ex: joao.silva)" value={novoNomeUsuario} onChange={(e) => setNovoNomeUsuario(e.target.value)} className="bg-slate-50 font-medium text-indigo-700" required />
-                            <Input type="email" placeholder="E-mail (ex: joao@empresa.com)" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} className="bg-slate-50" required />
+                            <Input placeholder="Nome de Utilizador (ex: joao.silva)" value={novoNomeUsuario} onChange={(e) => setNovoNomeUsuario(e.target.value)} className="bg-slate-50 font-medium text-indigo-700" />
+                            <Input type="email" placeholder="E-mail (ex: joao@empresa.com)" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} className="bg-slate-50" />
                             <div className="relative">
                               <Input 
                                 type={mostrarSenhaCadastro ? "text" : "password"} 
@@ -295,7 +298,6 @@ export default function ConfiguracoesPage() {
                                 value={novaSenha} 
                                 onChange={(e) => setNovaSenha(e.target.value)} 
                                 className="bg-slate-50 pr-10" 
-                                required
                               />
                               <button
                                 type="button"
@@ -307,11 +309,11 @@ export default function ConfiguracoesPage() {
                             </div>
                         </div>
                         <div className="flex justify-end pt-2">
-                            <Button type="submit" disabled={salvandoSeguranca} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                            <Button type="button" onClick={adicionarUsuario} disabled={salvandoSeguranca} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
                                 {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} Cadastrar Sistema
                             </Button>
                         </div>
-                    </form>
+                    </div>
 
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                         <div className="p-4 border-b flex justify-between items-center bg-slate-50"><h2 className="font-bold text-slate-800 flex items-center gap-2"><Shield className="w-4 h-4 text-indigo-600"/> Governança e Hierarquia</h2></div>
@@ -564,7 +566,6 @@ export default function ConfiguracoesPage() {
             )}
           </div>
         </div>
-      </div>
     </AppLayout>
   );
 }
