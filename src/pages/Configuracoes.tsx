@@ -105,13 +105,17 @@ export default function ConfiguracoesPage() {
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
+      // 1. Cria o utilizador no Supabase Auth
       const { error: authError } = await authGhost.auth.signUp({
         email: novoEmail.toLowerCase().trim(),
         password: novaSenha,
       });
 
-      if (authError) throw new Error("Erro no Auth: " + authError.message);
+      if (authError) {
+        throw new Error("Erro no Auth do Supabase: " + authError.message);
+      }
 
+      // 2. Insere os dados na tabela de permissões e nome de utilizador
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
         email: novoEmail.toLowerCase().trim(), 
         nome_usuario: novoNomeUsuario.toLowerCase().trim(),
@@ -121,13 +125,15 @@ export default function ConfiguracoesPage() {
         perfil_operacional: 'Nenhum' 
       }]);
       
-      if (dbError) throw new Error("Erro ao salvar permissões: O nome de utilizador ou e-mail já pode estar em uso.");
+      if (dbError) {
+        throw new Error("Erro na tabela de permissões: " + dbError.message);
+      }
 
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
       setNovoEmail(""); setNovoNomeUsuario(""); setNovaSenha("");
       carregarDadosSeguranca();
     } catch (e: any) { 
-      toast({ title: "Erro", description: e.message, variant: "destructive" }); 
+      toast({ title: "Erro no Cadastro", description: e.message, variant: "destructive" }); 
     } finally {
       setSalvandoSeguranca(false);
     }
