@@ -426,6 +426,7 @@ if (triggersData) setEmailTriggers(triggersData);
           setDadosEmailPendente({
               osId: osSelecionada.id,
               cliente: osSelecionada.cliente_nome,
+              emailDestino: osSelecionada.email_cliente || 'cliente@exemplo.com',
               assunto: assuntoPersonalizado,
               texto: textoPersonalizado
           });
@@ -638,12 +639,15 @@ if (triggersData) setEmailTriggers(triggersData);
   const dispararEmailCliente = async () => {
     if (!dadosEmailPendente) return;
     try {
-        // Exemplo: Disparo para o Webhook do n8n
-        // await fetch('https://seu-n8n.com/webhook/disparo-osg', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify(dadosEmailPendente)
-        // });
+        const respostaWebhook = await fetch('https://n8n01-n8njoaogaia.fdumjq.easypanel.host/webhook-test/disparo-osg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dadosEmailPendente)
+        });
+
+        if (!respostaWebhook.ok) {
+            throw new Error("Falha ao comunicar com o servidor de automação (n8n).");
+        }
         
         alert("E-mail disparado com sucesso para o cliente!");
         setModalConfirmarEmail(false);
@@ -651,7 +655,7 @@ if (triggersData) setEmailTriggers(triggersData);
         fetchOrdens(); 
         setOsSelecionada(null);
     } catch (error) {
-        alert("Erro ao disparar e-mail.");
+        alert("Erro ao disparar e-mail: " + error.message);
     }
 };
 
