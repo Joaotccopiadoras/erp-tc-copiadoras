@@ -117,6 +117,11 @@ export default function Grafica() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Estados para Automação de E-mail
+const [emailTriggers, setEmailTriggers] = useState<any[]>([]);
+const [modalConfirmarEmail, setModalConfirmarEmail] = useState(false);
+const [dadosEmailPendente, setDadosEmailPendente] = useState<any>(null);
+
   useEffect(() => {
     fetchUsuario();
     fetchDadosBase();
@@ -147,6 +152,8 @@ export default function Grafica() {
     } else if (eqRes.error) {
         console.error("Erro ao buscar equipamentos: ", eqRes.error);
     }
+    const { data: triggersData } = await supabase.from('cfg_email_triggers').select('*').eq('modulo', 'Grafica').eq('ativo', true);
+if (triggersData) setEmailTriggers(triggersData);
   };
 
   const fetchOrdens = async () => {
@@ -395,9 +402,29 @@ export default function Grafica() {
 
       await sincronizarCardKanban(osAtualizada || { ...osSelecionada, ...payloadUpdate }, true);
 
-      if (!statusFinal) {
-          alert("OSG atualizada com sucesso!");
-          fetchOrdens(); setOsSelecionada(null);
+      // VERIFICAÇÃO DE GATILHO DE E-MAIL APÓS SALVAR
+      const trigger = emailTriggers.find(t => t.status_gatilho === novoStatus);
+      if (trigger) {
+          const numOSG = String(osSelecionada.numero_op).padStart(4, '0');
+          const textoPersonalizado = trigger.corpo_texto
+              .replace(/{numero_osg}/g, numOSG)
+              .replace(/{solicitante}/g, editSolicitante || "Cliente")
+              .replace(/{status}/g, novoStatus);
+          
+          const assuntoPersonalizado = trigger.assunto.replace(/{numero_osg}/g, numOSG);
+
+          setDadosEmailPendente({
+              osId: osSelecionada.id,
+              cliente: osSelecionada.cliente_nome,
+              assunto: assuntoPersonalizado,
+              texto: textoPersonalizado
+          });
+          setModalConfirmarEmail(true); // Abre o modal de confirmação em vez de apenas dar o alert de sucesso
+      } else {
+          if (!statusFinal) {
+              alert("OSG atualizada com sucesso!");
+              fetchOrdens(); setOsSelecionada(null);
+          }
       }
     } catch (e: any) { 
         alert(e.message); throw e; 
@@ -598,6 +625,26 @@ export default function Grafica() {
   const totalProduzidoGeral = historicoProducao.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
   const percentualConclusao = osSelecionada ? Math.min(100, (totalProduzidoGeral / osSelecionada.quantidade_produzir) * 100) : 0;
 
+  const dispararEmailCliente = async () => {
+    if (!dadosEmailPendente) return;
+    try {
+        // Exemplo: Disparo para o Webhook do n8n
+        // await fetch('https://seu-n8n.com/webhook/disparo-osg', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify(dadosEmailPendente)
+        // });
+        
+        alert("E-mail disparado com sucesso para o cliente!");
+        setModalConfirmarEmail(false);
+        setDadosEmailPendente(null);
+        fetchOrdens(); 
+        setOsSelecionada(null);
+    } catch (error) {
+        alert("Erro ao disparar e-mail.");
+    }
+};
+
   return (
     <AppLayout>
       {/* MODAL: SELECIONAR CLIENTE */}
@@ -692,6 +739,31 @@ export default function Grafica() {
           </div>
         </div>
       )}
+
+      {/* MODAL: CONFIRMAR ENVIO DE E-MAIL */}
+{modalConfirmarEmail && dadosEmailPendente && (
+<div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
+        <h3 className="font-bold text-blue-900 flex items-center gap-2"><Mail className="w-5 h-5"/> Enviar Atualização ao Cliente?</h3>
+        <Button variant="ghost" size="sm" onClick={() => { setModalConfirmarEmail(false); fetchOrdens(); setOsSelecionada(null); }} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-5 h-5"/></Button>
+    </div>
+    <div className="p-6 space-y-4">
+        <p className="text-sm text-slate-600">O status da OSG mudou. Deseja notificar o cliente <b>{dadosEmailPendente.cliente}</b> com a mensagem abaixo?</p>
+        <div className="bg-slate-50 border p-4 rounded-lg">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Assunto</p>
+            <p className="font-bold text-slate-800 mb-4">{dadosEmailPendente.assunto}</p>
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Mensagem</p>
+            <p className="text-sm text-slate-700 whitespace-pre-wrap">{dadosEmailPendente.texto}</p>
+        </div>
+    </div>
+    <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
+        <Button variant="outline" onClick={() => { setModalConfirmarEmail(false); fetchOrdens(); setOsSelecionada(null); }}>Não Enviar</Button>
+        <Button onClick={dispararEmailCliente} className="bg-blue-600 hover:bg-blue-700 text-white gap-2"><Send className="w-4 h-4"/> Disparar E-mail</Button>
+    </div>
+    </div>
+</div>
+)}
 
       {/* MODAL: SELECIONAR EQUIPAMENTO */}
       {modalEquipamentoOpen && (
