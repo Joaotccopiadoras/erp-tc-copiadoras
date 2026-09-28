@@ -464,7 +464,7 @@ export default function ConfiguracoesPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border">
                           <Select value={novoGatilho.status_gatilho} onValueChange={v => setNovoGatilho({...novoGatilho, status_gatilho: v})}>
                               <SelectTrigger className="bg-white"><SelectValue placeholder="Status Gatilho (Ex: Levantamento de Material)"/></SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-white z-[99999]">
                                   <SelectItem value="Levantamento de Material">Levantamento de Material</SelectItem>
                                   <SelectItem value="Impressão">Impressão</SelectItem>
                                   <SelectItem value="Pronto para Expedição">Pronto para Expedição</SelectItem>
