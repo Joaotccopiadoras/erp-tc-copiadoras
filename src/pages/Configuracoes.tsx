@@ -90,13 +90,16 @@ export default function ConfiguracoesPage() {
     setLoadingSeguranca(false);
   };
 
-  const adicionarUsuario = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const adicionarUsuario = async () => {
+    console.log("Botão de cadastrar clicado!", { novoNomeUsuario, novoEmail, novaSenha });
+
     if (!novoEmail.includes("@") || !novoNomeUsuario.trim() || !novaSenha.trim()) {
-      return toast({ title: "Erro", description: "Preencha todos os campos obrigatórios.", variant: "destructive" });
+      toast({ title: "Erro", description: "Preencha todos os campos obrigatórios.", variant: "destructive" });
+      return;
     }
     if (novaSenha.length < 6) {
-      return toast({ title: "Erro", description: "A palavra-passe deve ter pelo menos 6 caracteres.", variant: "destructive" });
+      toast({ title: "Erro", description: "A palavra-passe deve ter pelo menos 6 caracteres.", variant: "destructive" });
+      return;
     }
 
     setSalvandoSeguranca(true);
@@ -282,58 +285,54 @@ export default function ConfiguracoesPage() {
       </div>
             
             {/* ABA: SEGURANÇA - CADASTRAR UTILIZADOR */}
-<div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-    
-    <form onSubmit={adicionarUsuario} className="bg-white p-6 rounded-xl border shadow-sm space-y-4 border-l-4 border-l-indigo-600">
-        <div>
-            <h2 className="text-sm font-bold text-slate-800">Cadastrar Novo Utilizador</h2>
-            <p className="text-xs text-slate-500">Defina o nome de utilizador, o e-mail associado e a palavra-passe inicial do colaborador.</p>
+<div className="bg-white p-6 rounded-xl border shadow-sm space-y-4 border-l-4 border-l-indigo-600">
+    <div>
+        <h2 className="text-sm font-bold text-slate-800">Cadastrar Novo Utilizador</h2>
+        <p className="text-xs text-slate-500">Defina o nome de utilizador, o e-mail associado e a palavra-passe inicial do colaborador.</p>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Input 
+          placeholder="Nome de Utilizador (ex: joao.silva)" 
+          value={novoNomeUsuario} 
+          onChange={(e) => setNovoNomeUsuario(e.target.value)} 
+          className="bg-slate-50 font-medium text-indigo-700" 
+        />
+        <Input 
+          type="email" 
+          placeholder="E-mail (ex: joao@empresa.com)" 
+          value={novoEmail} 
+          onChange={(e) => setNovoEmail(e.target.value)} 
+          className="bg-slate-50" 
+        />
+        <div className="relative">
+          <Input 
+            type={mostrarSenhaCadastro ? "text" : "password"} 
+            placeholder="Palavra-passe (Mín. 6 carateres)" 
+            value={novaSenha} 
+            onChange={(e) => setNovaSenha(e.target.value)} 
+            className="bg-slate-50 pr-10" 
+          />
+          <button
+            type="button"
+            onClick={() => setMostrarSenhaCadastro(!mostrarSenhaCadastro)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            {mostrarSenhaCadastro ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input 
-              placeholder="Nome de Utilizador (ex: joao.silva)" 
-              value={novoNomeUsuario} 
-              onChange={(e) => setNovoNomeUsuario(e.target.value)} 
-              className="bg-slate-50 font-medium text-indigo-700" 
-              required
-            />
-            <Input 
-              type="email" 
-              placeholder="E-mail (ex: joao@empresa.com)" 
-              value={novoEmail} 
-              onChange={(e) => setNovoEmail(e.target.value)} 
-              className="bg-slate-50" 
-              required
-            />
-            <div className="relative">
-              <Input 
-                type={mostrarSenhaCadastro ? "text" : "password"} 
-                placeholder="Palavra-passe (Mín. 6 carateres)" 
-                value={novaSenha} 
-                onChange={(e) => setNovaSenha(e.target.value)} 
-                className="bg-slate-50 pr-10" 
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setMostrarSenhaCadastro(!mostrarSenhaCadastro)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {mostrarSenhaCadastro ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-        </div>
-        <div className="flex justify-end pt-2">
-            <Button 
-              type="submit" 
-              disabled={salvandoSeguranca} 
-              className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-            >
-                {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} 
-                Cadastrar Sistema
-            </Button>
-        </div>
-    </form>
+    </div>
+    <div className="flex justify-end pt-2">
+        <Button 
+          type="button" 
+          onClick={adicionarUsuario}
+          disabled={salvandoSeguranca} 
+          className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm cursor-pointer"
+        >
+            {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} 
+            Cadastrar Sistema
+        </Button>
+    </div>
+</div>
 
             {/* ABAS RESTANTES */}
             {abaAtiva !== "seguranca" && abaAtiva !== "tecnicos" && abaAtiva !== "operadores" && (
