@@ -101,6 +101,8 @@ export default function Grafica() {
   const [editPaginasPorProduto, setEditPaginasPorProduto] = useState(1);
   const [editSolicitante, setEditSolicitante] = useState("");
   const [editOperadorNome, setEditOperadorNome] = useState("");
+  const [editTelefoneCliente, setEditTelefoneCliente] = useState("");
+  const [editEmailCliente, setEditEmailCliente] = useState("");
 
   // ESTADOS: FLUXO DE IMPRESSÃO
   const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo">("pendente");
@@ -277,6 +279,8 @@ if (triggersData) setEmailTriggers(triggersData);
     setEditDataPrevista(os.data_prevista || "");
     setEditPaginasPorProduto(os.paginas_por_produto || 1);
     setEditSolicitante(os.solicitante || "");
+    setEditTelefoneCliente(os.telefone_cliente || "");
+    setEditEmailCliente(os.email_cliente || "");
     setEditOperadorNome(os.operador_nome || "");
 
     let tml: any[] = [];
@@ -392,7 +396,9 @@ if (triggersData) setEmailTriggers(triggersData);
         data_prevista: editDataPrevista || null, 
         paginas_por_produto: editPaginasPorProduto || 1,
         solicitante: editSolicitante,
-        operador_nome: editOperadorNome
+        operador_nome: editOperadorNome,
+        telefone_cliente: editTelefoneCliente,
+        email_cliente: editEmailCliente
       };
 
       const { data: osAtualizada, error: updateError } = await supabase.from('prd_ordens_producao' as any).update(payloadUpdate).eq('id', osSelecionada.id).select().single();
@@ -1056,6 +1062,14 @@ if (triggersData) setEmailTriggers(triggersData);
                               <div className="space-y-2 md:col-span-2">
                                   <label className="text-xs font-bold text-slate-500 uppercase">Solicitante</label>
                                   <Input value={editSolicitante} onChange={e => setEditSolicitante(e.target.value)} className="bg-slate-50 h-9 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Telefone do Cliente</label>
+                                  <Input value={editTelefoneCliente} onChange={e => setEditTelefoneCliente(e.target.value)} className="bg-slate-50 h-9 text-sm" />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">E-mail do Cliente</label>
+                                <Input type="email" value={editEmailCliente} onChange={e => setEditEmailCliente(e.target.value)} className="bg-slate-50 h-9 text-sm" />
                               </div>
                               <div className="space-y-2 md:col-span-2">
                                   <label className="text-xs font-bold text-slate-500 uppercase">Operador Responsável</label>
