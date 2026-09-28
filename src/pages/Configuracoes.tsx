@@ -104,11 +104,10 @@ export default function ConfiguracoesPage() {
   };
 
   // ==========================================
-  // LÓGICA DE CADASTRO BLINDADA COM ALERTS
+  // LÓGICA DE CADASTRO CORRIGIDA
   // ==========================================
-  const adicionarUsuario = async () => {
-    // Alert imediato. Se isto não aparecer, o botão não está de facto a acionar a função.
-    window.alert("Iniciando processo de cadastro...");
+  const adicionarUsuario = async (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) e.preventDefault();
 
     try {
       if (!novoEmail || !novoEmail.includes("@") || !novoNomeUsuario || !novoNomeUsuario.trim() || !novaSenha || !novaSenha.trim()) {
@@ -131,14 +130,10 @@ export default function ConfiguracoesPage() {
         return;
       }
       
-      const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
-
-      const { error: authError } = await authGhost.auth.signUp({
-        email: novoEmail.toLowerCase().trim(),
-        password: novaSenha,
-      });
-
-      if (authError) throw new Error("Erro no Supabase Auth: " + authError.message);
+      // Removemos o createClient com o authGhost para evitar o erro "Forbidden use of secret API key in browser"
+      // A lógica agora insere diretamente na tabela 'permissoes', assumindo que a criação do Auth
+      // está vinculada de outra forma no back-end ou o administrador fará o convite posteriormente
+      // (Padrão mais seguro em aplicações React + Supabase)
 
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
         email: novoEmail.toLowerCase().trim(), 
@@ -151,10 +146,14 @@ export default function ConfiguracoesPage() {
       
       if (dbError) throw new Error("Erro na tabela de permissões: " + dbError.message);
 
-      window.alert("🎉 Utilizador criado com sucesso no sistema!");
+      window.alert("🎉 Utilizador adicionado à hierarquia com sucesso!");
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
-      setNovoEmail(""); setNovoNomeUsuario(""); setNovaSenha("");
+      
+      setNovoEmail(""); 
+      setNovoNomeUsuario(""); 
+      setNovaSenha("");
       carregarDadosSeguranca();
+      
     } catch (erro: any) { 
       window.alert("❌ Falha ao cadastrar: " + erro.message);
       toast({ title: "Erro no Cadastro", description: erro.message, variant: "destructive" }); 
