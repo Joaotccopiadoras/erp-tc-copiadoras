@@ -103,19 +103,34 @@ export default function ConfiguracoesPage() {
     setLoadingSeguranca(false);
   };
 
-  const adicionarUsuario = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!novoEmail.includes("@") || !novoNomeUsuario.trim() || !novaSenha.trim()) {
-      return toast({ title: "Erro", description: "Preencha todos os campos obrigatórios.", variant: "destructive" });
-    }
-    if (novaSenha.length < 6) {
-      return toast({ title: "Erro", description: "A palavra-passe deve ter pelo menos 6 caracteres.", variant: "destructive" });
-    }
+  // ==========================================
+  // LÓGICA DE CADASTRO BLINDADA COM ALERTS
+  // ==========================================
+  const adicionarUsuario = async () => {
+    // Alert imediato. Se isto não aparecer, o botão não está de facto a acionar a função.
+    window.alert("Iniciando processo de cadastro...");
 
-    setSalvandoSeguranca(true);
     try {
+      if (!novoEmail || !novoEmail.includes("@") || !novoNomeUsuario || !novoNomeUsuario.trim() || !novaSenha || !novaSenha.trim()) {
+        window.alert("⚠️ Erro: Preencha todos os campos obrigatórios (Nome, E-mail válido e Senha).");
+        return;
+      }
+      if (novaSenha.length < 6) {
+        window.alert("⚠️ Erro: A palavra-passe deve ter pelo menos 6 caracteres.");
+        return;
+      }
+
+      setSalvandoSeguranca(true);
+
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        window.alert("❌ Erro Crítico: Chaves do Supabase não foram encontradas no sistema.");
+        setSalvandoSeguranca(false);
+        return;
+      }
+      
       const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
       const { error: authError } = await authGhost.auth.signUp({
@@ -123,7 +138,7 @@ export default function ConfiguracoesPage() {
         password: novaSenha,
       });
 
-      if (authError) throw new Error("Erro ao registar login: " + authError.message);
+      if (authError) throw new Error("Erro no Supabase Auth: " + authError.message);
 
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
         email: novoEmail.toLowerCase().trim(), 
@@ -134,13 +149,15 @@ export default function ConfiguracoesPage() {
         perfil_operacional: 'Nenhum' 
       }]);
       
-      if (dbError) throw new Error("Erro ao salvar permissões: O nome de utilizador já pode estar em uso.");
+      if (dbError) throw new Error("Erro na tabela de permissões: " + dbError.message);
 
+      window.alert("🎉 Utilizador criado com sucesso no sistema!");
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
       setNovoEmail(""); setNovoNomeUsuario(""); setNovaSenha("");
       carregarDadosSeguranca();
-    } catch (e: any) { 
-      toast({ title: "Erro", description: e.message, variant: "destructive" }); 
+    } catch (erro: any) { 
+      window.alert("❌ Falha ao cadastrar: " + erro.message);
+      toast({ title: "Erro no Cadastro", description: erro.message, variant: "destructive" }); 
     } finally {
       setSalvandoSeguranca(false);
     }
@@ -354,9 +371,15 @@ export default function ConfiguracoesPage() {
                             </div>
                         </div>
                         <div className="flex justify-end pt-2">
-                            <Button type="button" onClick={adicionarUsuario} disabled={salvandoSeguranca} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm cursor-pointer">
-                                {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} Cadastrar Sistema
-                            </Button>
+                            <Button 
+  type="button" 
+  onClick={() => adicionarUsuario()} 
+  disabled={salvandoSeguranca} 
+  className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm cursor-pointer"
+>
+  {salvandoSeguranca ? <Loader2 className="w-4 h-4 animate-spin"/> : <UserPlus className="w-4 h-4" />} 
+  Cadastrar Sistema
+</Button>
                         </div>
                     </div>
 
