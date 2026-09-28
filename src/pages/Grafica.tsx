@@ -130,21 +130,20 @@ export default function Grafica() {
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
-      supabase.from('srv_equipamentos' as any).select('id, numero_serie, especificacoes, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
+      supabase.from('srv_equipamentos' as any).select('id, numero_serie, cliente_id, proprietario, especificacoes, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
     if (cliRes.data) setClientesBD(cliRes.data);
     if (opRes.data) setOperadoresBD(opRes.data);
     if (eqRes.data) {
-        // Filtro robusto para pegar equipamentos do TC SERVICOS ou se o cliente vinculado contiver "TC"
+        // Filtro robusto: inclui equipamentos em estoque/TC (sem cliente ou proprietário TC) ou vinculados à TC Serviços
         const tcEquips = eqRes.data.filter((e: any) => {
             const nomeCli = (e.log_clientes?.nome_fantasia || "").toUpperCase();
             const razaoCli = (e.log_clientes?.razao_social || "").toUpperCase();
-            return nomeCli.includes("TC") || razaoCli.includes("TC") || nomeCli.includes("SERVICOS") || razaoCli.includes("SERVICOS");
+            const isInternoTC = !e.cliente_id || e.proprietario === "TC Copiadoras";
+            return isInternoTC || nomeCli.includes("TC") || razaoCli.includes("TC") || nomeCli.includes("SERVICOS") || razaoCli.includes("SERVICOS");
         });
-        // Se porventura o filtro restrito retornar vazio (caso o vínculo na tabela srv_equipamentos seja diferente), 
-        // fallback para listar todos para não travar a produção
         setEquipamentosTC(tcEquips.length > 0 ? tcEquips : eqRes.data);
     }
   };
@@ -239,7 +238,7 @@ export default function Grafica() {
       const payload = {
         cliente_nome: clienteBusca, solicitante: solicitante, data_solicitacao: dataSolicitacao,
         operador_nome: operadorNome, descricao_servico: descServico, quantidade_produzir: qtdProduzir,
-        data_prevista: dataPrevista, paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
+        data_prevista: dataPrevista || null, paginas_por_produto: possuiImpressao === "Sim" ? paginasPorProdutoOS : 1,
         valor_unitario_pagina: possuiImpressao === "Sim" ? parseFloat(valorUnitarioPaginaOS) || 0 : 0,
         status: 'Solicitação Recebida', observacoes: flagImpressao, historico_producao: [], timeline: []
       };
@@ -412,7 +411,7 @@ export default function Grafica() {
       const eq = equipamentosTC.find(e => e.id === equipImpressaoId);
       const novoApontamento: ApontamentoProducao = {
           id: crypto.randomUUID(), data: new Date().toISOString(), equipamentoId: equipImpressaoId,
-          equipamentoNome: eq ? `${eq.log_produtos?.nome} (S/N: ${eq.numero_serie})` : 'Equipamento Desconhecido',
+          equipamentoNome: eq ? `${eq.log_produtos?.nome || 'Equipamento'} (S/N: ${eq.numero_serie})` : 'Equipamento Desconhecido',
           modo: modoImpressao, qtdSolicitada: qtdImprimirServico, paginasPorProduto: paginasPorProduto,
           valorUnitarioPagina: parseFloat(valorUnitarioPagina), contadorInicial: Number(contadorInicial), status: 'imprimindo'
       };
@@ -580,7 +579,7 @@ export default function Grafica() {
   
   const totalReceitaGerada = historicoProducao.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + ((curr.producaoValida || 0) * (curr.paginasPorProduto || 1) * (curr.valorUnitarioPagina || 0)), 0);
 
-  // ORDENAÇÃO: Mais antigas (topo) para mais recentes (baixo) com base na data de solicitação
+  // ORDENAÇÃO: Mais antigas (topo) para mais recentes (baixo) utilizando localeCompare seguro nas strings de data
   const ordensFiltradas = ordens
     .filter(o => 
       (o.cliente_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) || 
@@ -589,7 +588,14 @@ export default function Grafica() {
       (o.operador_nome?.toLowerCase() || "").includes(buscaOS.toLowerCase()) ||
       (o.solicitante?.toLowerCase() || "").includes(buscaOS.toLowerCase())
     )
-    .sort((a, b) => new Date(a.data_solicitacao || 0).getTime() - new Date(b.data_solicitacao || 0).getTime());
+    .sort((a, b) => {
+      const dataA = a.data_solicitacao || '';
+      const dataB = b.data_solicitacao || '';
+      if (dataA !== dataB) {
+        return dataA.localeCompare(dataB); // Mais antigas no topo, mais recentes embaixo
+      }
+      return (a.numero_op || 0) - (b.numero_op || 0);
+    });
 
   const totalProduzidoGeral = historicoProducao.filter(h => h.status === 'concluido').reduce((acc, curr) => acc + (curr.producaoValida || 0), 0);
   const percentualConclusao = osSelecionada ? Math.min(100, (totalProduzidoGeral / osSelecionada.quantidade_produzir) * 100) : 0;
