@@ -104,7 +104,7 @@ export default function ConfiguracoesPage() {
   };
 
 // ==========================================
-  // LÓGICA DE CADASTRO COM E-MAILS PARTILHADOS
+  // LÓGICA DE CADASTRO CORRIGIDA (SEM ERRO DE ENV)
   // ==========================================
   const adicionarUsuario = async (e?: React.MouseEvent | React.FormEvent) => {
     if (e) e.preventDefault();
@@ -121,22 +121,12 @@ export default function ConfiguracoesPage() {
 
       setSalvandoSeguranca(true);
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      if (!supabaseUrl || !supabaseKey) {
-        window.alert("❌ Erro Crítico: Chaves do Supabase não foram encontradas no sistema.");
-        setSalvandoSeguranca(false);
-        return;
-      }
-
       // Cria um pseudo-email único nos bastidores para burlar a trava de e-mails únicos do Auth
       const emailAutenticacao = `${novoNomeUsuario.toLowerCase().trim().replace(/\s+/g, '')}@sistema.local`;
       
-      const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
-
-      // 1. Cadastra no Auth com o pseudo-email único
-      const { error: authError } = await authGhost.auth.signUp({
+      // 1. Cadastra no Auth utilizando o CLIENT PRINCIPAL (que já está configurado e injetado pelo Vite globalmente)
+      // Como a chave anon é usada, a inserção só passará se você desativou o "Confirm email" no painel.
+      const { error: authError } = await supabase.auth.signUp({
         email: emailAutenticacao,
         password: novaSenha,
       });
