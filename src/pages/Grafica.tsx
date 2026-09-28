@@ -77,6 +77,9 @@ export default function Grafica() {
   const [modalInsumoOpen, setModalInsumoOpen] = useState(false);
   const [buscaModalInsumo, setBuscaModalInsumo] = useState("");
 
+  const [modalEquipamentoOpen, setModalEquipamentoOpen] = useState(false);
+  const [buscaModalEquipamento, setBuscaModalEquipamento] = useState("");
+
   // ESTADOS: PAINEL DE PRODUÇÃO
   const [ordens, setOrdens] = useState<any[]>([]);
   const [buscaOS, setBuscaOS] = useState("");
@@ -130,8 +133,8 @@ export default function Grafica() {
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
       supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
-      // CORREÇÃO AQUI: Removida a coluna 'especificacoes' do corpo principal, pois ela só existe em log_produtos
-      supabase.from('srv_equipamentos' as any).select('id, numero_serie, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
+      // Adicionado 'sequencial' à consulta para facilitar a busca do equipamento
+      supabase.from('srv_equipamentos' as any).select('id, sequencial, numero_serie, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
     ]);
     
     if (prodRes.data) setProdutosBD(prodRes.data);
@@ -690,6 +693,49 @@ export default function Grafica() {
         </div>
       )}
 
+      {/* MODAL: SELECIONAR EQUIPAMENTO */}
+      {modalEquipamentoOpen && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><Printer className="w-5 h-5 text-blue-600"/> Localizar Equipamento</h3>
+              <Button variant="ghost" size="sm" onClick={() => setModalEquipamentoOpen(false)} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500"><X className="w-5 h-5"/></Button>
+            </div>
+            <div className="p-4 border-b border-slate-100 bg-white">
+              <Input placeholder="Pesquise por Modelo, Número de Série ou Sequencial..." value={buscaModalEquipamento} onChange={e => setBuscaModalEquipamento(e.target.value)} className="bg-slate-50 font-medium border-blue-200 focus-visible:ring-blue-500" autoFocus />
+            </div>
+            <div className="overflow-y-auto flex-1 p-0 custom-scrollbar bg-white">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-slate-100 text-slate-500 text-[10px] uppercase sticky top-0 shadow-sm">
+                  <tr>
+                    <th className="p-3 font-semibold text-center w-20">Seq.</th>
+                    <th className="p-3 font-semibold">Modelo</th>
+                    <th className="p-3 font-semibold">Número de Série</th>
+                    <th className="p-3 font-semibold text-center w-28">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {equipamentosTC.filter(eq => 
+                    (eq.log_produtos?.nome || "").toLowerCase().includes(buscaModalEquipamento.toLowerCase()) || 
+                    (eq.numero_serie || "").toLowerCase().includes(buscaModalEquipamento.toLowerCase()) ||
+                    (eq.sequencial?.toString() || "").includes(buscaModalEquipamento)
+                  ).slice(0, 50).map(eq => (
+                    <tr key={eq.id} className="hover:bg-blue-50 transition-colors">
+                      <td className="p-3 text-center font-mono font-bold text-slate-400">#{String(eq.sequencial).padStart(4,'0')}</td>
+                      <td className="p-3 font-bold text-slate-800 text-sm">{eq.log_produtos?.nome || 'Modelo Desconhecido'}</td>
+                      <td className="p-3 text-slate-600 font-mono text-xs">{eq.numero_serie}</td>
+                      <td className="p-3 text-center">
+                        <Button size="sm" onClick={() => { setEquipImpressaoId(eq.id); setModalEquipamentoOpen(false); setBuscaModalEquipamento(""); }} className="bg-blue-100 text-blue-700 hover:bg-blue-200 shadow-none">Selecionar</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {abaAtiva === "abrir" ? (
         <div className="max-w-3xl mx-auto mt-6 mb-12 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white p-8 rounded-xl border shadow-sm space-y-6">
@@ -995,12 +1041,16 @@ export default function Grafica() {
                                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                       <div className="md:col-span-2 space-y-2">
                                           <label className="text-sm font-bold text-blue-800">Equipamento de Produção</label>
-                                          <Select value={equipImpressaoId} onValueChange={setEquipImpressaoId}>
-                                              <SelectTrigger className="bg-white z-[99999] border-blue-300"><SelectValue placeholder="Selecione o equipamento interno..."/></SelectTrigger>
-                                              <SelectContent className="bg-white z-[99999]">
-                                                  {equipamentosTC.map(e => <SelectItem key={e.id} value={e.id}>{e.log_produtos?.nome || 'Equipamento'} (S/N: {e.numero_serie})</SelectItem>)}
-                                              </SelectContent>
-                                          </Select>
+                                          
+                                          {/* SUBSTITUI O SELECT ANTIGO PELO BOTÃO QUE ABRE O MODAL */}
+                                          <div onClick={() => setModalEquipamentoOpen(true)} className="bg-white border border-blue-300 h-10 px-3 rounded-md cursor-pointer flex items-center justify-between hover:border-blue-500 transition-colors shadow-sm">
+                                              <span className={equipImpressaoId ? "text-slate-800 font-semibold truncate" : "text-slate-400 font-medium"}>
+                                                  {equipImpressaoId 
+                                                      ? (() => { const e = equipamentosTC.find(x => x.id === equipImpressaoId); return e ? `${e.log_produtos?.nome || 'Equipamento'} (S/N: ${e.numero_serie})` : "Selecione..."; })() 
+                                                      : "Pesquisar equipamento..."}
+                                              </span>
+                                              <Search className="w-4 h-4 text-blue-400 shrink-0" />
+                                          </div>
                                       </div>
                                       <div className="space-y-2">
                                           <label className="text-sm font-bold text-blue-800">Qtd a Imprimir</label>
