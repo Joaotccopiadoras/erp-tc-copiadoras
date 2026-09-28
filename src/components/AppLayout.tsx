@@ -117,7 +117,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const nomeCompleto = user.user_metadata?.nome || user.user_metadata?.full_name || user.email?.split('@')[0] || "Usuário";
         
         setUserName(nomeCompleto);
-        setUserEmail(user.email || "");
 
         // LÓGICA PARA GERAR AS INICIAIS (Ex: "João Gaia" -> "JG")
         const partesNome = nomeCompleto.trim().split(" ");
