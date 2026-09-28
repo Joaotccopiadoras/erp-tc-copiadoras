@@ -783,7 +783,7 @@ export default function AgendaKanban() {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <MultiSelectDropdown title="Líder" options={uniqueLideres} selected={filterLideres} onChange={setFilterLideres} />
-              <MultiSelectDropdown title="Departamento" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
+              <MultiSelectDropdown title="Workflow" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
               <MultiSelectDropdown title="Solicitante" options={uniqueSolicitantes} selected={filterSolicitantes} onChange={setFilterSolicitantes} />
               <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
             </div>
