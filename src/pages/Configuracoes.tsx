@@ -103,8 +103,8 @@ export default function ConfiguracoesPage() {
     setLoadingSeguranca(false);
   };
 
-  // ==========================================
-  // LÓGICA DE CADASTRO CORRIGIDA
+// ==========================================
+  // LÓGICA DE CADASTRO COM E-MAILS PARTILHADOS
   // ==========================================
   const adicionarUsuario = async (e?: React.MouseEvent | React.FormEvent) => {
     if (e) e.preventDefault();
@@ -129,14 +129,24 @@ export default function ConfiguracoesPage() {
         setSalvandoSeguranca(false);
         return;
       }
-      
-      // Removemos o createClient com o authGhost para evitar o erro "Forbidden use of secret API key in browser"
-      // A lógica agora insere diretamente na tabela 'permissoes', assumindo que a criação do Auth
-      // está vinculada de outra forma no back-end ou o administrador fará o convite posteriormente
-      // (Padrão mais seguro em aplicações React + Supabase)
 
+      // Cria um pseudo-email único nos bastidores para burlar a trava de e-mails únicos do Auth
+      const emailAutenticacao = `${novoNomeUsuario.toLowerCase().trim().replace(/\s+/g, '')}@sistema.local`;
+      
+      const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+      // 1. Cadastra no Auth com o pseudo-email único
+      const { error: authError } = await authGhost.auth.signUp({
+        email: emailAutenticacao,
+        password: novaSenha,
+      });
+
+      if (authError) throw new Error("Erro no Supabase Auth: " + authError.message);
+
+      // 2. Salva na tabela com o e-mail real partilhado e a chave oculta de auth
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
         email: novoEmail.toLowerCase().trim(), 
+        email_auth: emailAutenticacao,
         nome_usuario: novoNomeUsuario.toLowerCase().trim(),
         acesso_financeiro: false, 
         is_admin: false, 
@@ -146,7 +156,7 @@ export default function ConfiguracoesPage() {
       
       if (dbError) throw new Error("Erro na tabela de permissões: " + dbError.message);
 
-      window.alert("🎉 Utilizador adicionado à hierarquia com sucesso!");
+      window.alert("🎉 Utilizador adicionado com sucesso (E-mails partilhados ativados)!");
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
       
       setNovoEmail(""); 
