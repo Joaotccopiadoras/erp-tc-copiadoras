@@ -47,7 +47,7 @@ export default function Grafica() {
   const [dataPrevista, setDataPrevista] = useState("");
   const [telefoneClienteOS, setTelefoneClienteOS] = useState("");
   const [emailClienteOS, setEmailClienteOS] = useState("");
-  const [observacoesOS, setObservacoesOS] = useState(""); // Novo estado de observações
+  const [observacoesOS, setObservacoesOS] = useState(""); 
   const [produtosOSG, setProdutosOSG] = useState<ProdutoOSG[]>([{ id: crypto.randomUUID(), descricao: "", quantidade: 1, possuiImpressao: "Não", paginasPorProduto: 1, valorUnitario: 0, modoImpressao: "Simplex" }]);
 
   const [salvandoOS, setSalvandoOS] = useState(false);
@@ -105,6 +105,11 @@ export default function Grafica() {
   const [emailTriggers, setEmailTriggers] = useState<any[]>([]);
   const [modalConfirmarEmail, setModalConfirmarEmail] = useState(false);
   const [dadosEmailPendente, setDadosEmailPendente] = useState<any>(null);
+
+  // Variáveis calculadas de forma segura
+  const qtdNecessariaGeral = (editProdutosOSG || []).filter(p => p.possuiImpressao === "Sim").reduce((a, p) => a + (Number(p.quantidade) || 0), 0);
+  const totalProd = (historicoProducao || []).filter(h => h.status === 'concluido').reduce((a, c) => a + (Number(c.producaoValida) || 0), 0);
+  const totalReceitaGerada = (historicoProducao || []).filter(h => h.status === 'concluido').reduce((acc, curr) => acc + ((Number(curr.producaoValida) || 0) * (Number(curr.paginasPorProduto) || 1) * (Number(curr.valorUnitarioPagina) || 0)), 0);
 
   useEffect(() => { fetchUsuario(); fetchDadosBase(); fetchOrdens(); }, [abaAtiva]);
 
@@ -324,9 +329,9 @@ export default function Grafica() {
     setHistoricoProducao(novoHistorico);
     await supabase.from('prd_ordens_producao' as any).update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
     setStatusImpressao("pendente"); setContadorInicial(""); setContadorFinal("");
-    const totalProd = novoHistorico.filter(h => h.status === 'concluido').reduce((a, c) => a + (c.producaoValida || 0), 0);
+    const tProd = novoHistorico.filter(h => h.status === 'concluido').reduce((a, c) => a + (c.producaoValida || 0), 0);
     const qtdNecessaria = editProdutosOSG.filter((p: any) => p.possuiImpressao === "Sim").reduce((acc, p) => acc + p.quantidade, 0);
-    setQtdImprimirServico(Math.max(0, qtdNecessaria - totalProd));
+    setQtdImprimirServico(Math.max(0, qtdNecessaria - tProd));
   };
 
   const getBase64ImageFromUrl = async (u: string) => { try { const r = await fetch(u); const b = await r.blob(); return new Promise<string>((res) => { const reader = new FileReader(); reader.onloadend = () => res(reader.result as string); reader.readAsDataURL(b); }); } catch { return null; } };
@@ -604,8 +609,8 @@ export default function Grafica() {
                           <div className="flex-1 flex flex-col items-center justify-center text-center p-4 mt-8"><CheckCircle2 className="w-8 h-8 text-slate-400 mb-3" /><h4 className="text-xl font-bold text-blue-600 mb-6">{cards.length} OSG's</h4><Button onClick={() => setMostrarConcluidos(true)} className="bg-slate-800 text-white w-full text-xs">Visualizar Todos</Button></div>
                         ) : cards.map(os => (
                               <div key={os.id} onClick={() => abrirPrancheta(os)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-pointer relative group flex flex-col hover:border-purple-400 transition-all">
-                                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
-                                    <input type="checkbox" checked={osSelecionadasLote.includes(os.id)} onChange={e => { if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]); else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id)); }} className="w-4 h-4 text-purple-600 rounded cursor-pointer" />
+                                <div className={`absolute top-3 right-3 transition-opacity ${osSelecionadasLote.includes(os.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => e.stopPropagation()}>
+                                    <input type="checkbox" checked={osSelecionadasLote.includes(os.id)} onChange={e => { if (e.target.checked) setOsSelecionadasLote([...osSelecionadasLote, os.id]); else setOsSelecionadasLote(osSelecionadasLote.filter(id => id !== os.id)); }} className="w-4 h-4 text-purple-600 rounded cursor-pointer shadow-sm border-slate-300" />
                                 </div>
                                 <div className="flex justify-between items-start mb-2 pr-6">
                                     <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider">OSG-{String(os.numero_op).padStart(4,'0')}</span>
@@ -691,7 +696,7 @@ export default function Grafica() {
                               {statusImpressao === "pendente" && totalProd < qtdNecessariaGeral && (
                                   <div className="grid grid-cols-2 gap-4">
                                       <div className="space-y-1 col-span-2"><label className="text-xs font-bold text-blue-800">Equipamento</label><div onClick={() => setModalEquipamentoOpen(true)} className="bg-white border-blue-300 h-9 px-3 rounded flex items-center cursor-pointer">{equipImpressaoId ? equipamentosTC.find(x => x.id === equipImpressaoId)?.log_produtos?.nome : "Pesquisar..."}</div></div>
-                                      <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Qtd a Imprimir</label><Input type="number" max={qtdNecessariaGeral - totalProd} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="h-9" /></div>
+                                      <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Qtd a Imprimir</label><Input type="number" max={Math.max(0, qtdNecessariaGeral - totalProd)} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="h-9" /></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Páginas/Prod (Média)</label><Input type="number" value={paginasPorProduto} onChange={e => setPaginasPorProduto(Number(e.target.value))} className="h-9" /></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Valor Un.</label><Input type="number" step="0.01" value={valorUnitarioPagina} onChange={e => setValorUnitarioPagina(e.target.value)} className="h-9" /></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Modo</label><Select value={modoImpressao} onValueChange={setModoImpressao}><SelectTrigger className="h-9 bg-white z-[99999]"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Simplex">Simplex</SelectItem><SelectItem value="Duplex">Duplex</SelectItem></SelectContent></Select></div>
