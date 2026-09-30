@@ -101,7 +101,7 @@ export default function Grafica() {
   const [editEmailCliente, setEditEmailCliente] = useState("");
   const [editProdutosOSG, setEditProdutosOSG] = useState<ProdutoOSG[]>([]);
 
-  // IMPRESSÃO (Agora usa totais agrupados dos produtos com impressão)
+  // IMPRESSÃO
   const [statusImpressao, setStatusImpressao] = useState<"pendente" | "imprimindo">("pendente");
   const [equipImpressaoId, setEquipImpressaoId] = useState("");
   const [qtdImprimirServico, setQtdImprimirServico] = useState(1); 
@@ -204,7 +204,7 @@ export default function Grafica() {
         telefone_cliente: telefoneClienteOS, email_cliente: emailClienteOS,
         operador_nome: operadorNome, produtos: produtosOSG,
         data_prevista: dataPrevista || null, status: 'Solicitação Recebida', observacoes: "", historico_producao: [], timeline: [],
-        descricao_servico: produtosOSG[0].descricao, // Fallback legacy
+        descricao_servico: produtosOSG[0].descricao, 
         quantidade_produzir: produtosOSG[0].quantidade,
         paginas_por_produto: produtosOSG[0].paginasPorProduto,
         valor_unitario_pagina: produtosOSG[0].valorUnitario,
@@ -383,6 +383,80 @@ export default function Grafica() {
       } catch (e) { alert("Erro PDF."); } finally { setExportando(false); }
   };
 
+  const gerarExtratoFaturamentoPDF = async (osList: any[]) => {
+      if (!osList || osList.length === 0) return;
+      if (osList.some(os => os.cliente_nome !== osList[0].cliente_nome)) return alert("Selecione OSGs do mesmo cliente para o extrato.");
+      setExportando(true);
+      try {
+          const doc = new jsPDF("l", "mm", "a4"); 
+          const logoBase64 = await getBase64ImageFromUrl("/logo.png");
+          const clienteObj = clientesBD.find(c => c.nome_fantasia === osList[0].cliente_nome || c.razao_social === osList[0].cliente_nome);
+          const rs = clienteObj?.razao_social || osList[0].cliente_nome; 
+          const cnpj = clienteObj?.cnpj_cpf || "Não informado";
+          
+          doc.setFont("times", "bold"); doc.setFontSize(11);
+          doc.text(`Belém/PA, ${String(new Date().getDate()).padStart(2,'0')}/${String(new Date().getMonth()+1).padStart(2,'0')}/${new Date().getFullYear()}`, 280, 45, { align: "right" });
+          doc.text(`À (O) ${String(rs).toUpperCase()}`, 14, 55); doc.text(`CNPJ: ${cnpj}`, 14, 60);
+          doc.setFontSize(12); doc.text(`EXTRATO DE FATURAMENTO`, 148, 75, { align: "center" });
+
+          let totalGeralPaginas = 0; 
+          let totalGeralFinanceiro = 0;
+          const tableRows: any[] = [];
+          
+          osList.forEach(os => {
+              const produtos = (os.produtos && os.produtos.length > 0) ? os.produtos : [{ descricao: os.descricao_servico, quantidade: os.quantidade_produzir, possuiImpressao: os.observacoes?.includes("[Possui Impressão: Sim]") ? "Sim" : "Não", paginasPorProduto: os.paginas_por_produto || 1, valorUnitario: os.valor_unitario_pagina || 0 }];
+              let totalOsImpressoes = 0;
+              let totalOsFinanceiro = 0;
+              
+              produtos.forEach((prod: any, idx: number) => {
+                  const ppProduto = prod.paginasPorProduto || 1;
+                  const totalImpressoes = prod.possuiImpressao === "Sim" ? (prod.quantidade * ppProduto) : 0;
+                  const valorUn = prod.valorUnitario || 0;
+                  const totalRS = totalImpressoes * valorUn;
+                  
+                  totalOsImpressoes += totalImpressoes; 
+                  totalGeralPaginas += totalImpressoes;
+                  totalOsFinanceiro += totalRS;
+                  totalGeralFinanceiro += totalRS;
+                  
+                  const row: any[] = [];
+                  if (idx === 0) {
+                      row.push({ content: os.data_solicitacao ? new Date(os.data_solicitacao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-", rowSpan: produtos.length, styles: { valign: 'middle' } });
+                      row.push({ content: os.solicitante || "-", rowSpan: produtos.length, styles: { valign: 'middle' } });
+                      row.push({ content: `OSG-${String(os.numero_op).padStart(4, '0')}`, rowSpan: produtos.length, styles: { valign: 'middle' } });
+                  }
+                  row.push(prod.descricao || "-"); 
+                  row.push(prod.quantidade || 0); 
+                  row.push(prod.possuiImpressao === "Sim" ? ppProduto : "-"); 
+                  row.push(prod.possuiImpressao === "Sim" ? totalImpressoes : "-");
+                  row.push(prod.possuiImpressao === "Sim" ? `R$ ${valorUn.toFixed(2)}` : "-");
+                  row.push(prod.possuiImpressao === "Sim" ? `R$ ${totalRS.toFixed(2)}` : "-");
+                  tableRows.push(row);
+              });
+              
+              tableRows.push([
+                  { content: `TOTAL DA OSG-${String(os.numero_op).padStart(4, '0')}`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245,245,245] } }, 
+                  { content: totalOsImpressoes.toString(), styles: { fontStyle: 'bold', halign: 'center', fillColor: [245,245,245] } }, 
+                  { content: "-", styles: { halign: 'center', fillColor: [245,245,245] } }, 
+                  { content: `R$ ${totalOsFinanceiro.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [245,245,245] } }
+              ]);
+          });
+          
+          tableRows.push([
+              { content: "TOTAL GERAL", colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [220,220,220] } }, 
+              { content: totalGeralPaginas.toString(), styles: { fontStyle: 'bold', halign: 'center', fillColor: [220,220,220] } }, 
+              { content: "-", styles: { halign: 'center', fillColor: [220,220,220] } }, 
+              { content: `R$ ${totalGeralFinanceiro.toFixed(2)}`, styles: { fontStyle: 'bold', halign: 'right', fillColor: [220,220,220] } }
+          ]);
+
+          autoTable(doc, {
+              head: [["DATA", "SOLICITANTE", "OSG", "PRODUTO", "QTD", "P.P P/ PRODUTO", "TOTAL IMPRESSÕES", "VALOR UN.", "TOTAL (R$)"]], body: tableRows, startY: 85,
+              theme: 'grid', styles: { font: 'times', fontSize: 8, cellPadding: 2, lineColor: [200,200,200], lineWidth: 0.1 }, headStyles: { fillColor: [240,240,240], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' }
+          });
+          doc.save(`Extrato_Faturamento_${osList[0].cliente_nome.replace(/\s+/g, '_')}.pdf`);
+      } catch (e) { alert("Erro ao gerar Extrato PDF."); } finally { setExportando(false); }
+  };
+
   const dispararEmailCliente = async () => {
     if (!dadosEmailPendente) return;
     try {
@@ -473,18 +547,39 @@ export default function Grafica() {
         </div>
       ) : (
         <div className="flex h-[calc(100vh-6rem)] overflow-hidden bg-slate-50">
-          <div className="flex-1 flex flex-col">
-            <div className="bg-white p-4 border-b flex justify-between shadow-sm z-10 flex-wrap gap-4">
-              <div><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Layers className="w-5 h-5 text-purple-600"/> Kanban Produção</h2></div>
-              <div className="flex gap-4 items-center">
-                <Input placeholder="Buscar OSG..." value={buscaOS} onChange={e => setBuscaOS(e.target.value)} className="w-64" />
-                {osSelecionadasLote.length > 0 && !osSelecionada && <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} size="sm" className="bg-blue-600 text-white gap-2">Comprovante Lote</Button>}
-                <Button onClick={() => setAbaAtiva("abrir")} size="sm" className="bg-purple-600 text-white gap-2"><Plus className="w-4 h-4"/> Nova OSG</Button>
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="bg-white p-4 border-b flex flex-col md:flex-row justify-between items-center shadow-sm z-10 gap-4 w-full">
+              <div className="flex-shrink-0">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-purple-600"/> Kanban Produção
+                </h2>
+              </div>
+              
+              <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <Input placeholder="Buscar OSG..." value={buscaOS} onChange={e => setBuscaOS(e.target.value)} className="pl-9 w-full md:w-64" />
+                </div>
+                
+                {osSelecionadasLote.length > 0 && !osSelecionada && (
+                  <div className="flex gap-2 bg-blue-50 p-1 rounded-md border border-blue-100 shrink-0">
+                    <Button onClick={() => gerarComprovantePDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} size="sm" variant="ghost" className="text-blue-700 hover:bg-blue-100 gap-1 h-8">
+                      <FileText className="w-4 h-4"/> Comprovante
+                    </Button>
+                    <Button onClick={() => gerarExtratoFaturamentoPDF(ordens.filter(o => osSelecionadasLote.includes(o.id)))} size="sm" variant="ghost" className="text-emerald-700 hover:bg-emerald-100 gap-1 h-8">
+                      <Landmark className="w-4 h-4"/> Extrato
+                    </Button>
+                  </div>
+                )}
+                
+                <Button onClick={() => setAbaAtiva("abrir")} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-2 shrink-0 h-9">
+                  <Plus className="w-4 h-4"/> Nova OSG
+                </Button>
               </div>
             </div>
 
             {!osSelecionada && (
-                <div className="flex-1 overflow-x-auto p-6 flex gap-6 bg-slate-100">
+                <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar flex gap-6 bg-slate-100 p-6 min-w-0">
                   {STATUS_FLUXO_GRAFICA.map(col => {
                     const cards = ordens.filter(o => (col === "Concluído" && o.status === "Cancelado") || o.status === col).filter(o => (o.cliente_nome||"").toLowerCase().includes(buscaOS.toLowerCase()) || (o.numero_op||"").toString().includes(buscaOS));
                     const isC = col === "Concluído" && !mostrarConcluidos;
@@ -523,6 +618,7 @@ export default function Grafica() {
                       </div>
                       <div className="flex items-center gap-3">
                           <Button variant="outline" size="sm" onClick={() => gerarComprovantePDF([osSelecionada])}>Comprovante</Button>
+                          <Button variant="outline" size="sm" className="text-emerald-700" onClick={() => gerarExtratoFaturamentoPDF([osSelecionada])}>Extrato</Button>
                           <Select value={statusOS} onValueChange={setStatusOS}><SelectTrigger className="w-48 bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]">{STATUS_FLUXO_GRAFICA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}<SelectItem value="Cancelado" className="text-red-600">Cancelado</SelectItem></SelectContent></Select>
                           <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 text-white">Salvar</Button>
                       </div>
