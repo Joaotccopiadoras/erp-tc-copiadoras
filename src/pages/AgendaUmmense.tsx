@@ -159,11 +159,7 @@ export default function DashboardPage() {
         if (error) throw error;
         
         if (data) {
-           const dadosFiltrados = data.filter(item => {
-               if (!item.lider_email) return false; 
-               return item.lider_email.toLowerCase().trim() === user.email?.toLowerCase().trim();
-           });
-           setAllData(dadosFiltrados); 
+           setAllData(data); 
         }
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
