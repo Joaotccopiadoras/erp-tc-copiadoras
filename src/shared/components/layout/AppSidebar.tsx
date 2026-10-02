@@ -1,8 +1,8 @@
 import { Printer, Upload, Banknote, Settings, Database, LogOut, Calendar } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/shared/lib/supabase/utils";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/shared/lib/supabase/client";
+import { useToast } from "@/shared/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 
 const navItems = [
