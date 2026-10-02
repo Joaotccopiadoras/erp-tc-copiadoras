@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import AppLayout from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AppLayout from "@/shared/components/layout/AppLayout";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { 
   Building2, Search, Plus, ArrowLeft, Save, Globe, Key, 
   Clock, MapPin, Phone, Mail, Building, Eye, EyeOff, Loader2, Truck, Activity, Receipt, Edit, Calculator

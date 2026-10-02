@@ -4,13 +4,13 @@ import { Node, Edge } from 'reactflow';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toPng } from "html-to-image";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import AppLayout from "@/components/AppLayout";
-import FluxogramaEditor from "@/components/FluxogramaEditor";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Textarea } from "@/shared/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
+import AppLayout from "@/shared/components/layout/AppLayout";
+import FluxogramaEditor from "@/shared/components/FluxogramaEditor";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Processos() {

@@ -1,14 +1,14 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { supabase } from "../integrations/supabase/client"; 
+import { supabase } from "../shared/lib/supabase/client"; 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { FileText, Table as TableIcon, Trash2, ChevronDown, ArrowUp, ArrowDown, Wrench, Filter, X, Loader2 } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import AppLayout from "@/components/AppLayout";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/components/ui/table";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import AppLayout from "@/shared/components/layout/AppLayout";
 
 const PAGE_SIZE = 15;
 const mapaStatus: Record<string, string> = { active: "ANDAMENTO", waiting: "AGUARDANDO", completed: "CONCLUÍDO"};

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import AppLayout from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AppLayout from "@/shared/components/layout/AppLayout";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Recycle, Wrench, Factory, Plus, Clock, Search, Trash2, ArrowRight, PlayCircle, CheckCircle2, Box, Save, Settings2, Calculator } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 

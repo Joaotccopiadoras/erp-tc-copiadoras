@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import AppLayout from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AppLayout from "@/shared/components/layout/AppLayout";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Briefcase, ShoppingBag, FileText, Printer, CheckCircle2, Plus, Search, Trash2, DollarSign, ArrowRight, Users, Percent, Calculator, FileCheck, PackageMinus, Landmark } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 

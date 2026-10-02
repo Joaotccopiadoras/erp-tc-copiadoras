@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import AppLayout from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AppLayout from "@/shared/components/layout/AppLayout";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import {
   Barcode, CheckCircle2, Edit, Package, Plus, Search, FileDigit, DollarSign, Settings2, 
   Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, 

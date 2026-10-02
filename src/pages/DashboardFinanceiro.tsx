@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, DollarSign, TrendingUp, Filter, X, ListOrdered, Download, FileText } from "lucide-react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
-import AppLayout from "@/components/AppLayout";
-import KpiCard from "@/components/KpiCard";
+import AppLayout from "@/shared/components/layout/AppLayout";
+import KpiCard from "@/shared/components/KpiCard";
 import { useCsvData } from "@/hooks/useCsvData";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
+import { cn } from "@/shared/lib/supabase/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 

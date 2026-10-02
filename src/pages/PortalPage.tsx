@@ -1,6 +1,6 @@
 import { Wrench, DollarSign, CalendarDays, LayoutDashboard, LogOut, Settings, IceCreamCone, UsersRound, TrendingUp, Package, Printer } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../integrations/supabase/client"
+import { supabase } from "@/shared/lib/supabase/client"
 
 export default function PortalPage() {
   const navigate = useNavigate();

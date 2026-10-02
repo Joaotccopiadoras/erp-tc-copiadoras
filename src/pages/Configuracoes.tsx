@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
-import AppLayout from "@/components/AppLayout";
+import AppLayout from "@/shared/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { createClient } from "@supabase/supabase-js";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Briefcase, CheckCircle, Fingerprint, Lock, Settings, Shield,
   ShieldAlert, Trash2, User, UserPlus, Landmark, Tags, MapPin,
   Plus, Edit, Save, X, Loader2, CreditCard, Network, BriefcaseBusiness, Wrench, Printer, Eye, EyeOff, Mail
 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 
 export default function ConfiguracoesPage() {
   const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "emails" | "contas" | "transacoes" | "centros" | "segmentos" | "formas" | "locais" | "tecnicos" | "operadores">("seguranca");
