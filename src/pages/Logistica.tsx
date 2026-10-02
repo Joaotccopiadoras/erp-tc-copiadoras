@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, 
   Table as TableIcon, Database, Printer, Layers, MapPin, Save, X, ArrowLeftRight, FileText, Activity
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 

@@ -5,7 +5,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { PackageOpen, Plus, Save, Trash2, Barcode, CheckCircle2, ArrowLeft, FileCode2, AlertTriangle, FileText, Truck, MapPin, Calculator, History, Search, Eye, X, Loader2, Receipt, Pencil, Eraser, Landmark, Calendar, Bot } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 type ItemEntrada = {
   produtoId: string;

@@ -3,7 +3,7 @@ import AppLayout from "@/shared/components/layout/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { BadgePercent, Target, TrendingUp, BarChart4, Users, Plus, Trash2, Search, CalendarDays, DollarSign, PieChart, Layers, CheckCircle2 } from "lucide-react";
+import { BadgePercent, Clock, Target, TrendingUp, BarChart4, Users, Plus, Trash2, Search, CalendarDays, DollarSign, PieChart, Layers, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 
 export default function GestaoComissoes() {

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import AppLayout from "@/shared/components/layout/AppLayout";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 import { createClient } from "@supabase/supabase-js";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/shared/hooks/use-toast";
 import {
   Briefcase, CheckCircle, Fingerprint, Lock, Settings, Shield,
   ShieldAlert, Trash2, User, UserPlus, Landmark, Tags, MapPin,

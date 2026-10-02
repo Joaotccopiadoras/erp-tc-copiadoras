@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";

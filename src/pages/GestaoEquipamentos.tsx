@@ -4,7 +4,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Printer, Plus, Search, CheckCircle2, AlertCircle, ArrowLeft, QrCode, ShieldCheck, MapPin, User, Settings, Calculator, Activity, FileText, History, Repeat, ShieldAlert, Edit, Eraser, ChevronDown, Loader2, Phone, Mail, UserPlus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 export default function GestaoEquipamentos() {
   const [abaAtiva, setAbaAtiva] = useState<"lista" | "novo" | "dossie">("lista");

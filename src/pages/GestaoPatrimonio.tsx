@@ -9,7 +9,7 @@ import AppLayout from "@/shared/components/layout/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 const defaultFormAtivo = {
     categoria: "TI / Informática", descricao: "", marca_modelo: "", identificacao_extra: "",

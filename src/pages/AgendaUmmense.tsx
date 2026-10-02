@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import AppLayout from "@/shared/components/layout/AppLayout";
-import { supabase } from "../shared/lib/supabase/client"; 
+import { supabase } from "@/shared/lib/supabase/client";
 
 const PAGE_SIZE = 15;
 const mapaStatus: Record<string, string> = { active: "ANDAMENTO", waiting: "AGUARDANDO", completed: "CONCLUÍDO" };

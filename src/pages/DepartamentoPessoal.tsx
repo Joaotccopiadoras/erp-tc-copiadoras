@@ -5,7 +5,7 @@ import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Calculator,
   Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 export default function DepartamentoPessoal() {
   const [abaAtiva, setAbaAtiva] = useState<"colaboradores" | "folha" | "beneficios">("colaboradores");

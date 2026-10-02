@@ -10,7 +10,7 @@ import {
   Edit, Trash2, Filter, X, Table as TableIcon, ArrowUp, ArrowDown, PackageSearch,
   UploadCloud, AlertTriangle, Check, Paperclip, Upload, Receipt, CalendarClock, Zap
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";

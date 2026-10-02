@@ -4,7 +4,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Wrench, Barcode, Loader2, Plus, Search, Trash2, Printer, CheckCircle2, Clock, PlayCircle, FileText, ArrowLeft, Package, User, Toolbox, Landmark, AlertCircle, Eraser } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 type PecaOS = { id: string; produtoId: string; nome: string; quantidade: number; preco: number; estoqueAtual: number };
 type ServicoOS = { id: string; descricao: string; quantidade: number; preco: number };

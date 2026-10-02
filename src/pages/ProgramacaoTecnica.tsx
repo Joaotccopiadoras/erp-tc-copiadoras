@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { supabase } from "../shared/lib/supabase/client"; 
+import { supabase } from "@/shared/lib/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";

@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import AppLayout from "@/shared/components/layout/AppLayout";
 import FluxogramaEditor from "@/shared/components/FluxogramaEditor";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 export default function Processos() {
   const [modo, setModo] = useState<"lista" | "visualizar" | "editar">("lista");

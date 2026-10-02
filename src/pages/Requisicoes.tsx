@@ -4,7 +4,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { ClipboardList, Plus, Search, CheckCircle2, Clock, AlertTriangle, ArrowRight, Package, ShoppingCart, User, XCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 export default function Requisicoes() {
   const [abaAtiva, setAbaAtiva] = useState<"nova" | "painel">("painel");

@@ -7,7 +7,7 @@ import {
   Building2, Search, Plus, ArrowLeft, Save, Globe, Key, 
   Clock, MapPin, Phone, Mail, Building, Eye, EyeOff, Loader2, Truck, Activity, Receipt, Edit, Calculator
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/shared/lib/supabase/client";
 
 export default function Fornecedores() {
   const [modo, setModo] = useState<"lista" | "formulario" | "dossie">("lista");
