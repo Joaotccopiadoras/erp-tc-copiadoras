@@ -1,242 +1,305 @@
-import { useMemo, useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import AppLayout from "@/components/AppLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ArrowDown,
-  ArrowUp,
-  CalendarRange,
-  ChevronDown, 
-  FileText,
-  Filter,
-  Loader2,
-  Table as TableIcon,
-  Trash2, 
-  X } from "lucide-react";
+  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import AppLayout from "@/components/AppLayout";
-
-import { supabase } from "../integrations/supabase/client"; 
-
-const PAGE_SIZE = 15;
-const mapaStatus: Record<string, string> = { active: "ANDAMENTO", waiting: "AGUARDANDO", completed: "CONCLUÍDO" };
-const formatarStatus = (status: string) => {
-  if (!status) return "—";
-  return mapaStatus[status.toLowerCase()] || status.toUpperCase();
+type Workflow = { id: string; nome: string; descricao?: string };
+type Coluna = { id: string; workflow_id: string; nome: string; ordem: number; status_global: string };
+type Card = { 
+  id: string; 
+  workflow_id: string; 
+  coluna_id: string; 
+  titulo: string; 
+  descricao: string; 
+  responsavel_nome: string; 
+  responsavel_email: string; 
+  prioridade: string; 
+  data_vencimento: string; 
+  created_at?: string;
+  atualizado_em?: string;
+  kanban_colunas?: { status_global: string, nome: string }; 
+  kanban_workflows?: { nome: string } 
 };
 
-function MultiSelectDropdown({ title, options, selected, onChange }: { title: string, options: string[], selected: string[], onChange: (val: string[]) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+const STATUS_GLOBAIS = ["Backlog", "Andamento", "Aguardando", "Concluído"];
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <div className="relative" ref={ref}>
-      <Button variant="outline" onClick={() => setOpen(!open)} className="w-full justify-between bg-white text-left font-normal h-10 px-3 border-slate-200 hover:bg-slate-50 transition-colors">
-        <span className="truncate text-slate-600">
-          {selected.length === 0 ? title : <span className="font-bold text-indigo-600">{title} ({selected.length})</span>}
-        </span>
-        <ChevronDown className="h-4 w-4 opacity-50" />
-      </Button>
-      {open && (
-        <div className="absolute z-[9999] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 max-h-60 overflow-y-auto custom-scrollbar">
-          {options.length === 0 ? (
-            <div className="p-2 text-sm text-slate-400 text-center italic">Nenhum dado...</div>
-          ) : (
-            options.map(opt => (
-              <label key={opt} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
-                <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={selected.includes(opt)} onChange={(e) => { if (e.target.checked) onChange([...selected, opt]); else onChange(selected.filter(x => x !== opt)); }} />
-                <span className="text-sm text-slate-700 truncate font-medium">{opt}</span>
-              </label>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function DashboardPage() {
-  const navigate = useNavigate();
-  const [allData, setAllData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function AgendaKanban() {
+  const [usuarioAtual, setUsuarioAtual] = useState<any>(null);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [colunas, setColunas] = useState<Coluna[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [workflowAtivo, setWorkflowAtivo] = useState<string>("global");
   const [exportando, setExportando] = useState(false);
-
-  // estados filtros e ordenac
-  const [filterLideres, setFilterLideres] = useState<string[]>([]);
-  const [filterDepartamentos, setFilterDepartamentos] = useState<string[]>([]);
-  const [filterSolicitantes, setFilterSolicitantes] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   
-  const [dataEntradaInicio, setDataEntradaInicio] = useState("");
-  const [dataEntradaFim, setDataEntradaFim] = useState("");
-  const [dataPrevisaoInicio, setDataPrevisaoInicio] = useState("");
-  const [dataPrevisaoFim, setDataPrevisaoFim] = useState("");
-  const [dataConclusaoInicio, setDataConclusaoInicio] = useState("");
-  const [dataConclusaoFim, setDataConclusaoFim] = useState("");
-  
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-  const [page, setPage] = useState(0);
+  const [modalWF, setModalWF] = useState(false);
+  const [modalColuna, setModalColuna] = useState(false);
+  const [modalCard, setModalCard] = useState(false);
+  const [cardSendoEditado, setCardSendoEditado] = useState<Card | null>(null);
+  const [colunaSendoEditada, setColunaSendoEditada] = useState<Coluna | null>(null);
 
-  const [selecionados, setSelecionados] = useState<number[]>([]);
-  const toggleSelecao = (id: number) => {
-    setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const [nomeWf, setNomeWf] = useState("");
+  const [nomeColuna, setNomeColuna] = useState("");
+  const [statusGlobalColuna, setStatusGlobalColuna] = useState("Backlog");
+  
+  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: "" });
+
+  useEffect(() => {
+    fetchInitData();
+  }, []);
+
+  useEffect(() => {
+    fetchQuadro();
+  }, [workflowAtivo, usuarioAtual]);
+
+  const fetchInitData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) setUsuarioAtual(user);
+    const { data } = await supabase.from('kanban_workflows').select('*').order('criado_em');
+    if (data) setWorkflows(data);
   };
-  const toggleTodos = (itensDaPagina: any[]) => {
-    setSelecionados(selecionados.length === itensDaPagina.length ? [] : itensDaPagina.map(item => item.id));
+
+  const fetchQuadro = async () => {
+    let currentUser = usuarioAtual;
+    if (!currentUser) {
+      const { data: { user } } = await supabase.auth.getUser();
+      currentUser = user;
+      if (user) setUsuarioAtual(user);
+    }
+
+    if (workflowAtivo === "global") {
+      const [colsRes, cardsRes] = await Promise.all([
+        supabase.from('kanban_colunas').select('*'),
+        supabase.from('kanban_cards').select('*, kanban_colunas(status_global, nome), kanban_workflows(nome)')
+      ]);
+      if (colsRes.data) setColunas(colsRes.data);
+      if (cardsRes.data) setCards(cardsRes.data); // Delegação completa do filtro ao banco de dados RLS
+    } else {
+      const [colsRes, cardsRes] = await Promise.all([
+        supabase.from('kanban_colunas').select('*').eq('workflow_id', workflowAtivo).order('ordem'),
+        supabase.from('kanban_cards').select('*, kanban_colunas(status_global, nome), kanban_workflows(nome)').eq('workflow_id', workflowAtivo)
+      ]);
+      if (colsRes.data) setColunas(colsRes.data);
+      if (cardsRes.data) setCards(cardsRes.data);
+    }
   };
-  const excluirEmLote = async () => {
-    if (!window.confirm(`Tem certeza que deseja excluir ${selecionados.length} projetos definitivamente?`)) return;
-    
+
+  const criarWorkflow = async () => {
+    if (!nomeWf) return;
+    const { data, error } = await supabase.from('kanban_workflows').insert([{ nome: nomeWf }]).select().single();
+    if (!error && data) {
+      setWorkflows([...workflows, data]);
+      setWorkflowAtivo(data.id);
+      setModalWF(false); setNomeWf("");
+    }
+  };
+
+  const abrirEditarColuna = (col: Coluna) => {
+    setColunaSendoEditada(col);
+    setNomeColuna(col.nome);
+    setStatusGlobalColuna(col.status_global);
+    setModalColuna(true);
+  };
+
+  const deletarColuna = async (id: string, cardsCount: number) => {
+    if (cardsCount > 0) return alert("Não é possível excluir uma coluna que possui cards. Mova-os para outra etapa ou exclua-os primeiro.");
+    if (!window.confirm("Deseja realmente excluir esta etapa?")) return;
     try {
-      setLoading(true);
-      const { error } = await supabase.from('programacao_tc').delete().in('id', selecionados);
+      const { error } = await supabase.from('kanban_colunas').delete().eq('id', id);
       if (error) throw error;
-    
-      setAllData(prev => prev.filter(item => !selecionados.includes(item.id)));
-      setSelecionados([]);
-    } catch (error) {
-      console.error("Erro ao excluir em lote:", error);
-      alert("Erro ao excluir. Tente novamente.");
-    } finally {
-      setLoading(false);
+      fetchQuadro();
+    } catch (error: any) { alert("Erro ao excluir coluna: " + error.message); }
+  };
+
+  const salvarColuna = async () => {
+    if (!nomeColuna || workflowAtivo === "global") return;
+    if (colunaSendoEditada) {
+      const { error } = await supabase.from('kanban_colunas').update({ nome: nomeColuna, status_global: statusGlobalColuna }).eq('id', colunaSendoEditada.id);
+      if (!error) { 
+        setModalColuna(false); 
+        setColunaSendoEditada(null);
+        setNomeColuna(""); 
+        fetchQuadro(); 
+      } else { alert("Erro ao editar etapa: " + error.message); }
+    } else {
+      const ordem = colunas.length;
+      const { error } = await supabase.from('kanban_colunas').insert([{ workflow_id: workflowAtivo, nome: nomeColuna, status_global: statusGlobalColuna, ordem }]);
+      if (!error) { 
+        setModalColuna(false); 
+        setNomeColuna(""); 
+        fetchQuadro(); 
+      } else { alert("Erro ao criar etapa: " + error.message); }
     }
   };
 
+  const moverColuna = async (id: string, direcao: number) => {
+    const index = colunas.findIndex(c => c.id === id);
+    if (index < 0) return;
+    const newIndex = index + direcao;
+    if (newIndex < 0 || newIndex >= colunas.length) return;
+    const novaLista = [...colunas];
+    const temp = novaLista[index];
+    novaLista[index] = novaLista[newIndex];
+    novaLista[newIndex] = temp;
+    const listaAtualizada = novaLista.map((c, i) => ({ ...c, ordem: i }));
+    setColunas(listaAtualizada);
+    for (const u of listaAtualizada) { await supabase.from('kanban_colunas').update({ ordem: u.ordem }).eq('id', u.id); }
+  };
 
-  // autosave
-  useEffect(() => {
-    const savedFilters = sessionStorage.getItem("agenda_ummense_filtros");
-    if (savedFilters) {
-      try {
-        const parsed = JSON.parse(savedFilters);
-        if (parsed.filterLideres) setFilterLideres(parsed.filterLideres);
-        if (parsed.filterDepartamentos) setFilterDepartamentos(parsed.filterDepartamentos);
-        if (parsed.filterSolicitantes) setFilterSolicitantes(parsed.filterSolicitantes);
-        if (parsed.filterStatus) setFilterStatus(parsed.filterStatus);
-        if (parsed.dataEntradaInicio) setDataEntradaInicio(parsed.dataEntradaInicio);
-        if (parsed.dataEntradaFim) setDataEntradaFim(parsed.dataEntradaFim);
-        if (parsed.dataPrevisaoInicio) setDataPrevisaoInicio(parsed.dataPrevisaoInicio);
-        if (parsed.dataPrevisaoFim) setDataPrevisaoFim(parsed.dataPrevisaoFim);
-        if (parsed.dataConclusaoInicio) setDataConclusaoInicio(parsed.dataConclusaoInicio);
-        if (parsed.dataConclusaoFim) setDataConclusaoFim(parsed.dataConclusaoFim);
-        if (parsed.sortConfig !== undefined) setSortConfig(parsed.sortConfig);
-        if (parsed.page !== undefined) setPage(parsed.page);
-      } catch (e) {}
-    }
-  }, []);
+  const salvarCard = async () => {
+    if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna/Etapa são obrigatórios.");
+    let finalColunaId = cardForm.coluna_id;
+    let finalWfId = workflowAtivo;
 
-  useEffect(() => {
-    const stateToSave = {
-      filterLideres, filterDepartamentos, filterSolicitantes, filterStatus,
-      dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim,
-      sortConfig, page
-    };
-    sessionStorage.setItem("agenda_ummense_filtros", JSON.stringify(stateToSave));
-  }, [filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page]);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !user.email) return; 
-        
-        const { data, error } = await supabase.from('programacao_tc').select('*').order('data_entrada', { ascending: false });
-        if (error) throw error;
-        
-        if (data) {
-           setAllData(data); 
+    if (workflowAtivo === "global") {
+      if (cardSendoEditado) {
+        const statusGlobalAlvo = cardForm.coluna_id;
+        finalWfId = cardSendoEditado.workflow_id;
+        let colunaEquivalente = colunas.find(c => c.workflow_id === finalWfId && c.status_global === statusGlobalAlvo);
+        if (!colunaEquivalente) {
+          const ordem = colunas.filter(c => c.workflow_id === finalWfId).length;
+          const { data: newCol } = await supabase.from('kanban_colunas').insert([{ workflow_id: finalWfId, nome: statusGlobalAlvo, status_global: statusGlobalAlvo, ordem }]).select().single();
+          if (newCol) colunaEquivalente = newCol;
         }
-      } catch (error) {
-        console.error("Erro ao buscar dados:", error);
-      } finally {
-        setLoading(false);
+        if (colunaEquivalente) finalColunaId = colunaEquivalente.id;
+      } else {
+        let wfGeral = workflows.find(w => w.nome === "Tarefas Avulsas");
+        if (!wfGeral) {
+          const { data: newWf } = await supabase.from('kanban_workflows').insert([{ nome: "Tarefas Avulsas" }]).select().single();
+          if (newWf) { wfGeral = newWf; setWorkflows([...workflows, newWf]); }
+        }
+        if (wfGeral) {
+          finalWfId = wfGeral.id;
+          let colGeral = colunas.find(c => c.workflow_id === wfGeral!.id && c.status_global === cardForm.coluna_id);
+          if (!colGeral) {
+            const { data: newCol } = await supabase.from('kanban_colunas').insert([{ workflow_id: wfGeral.id, nome: cardForm.coluna_id, status_global: cardForm.coluna_id, ordem: STATUS_GLOBAIS.indexOf(cardForm.coluna_id) }]).select().single();
+            if (newCol) { colGeral = newCol; }
+          }
+          if (colGeral) finalColunaId = colGeral.id;
+        }
       }
+    } else {
+      const colSelecionada = colunas.find(c => c.id === cardForm.coluna_id);
+      finalWfId = colSelecionada?.workflow_id || workflowAtivo;
     }
-    fetchData();
-  }, []);
 
-  const excluirRegistro = async (id: number) => {
-    if (!window.confirm("Tem certeza que deseja excluir este registro definitivamente?")) return;
-    try {
-      await supabase.from('programacao_tc').delete().eq('id', id);
-      setAllData(prev => prev.filter(item => item.id !== id));
-    } catch (error) { alert("Erro ao excluir. Tente novamente."); }
-  };
+    const payload = {
+      workflow_id: finalWfId,
+      coluna_id: finalColunaId,
+      titulo: cardForm.titulo,
+      descricao: cardForm.descricao,
+      responsavel_nome: cardForm.responsavel || usuarioAtual?.user_metadata?.full_name || "Usuário",
+      responsavel_email: usuarioAtual?.email,
+      prioridade: cardForm.prioridade,
+      data_vencimento: cardForm.vencimento || null,
+      atualizado_em: new Date().toISOString()
+    };
 
-  const filtered = useMemo(() => {
-    let result = allData.filter((a) => {
-      if (filterLideres.length > 0 && !filterLideres.includes(a.lider_card)) return false;
-      if (filterDepartamentos.length > 0 && !filterDepartamentos.includes(a.departamento)) return false;
-      if (filterSolicitantes.length > 0 && !filterSolicitantes.includes(a.solicitante)) return false;
-      if (filterStatus.length > 0 && !filterStatus.includes(formatarStatus(a.status))) return false;
-      
-      if (dataEntradaInicio && a.data_entrada < dataEntradaInicio) return false;
-      if (dataEntradaFim && a.data_entrada > dataEntradaFim + "T23:59:59") return false;
-      if (dataPrevisaoInicio && a.previsao_prazo < dataPrevisaoInicio) return false;
-      if (dataPrevisaoFim && a.previsao_prazo > dataPrevisaoFim + "T23:59:59") return false;
-      if (dataConclusaoInicio && a.data_conclusao < dataConclusaoInicio) return false;
-      if (dataConclusaoFim && a.data_conclusao > dataConclusaoFim + "T23:59:59") return false;
-      return true;
-    });
-
-    if (sortConfig) {
-      result.sort((a, b) => {
-        let valA = a[sortConfig.key]; let valB = b[sortConfig.key];
-        if (sortConfig.key === 'status') { valA = formatarStatus(a.status); valB = formatarStatus(b.status); }
-        if (!valA) valA = ""; if (!valB) valB = "";
-        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
+    if (cardSendoEditado) {
+      await supabase.from('kanban_cards').update(payload).eq('id', cardSendoEditado.id);
+    } else {
+      await supabase.from('kanban_cards').insert([payload]);
     }
-    return result;
-  }, [allData, filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig]);
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  const hasFilters = filterLideres.length > 0 || filterDepartamentos.length > 0 || filterSolicitantes.length > 0 || filterStatus.length > 0 || dataEntradaInicio || dataEntradaFim || dataPrevisaoInicio || dataPrevisaoFim || dataConclusaoInicio || dataConclusaoFim;
-
-  const clearFilters = () => {
-    sessionStorage.removeItem("agenda_ummense_filtros");
-    setFilterLideres([]); setFilterDepartamentos([]); setFilterSolicitantes([]); setFilterStatus([]);
-    setDataEntradaInicio(""); setDataEntradaFim(""); setDataPrevisaoInicio(""); setDataPrevisaoFim(""); setDataConclusaoInicio(""); setDataConclusaoFim("");
-    setPage(0); setSortConfig(null);
+    setModalCard(false); setCardSendoEditado(null);
+    setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: "" });
+    fetchQuadro();
   };
 
-  const handleSort = (key: string) => {
-    setSortConfig(prev => {
-      if (prev && prev.key === key) return prev.direction === 'asc' ? { key, direction: 'desc' } : null; 
-      return { key, direction: 'asc' };
-    });
+  const abrirModalCard = (card?: Card, defaultColId?: string) => {
+    if (card) {
+      setCardSendoEditado(card);
+      const initialCol = workflowAtivo === "global" ? (card.kanban_colunas?.status_global || "Backlog") : card.coluna_id;
+      setCardForm({ titulo: card.titulo, descricao: card.descricao || "", responsavel: card.responsavel_nome || "", prioridade: card.prioridade || "Normal", vencimento: card.data_vencimento ? card.data_vencimento.split('T')[0] : "", coluna_id: initialCol });
+    } else {
+      setCardSendoEditado(null);
+      setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: workflowAtivo === "global" ? "Backlog" : (defaultColId || (colunas[0]?.id || "")) });
+    }
+    setModalCard(true);
   };
 
-  const uniqueLideres = [...new Set(allData.map((a) => a.lider_card).filter(Boolean))].sort();
-  const uniqueDepartamentos = [...new Set(allData.map((a) => a.departamento).filter(Boolean))].sort();
-  const uniqueSolicitantes = [...new Set(allData.map((a) => a.solicitante).filter(Boolean))].sort();
-  const uniqueStatus = [...new Set(allData.map((a) => formatarStatus(a.status)).filter(s => s !== "—"))].sort();
-
-  const formatarData = (dataStr: string) => {
-    if (!dataStr) return "—";
-    return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
+  const deletarCard = async (id: string) => {
+    if(!window.confirm("Excluir este card?")) return;
+    await supabase.from('kanban_cards').delete().eq('id', id);
+    fetchQuadro();
+    setModalCard(false);
   };
 
-  // Função Auxiliar para carregar a imagem de forma segura
+  const handleDragStart = (e: React.DragEvent, card: Card) => {
+    e.stopPropagation();
+    e.dataTransfer.setData("cardId", card.id);
+    e.dataTransfer.setData("type", "card");
+  };
+
+  const handleColumnDragStart = (e: React.DragEvent, colId: string) => {
+    e.stopPropagation();
+    e.dataTransfer.setData("colId", colId);
+    e.dataTransfer.setData("type", "column");
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropTargetId: string, isGlobal: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const type = e.dataTransfer.getData("type");
+    
+    if (type === "column") {
+      if (isGlobal) return;
+      const draggedColId = e.dataTransfer.getData("colId");
+      if (!draggedColId || draggedColId === dropTargetId) return;
+      const colList = [...colunas];
+      const draggedIdx = colList.findIndex(c => c.id === draggedColId);
+      const targetIdx = colList.findIndex(c => c.id === dropTargetId);
+      if (draggedIdx < 0 || targetIdx < 0) return;
+      const [draggedCol] = colList.splice(draggedIdx, 1);
+      colList.splice(targetIdx, 0, draggedCol);
+      const updatedCols = colList.map((c, idx) => ({ ...c, ordem: idx }));
+      setColunas(updatedCols);
+      for (const c of updatedCols) { supabase.from('kanban_colunas').update({ ordem: c.ordem }).eq('id', c.id).then(); }
+      return;
+    }
+
+    const cardId = e.dataTransfer.getData("cardId");
+    if (!cardId) return;
+    const cardMovido = cards.find(c => c.id === cardId);
+    if (!cardMovido) return;
+
+    let novaColunaId = dropTargetId;
+    if (isGlobal) {
+      const statusGlobalAlvo = dropTargetId;
+      let colunaEquivalente = colunas.find(c => c.workflow_id === cardMovido.workflow_id && c.status_global === statusGlobalAlvo);
+      if (!colunaEquivalente) {
+        const ordem = colunas.filter(c => c.workflow_id === cardMovido.workflow_id).length;
+        const { data: newCol } = await supabase.from('kanban_colunas').insert([{ workflow_id: cardMovido.workflow_id, nome: statusGlobalAlvo, status_global: statusGlobalAlvo, ordem }]).select().single();
+        if (newCol) { colunaEquivalente = newCol; setColunas(prev => [...prev, newCol]); } 
+        else { return alert(`Erro ao mover: O fluxo original não possui etapa para "${statusGlobalAlvo}".`); }
+      }
+      novaColunaId = colunaEquivalente.id;
+    }
+
+    if (cardMovido.coluna_id === novaColunaId) return;
+    setCards(prev => prev.map(c => c.id === cardId ? { ...c, coluna_id: novaColunaId, kanban_colunas: { ...c.kanban_colunas, status_global: isGlobal ? dropTargetId : (colunas.find(x => x.id === novaColunaId)?.status_global || 'Backlog') } as any } : c));
+    await supabase.from('kanban_cards').update({ coluna_id: novaColunaId, atualizado_em: new Date().toISOString() }).eq('id', cardId);
+  };
+
+  const getColunasRenderizacao = () => {
+    if (workflowAtivo === "global") {
+      return STATUS_GLOBAIS.map(status => ({ id: status, nome: status, isGlobal: true, statusBadge: status, cards: cards.filter(c => c.kanban_colunas?.status_global === status) }));
+    } else {
+      return colunas.map(col => ({ id: col.id, nome: col.nome, isGlobal: false, statusBadge: col.status_global, cards: cards.filter(c => c.coluna_id === col.id) }));
+    }
+  };
+
+  const colunasAtivas = getColunasRenderizacao();
+
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
       const res = await fetch(imageUrl);
@@ -248,345 +311,364 @@ export default function DashboardPage() {
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(blob);
       });
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   };
 
-const exportarPDF = async () => {
+  const formatarData = (dataStr: string) => {
+    if (!dataStr) return "—";
+    return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
+  };
+
+  const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
+
+  const exportarPDF = async () => {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape");
       const logoData = await getBase64ImageFromUrl("/logo.png");
-      
-      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
-
-      // ORDENAÇÃO MULTINÍVEL: Líder sempre em primeiro, depois a ordenação da tela
-      const dadosOrdenados = [...filtered].sort((a, b) => {
-        // 1. PRIMAZIA DO LÍDER (Sempre agrupa por ele primeiro)
-        const liderA = a.lider_card || "Sem Líder";
-        const liderB = b.lider_card || "Sem Líder";
-        if (liderA < liderB) return -1;
-        if (liderA > liderB) return 1;
-
-        // 2. ORDENAÇÃO DA TELA (Secundária - aplicada dentro do bloco do líder)
-        if (sortConfig) {
-          let valA = a[sortConfig.key];
-          let valB = b[sortConfig.key];
-          if (sortConfig.key === 'status') {
-            valA = formatarStatus(a.status);
-            valB = formatarStatus(b.status);
-          }
-          if (!valA) valA = "";
-          if (!valB) valB = "";
-          if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-          if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        
-        // 3. Status e Datas (Terciária, se empatar o resto)
-        const stA = formatarStatus(a.status);
-        const stB = formatarStatus(b.status);
+      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3, "BACKLOG": 4 };
+      const dadosOrdenados = [...cards].sort((a, b) => {
+        const respA = a.responsavel_nome || "Sem Responsável";
+        const respB = b.responsavel_nome || "Sem Responsável";
+        if (respA < respB) return -1;
+        if (respA > respB) return 1;
+        const stA = formatarStatus(a.kanban_colunas?.status_global || "BACKLOG");
+        const stB = formatarStatus(b.kanban_colunas?.status_global || "BACKLOG");
         const ordemA = pesoStatus[stA] || 99;
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
-        
-        return new Date(a.data_entrada || 0).getTime() - new Date(b.data_entrada || 0).getTime();
+        return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
       });
 
-      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Solicitante", "Projeto/Processo", "Depto", "Líder", "Tarefa Atual", "Status", "Resumo/Obs"];
+      const tableColumn = ["Data de Criação", "Título do Card", "Etapa", "Responsável", "Prazo/Previsão", "Status", "Observações"];
       const tableRows: any[] = [];
       let grupoAtual = null;
 
-      dadosOrdenados.forEach(item => {
-        // BLOQUEIO: O Agrupador sempre será o Líder, independente da ordenação da tela
-        let valGrupo = item.lider_card || "Sem Líder";
-        let labelGrupo = "Líder Responsável";
-
+      dadosOrdenados.forEach((item: any) => {
+        let valGrupo = item.responsavel_nome || "Sem Responsável";
         if (valGrupo !== grupoAtual) {
-          tableRows.push([{
-            content: `${labelGrupo}: ${valGrupo}`, colSpan: 10, 
-            styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
-          }]);
+          tableRows.push([{ content: `Responsável: ${valGrupo}`, colSpan: 7, styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' } }]);
           grupoAtual = valGrupo;
         }
-        
         tableRows.push([
-          formatarData(item.data_entrada), formatarData(item.previsao_prazo), formatarData(item.data_conclusao),
-          item.solicitante || "-", item.processo_projeto || "-", item.departamento || "-",
-          item.lider_card || "-", item.tarefa_atual || "-", formatarStatus(item.status), item.resumo_observacoes || "-"
+          formatarData(item.created_at || item.atualizado_em), item.titulo || "-", item.kanban_colunas?.nome || "-", 
+          item.responsavel_nome || "-", formatarData(item.data_vencimento), item.kanban_colunas?.status_global || "-", item.descricao || "-"
         ]);
       });
 
       autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: 45, // Tabela desce para não bater na logo/barra preta superior
-        margin: { top: 45, bottom: 40, left: 14, right: 14 },
-        theme: 'grid', 
-        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: { 
-          0: { cellWidth: 16, halign: 'center' }, 
-          1: { cellWidth: 16, halign: 'center' }, 
-          2: { cellWidth: 16, halign: 'center' }, 
-          3: { cellWidth: 25 }, 
-          4: { cellWidth: 35 }, 
-          5: { cellWidth: 20 }, 
-          6: { cellWidth: 20 }, 
-          7: { cellWidth: 30 }, 
-          8: { cellWidth: 22, halign: 'center' }, 
-          9: { cellWidth: 'auto', halign: 'left' } 
-        },
-        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // Cabeçalho da tabela combinando com a identidade visual preta
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        
+        head: [tableColumn], body: tableRows, startY: 40, margin: { top: 40, bottom: 40, left: 14, right: 14 },
+        theme: 'grid', styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: { 0: { cellWidth: 25, halign: 'center' }, 1: { cellWidth: 45 }, 2: { cellWidth: 35 }, 3: { cellWidth: 35 }, 4: { cellWidth: 25, halign: 'center' }, 5: { cellWidth: 25, halign: 'center' }, 6: { cellWidth: 'auto', halign: 'left' } },
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, alternateRowStyles: { fillColor: [248, 250, 252] },
         didDrawPage: function (data) {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
-
-          // ==========================================
-          // BLINDAGEM DE BACKGROUND (Limpa áreas do cabeçalho e rodapé)
-          // ==========================================
           doc.setFillColor(255, 255, 255);
-          doc.rect(0, 0, pageWidth, 42, "F"); // Limpa o topo
-          doc.rect(0, pageHeight - 35, pageWidth, 35, "F"); // Limpa o rodapé
-
-          // ==========================================
-          // CABEÇALHO (Barra Preta + Logo)
-          // ==========================================
-          doc.setFillColor(0, 0, 0); // Preto
-          doc.rect(0, 0, pageWidth, 15, "F"); // Barra no topo absoluto
-
-          if (logoData) {
-            // A logo fica flutuando abaixo da barra preta, à esquerda
-            doc.addImage(logoData, "PNG", 14, 18, 40, 15);
-          }
-          
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(16);
-          doc.setTextColor(0, 0, 0);
-          // Título centralizado ao lado da logo
-          doc.text("Gestão de Projetos e Processos", pageWidth / 2, 28, { align: "center" });
-
-          // Linha divisória fina
-          doc.setDrawColor(200, 200, 200);
-          doc.setLineWidth(0.5);
-          doc.line(14, 38, pageWidth - 14, 38);
-
-          // Data (Canto direito inferior do cabeçalho)
+          doc.rect(0, 0, pageWidth, 38, "F"); 
+          doc.rect(0, pageHeight - 35, pageWidth, 35, "F");
+          if (logoData) doc.addImage(logoData, "PNG", 14, 10, 40, 15);
+          doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(0, 0, 0);
+          doc.text("Agenda Kanban TC Copiadoras", pageWidth / 2, 20, { align: "center" });
+          doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.5); doc.line(14, 28, pageWidth - 14, 28);
           const today = new Date();
           const dia = String(today.getDate()).padStart(2, '0');
           const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-          const textoData = `Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(9);
-          doc.setTextColor(80, 80, 80);
-          doc.text(textoData, pageWidth - 14, 35, { align: "right" });
-
-          // ==========================================
-          // RODAPÉ (Barra Preta)
-          // ==========================================
-          doc.setFillColor(0, 0, 0); // Preto
-          doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
-
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.5);
-          doc.setTextColor(255, 255, 255); // Texto branco no fundo preto
-
-          // Informações do Endereço (Esquerda)
-          const infoEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
-          doc.text(infoEsq, 14, pageHeight - 16);
-
-          // Contatos Telefônicos e Email (Direita)
-          const infoDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
-          doc.text(infoDir, pageWidth - 14, pageHeight - 16, { align: "right" });
+          doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+          doc.text(`Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`, pageWidth - 14, 25, { align: "right" });
+          doc.setFillColor(0, 0, 0); doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
+          doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(255, 255, 255);
+          doc.text("Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0", 14, pageHeight - 16);
+          doc.text("(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br", pageWidth - 14, pageHeight - 16, { align: "right" });
         },
-        
         didParseCell: function (data) {
-          // Índice 8 = Coluna de Status na AgendaUmmense
-          if (data.section === 'body' && data.column.index === 8 && data.cell.raw && (data.row.raw as any[]).length > 1) {
-            const status = data.cell.raw as string;
+          if (data.section === 'body' && data.column.index === 5 && data.cell.raw) {
+            const status = String(data.cell.raw).toUpperCase();
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'ANDAMENTO') { data.cell.styles.textColor = [29, 78, 216]; data.cell.styles.fontStyle = 'bold'; }
           }
         }
       });
-      doc.save("Agenda_Projetos_Processos.pdf");
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Erro ao gerar PDF.");
-    } finally {
-      setExportando(false);
-    }
+      doc.save("Agenda_Kanban_TC_Copiadoras.pdf");
+    } catch (error) { alert("Erro ao gerar PDF."); } finally { setExportando(false); }
   };
 
-  // ==========================================
-  // EXPORTAÇÃO EXCEL
-  // ==========================================
   const exportarExcel = async () => {
     setExportando(true);
     try {
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Projetos");
+      const worksheet = workbook.addWorksheet("Kanban Cards");
       const logoBase64 = await getBase64ImageFromUrl("/logo.png");
-      
       let startRow = 1;
-      
       if (logoBase64) {
         const imageId = workbook.addImage({ base64: logoBase64, extension: "png" });
         worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });
-        startRow = 5; // Empurra a tabela para baixo se tiver logo
+        startRow = 5; 
       }
-      
-      worksheet.getRow(startRow).values = ["Data Entrada", "Data Previsão", "Data Conclusão", "Líder", "Solicitante", "Projeto", "Departamento", "Tarefa Atual", "Status", "Resumo"];
+      worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
       worksheet.getRow(startRow).font = { bold: true };
-      
-      filtered.forEach((item) => {
+      cards.forEach((item) => {
         worksheet.addRow([
-          formatarData(item.data_entrada), formatarData(item.previsao_prazo), formatarData(item.data_conclusao),
-          item.lider_card || "-", item.solicitante || "-", item.processo_projeto || "-",
-          item.departamento || "-", item.tarefa_atual || "-", formatarStatus(item.status), item.resumo_observacoes || "-"
+          item.kanban_colunas?.nome || "-", item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", 
+          formatarData(item.data_vencimento), item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
         ]);
       });
-      
-      worksheet.columns.forEach(column => { column.width = 18; });
+      worksheet.columns.forEach(column => { column.width = 20; });
       const buffer = await workbook.xlsx.writeBuffer();
-      saveAs(new Blob([buffer]), "Acompanhamento_Projetos.xlsx");
-    } catch (error) { 
-      console.error("Erro ao gerar Excel:", error); 
-      alert("Erro ao gerar Excel."); 
-    } finally {
-      setExportando(false);
-    }
-  };
-
-  const renderSortIcon = (key: string) => {
-    if (sortConfig?.key === key) return sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4 inline ml-1" /> : <ArrowDown className="h-4 w-4 inline ml-1" />;
-    return null;
+      saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");
+    } catch (error) { alert("Erro ao gerar Excel."); } finally { setExportando(false); }
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-[1400px] mx-auto mb-12">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800"><CalendarRange className="w-6 h-6 text-indigo-600" /> Gestão de Projetos e Processos</h1>
-            <p className="text-slate-500">Acompanhamento e rastreabilidade de atividades da Agenda (Ummense).</p>
+      <div className="flex h-[calc(100vh-6rem)] max-w-[1600px] mx-auto overflow-hidden bg-slate-50 rounded-xl border shadow-sm">
+        <div className="w-64 bg-slate-900 text-slate-300 flex flex-col">
+          <div className="p-5 border-b border-slate-800">
+            <h2 className="text-white font-bold flex items-center gap-2 text-lg"><KanbanSquare className="w-5 h-5 text-indigo-400"/> Agenda Kanban</h2>
           </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2"><Filter className="w-4 h-4 text-indigo-500"/> Filtros Avançados</h3>
-            {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2 text-xs"><X className="h-3 w-3 mr-1" /> Limpar Tudo</Button>}
+          <div className="p-3 overflow-y-auto flex-1 space-y-1 custom-scrollbar">
+            <button onClick={() => setWorkflowAtivo("global")} className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${workflowAtivo === "global" ? "bg-indigo-600 text-white font-bold" : "hover:bg-slate-800 hover:text-white"}`}>
+              <Layers className="w-4 h-4" /> Programação (Global)
+            </button>
+            <div className="pt-4 pb-2"><span className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Seus Workflows</span></div>
+            {workflows.filter(wf => wf.nome !== "Tarefas Avulsas").map(wf => (
+              <button key={wf.id} onClick={() => setWorkflowAtivo(wf.id)} className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors text-sm ${workflowAtivo === wf.id ? "bg-slate-800 text-white font-semibold shadow-inner" : "hover:bg-slate-800 hover:text-white"}`}>
+                <FolderKanban className="w-4 h-4 opacity-70" /> <span className="truncate">{wf.nome}</span>
+              </button>
+            ))}
           </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MultiSelectDropdown title="Líder" options={uniqueLideres} selected={filterLideres} onChange={setFilterLideres} />
-            <MultiSelectDropdown title="Departamento" options={uniqueDepartamentos} selected={filterDepartamentos} onChange={setFilterDepartamentos} />
-            <MultiSelectDropdown title="Solicitante" options={uniqueSolicitantes} selected={filterSolicitantes} onChange={setFilterSolicitantes} />
-            <MultiSelectDropdown title="Status" options={uniqueStatus} selected={filterStatus} onChange={setFilterStatus} />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Entrada</span>
-              <div className="flex gap-2 items-center"><Input type="date" className="text-xs h-8 bg-white" value={dataEntradaInicio} onChange={e => {setDataEntradaInicio(e.target.value); setPage(0);}} /><span className="text-xs text-slate-400 font-medium">até</span><Input type="date" className="text-xs h-8 bg-white" value={dataEntradaFim} onChange={e => {setDataEntradaFim(e.target.value); setPage(0);}} /></div>
-            </div>
-            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Previsão</span>
-              <div className="flex gap-2 items-center"><Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoInicio} onChange={e => {setDataPrevisaoInicio(e.target.value); setPage(0);}} /><span className="text-xs text-slate-400 font-medium">até</span><Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoFim} onChange={e => {setDataPrevisaoFim(e.target.value); setPage(0);}} /></div>
-            </div>
-            <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Conclusão</span>
-              <div className="flex gap-2 items-center"><Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoInicio} onChange={e => {setDataConclusaoInicio(e.target.value); setPage(0);}} /><span className="text-xs text-slate-400 font-medium">até</span><Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoFim} onChange={e => {setDataConclusaoFim(e.target.value); setPage(0);}} /></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"><strong className="text-slate-800 text-base">{filtered.length}</strong> projetos listados</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportarExcel} disabled={loading || filtered.length === 0 || exportando} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
-              {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Exportar Excel
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportarPDF} disabled={loading || filtered.length === 0 || exportando} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
-              {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} Exportar PDF
+          <div className="p-4 border-t border-slate-800">
+            <Button onClick={() => setModalWF(true)} variant="outline" className="w-full bg-transparent border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white gap-2">
+              <Plus className="w-4 h-4" /> Criar Fluxo
             </Button>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto min-h-[400px]">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">
+                {workflowAtivo === "global" ? "Programação da Semana" : workflows.find(w => w.id === workflowAtivo)?.nome}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {workflowAtivo === "global" ? "Visão unificada mapeada por status global. Mostrando todos os cards." : "Gerencie as etapas e cards deste processo."}
+              </p>
+            </div>
+            <div className="flex gap-2 items-center flex-wrap">
+              <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || cards.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+                {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || cards.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+                {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} PDF
+              </Button>
+              <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
+              {workflowAtivo !== "global" && (
+                <Button onClick={() => { setColunaSendoEditada(null); setNomeColuna(""); setStatusGlobalColuna("Backlog"); setModalColuna(true); }} variant="outline" size="sm" className="gap-2 border-dashed border-slate-300 text-slate-600 hover:bg-slate-50"><Plus className="w-4 h-4"/> Nova Etapa</Button>
+              )}
+              <Button onClick={() => abrirModalCard()} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md"><Plus className="w-4 h-4"/> Novo Card</Button>
+            </div>
+          </div>
 
-            {selecionados.length > 0 && (
-              <div className="bg-red-50 border-b border-red-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2 mb-4 rounded-lg m-4">
-                <span className="text-red-800 font-semibold">{selecionados.length} projeto(s) selecionado(s)</span>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setSelecionados([])} className="text-red-700 hover:bg-red-100">Desmarcar Todos</Button>
-                  <Button size="sm" onClick={excluirEmLote} className="bg-red-600 hover:bg-red-700 text-white gap-2">
-                    <Trash2 className="w-4 h-4" /> Excluir Selecionados
-                  </Button>
+          <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6">
+            {colunasAtivas.map(col => {
+              const isConcluido = col.statusBadge === "Concluído" || col.id === "Concluído" || col.nome.toLowerCase() === "concluído";
+              const isCompactado = isConcluido && !mostrarConcluidos;
+
+              return (
+              <div 
+                key={col.id} 
+                className={`shrink-0 flex flex-col bg-slate-100/50 rounded-xl border border-slate-200/60 max-h-full transition-all duration-300 ${isCompactado ? 'w-64' : 'w-80'}`} 
+                draggable={!col.isGlobal}
+                onDragStart={e => !col.isGlobal && handleColumnDragStart(e, col.id)}
+                onDragOver={e => e.preventDefault()} 
+                onDrop={e => handleDrop(e, col.id, col.isGlobal)}
+              >
+                <div className={`p-3 border-b border-slate-200/60 bg-slate-100 rounded-t-xl flex justify-between items-center group ${!col.isGlobal ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-700">{col.nome}</h3>
+                    <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{col.cards.length}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {isConcluido && mostrarConcluidos && (
+                      <Button variant="ghost" size="sm" onClick={() => setMostrarConcluidos(false)} className="h-6 text-[10px] px-2 text-slate-500 hover:text-slate-700">Ocultar</Button>
+                    )}
+                    {!col.isGlobal && !isConcluido && (
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded group-hover:hidden">{col.statusBadge}</span>
+                    )}
+                    {!col.isGlobal && (
+                      <div className="hidden group-hover:flex items-center ml-1">
+                        <button onClick={() => moverColuna(col.id, -1)} title="Mover para esquerda" className="p-1"><ArrowLeft className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                        <button onClick={() => moverColuna(col.id, 1)} title="Mover para direita" className="p-1"><ArrowRight className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                        <button onClick={() => abrirEditarColuna(col as Coluna)} title="Editar Coluna" className="p-1"><Edit2 className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-600"/></button>
+                        <button onClick={() => deletarColuna(col.id, col.cards.length)} title="Excluir Coluna" className="p-1"><Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500"/></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                  {isCompactado ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4 mt-8">
+                      <CheckCircle2 className="w-8 h-8 text-slate-400 mb-3" />
+                      <p className="text-xs text-slate-500 mb-1">Cards concluídos</p>
+                      <h4 className="text-xl font-bold text-indigo-600 mb-6">{col.cards.length} card(s)</h4>
+                      <Button onClick={() => setMostrarConcluidos(true)} className="bg-slate-800 hover:bg-slate-900 text-white w-full text-xs shadow-sm">Visualizar Todos</Button>
+                    </div>
+                  ) : (
+                    <>
+                      {col.cards.map(card => (
+                        <div key={card.id} draggable onDragStart={(e) => handleDragStart(e, card)} onClick={() => abrirModalCard(card)} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md cursor-grab active:cursor-grabbing transition-all">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${card.prioridade === 'Emergência' || card.prioridade === 'Urgente' ? 'bg-red-50 text-red-600 border border-red-100' : card.prioridade === 'Alta' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+                              {card.prioridade}
+                            </span>
+                            {card.data_vencimento && (
+                              <span className={`flex items-center gap-1 text-[10px] font-bold ${new Date(card.data_vencimento) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
+                                <CalendarIcon className="w-3 h-3"/> {new Date(card.data_vencimento).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <h4 className="font-bold text-slate-800 text-sm leading-tight mb-1">{card.titulo}</h4>
+                          {workflowAtivo === "global" && card.kanban_workflows?.nome && (
+                            <p className="text-[10px] text-indigo-600 font-semibold mb-2">De: {card.kanban_workflows.nome}</p>
+                          )}
+                          {card.descricao && <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">{card.descricao}</p>}
+                          
+                          <div className="flex items-center gap-2 pt-2 border-t border-slate-50 mt-auto">
+                            <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-[9px]">
+                              {(card.responsavel_nome || "U").substring(0,2).toUpperCase()}
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-500 truncate">{card.responsavel_nome || "Sem responsável"}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {col.cards.length === 0 && (
+                        <div className="h-24 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-400 font-medium">Solte cards aqui</div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {!col.isGlobal && !isCompactado && (
+                  <div className="p-2 bg-slate-100 border-t border-slate-200/60 rounded-b-xl">
+                    <Button variant="ghost" className="w-full text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 h-8 gap-2 text-xs" onClick={() => abrirModalCard(undefined, col.id)}>
+                      <Plus className="w-3 h-3"/> Adicionar Card
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )})}
+          </div>
+        </div>
+      </div>
+
+      {modalWF && (
+        <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
+          <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
+            <h3 className="font-bold text-lg mb-4">Criar Novo Workflow</h3>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome do Processo</label><Input value={nomeWf} onChange={e => setNomeWf(e.target.value)} placeholder="Ex: Central de Compras" autoFocus/></div>
+            </div>
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setModalWF(false)}>Cancelar</Button><Button className="bg-indigo-600 text-white" onClick={criarWorkflow}>Salvar</Button></div>
+          </div>
+        </div>
+      )}
+
+      {modalColuna && (
+        <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
+          <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
+            <h3 className="font-bold text-lg mb-1">{colunaSendoEditada ? "Editar Etapa" : "Nova Coluna (Etapa)"}</h3>
+            <p className="text-xs text-slate-500 mb-4">Vincule a etapa a um Status Global para a visão da Programação.</p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome da Etapa</label><Input value={nomeColuna} onChange={e => setNomeColuna(e.target.value)} placeholder="Ex: Cotar Preços" autoFocus/></div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-indigo-600 uppercase flex items-center gap-1"><Settings className="w-3 h-3"/> Mapeamento Global</label>
+                <Select value={statusGlobalColuna} onValueChange={setStatusGlobalColuna}>
+                  <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                  <SelectContent className="bg-white z-[99999]">
+                    {STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setModalColuna(false); setColunaSendoEditada(null); setNomeColuna(""); }}>Cancelar</Button>
+              <Button className="bg-indigo-600 text-white" onClick={salvarColuna}>{colunaSendoEditada ? "Atualizar" : "Adicionar"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalCard && (
+        <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="p-5 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600"/> {cardSendoEditado ? "Editar Tarefa" : "Nova Tarefa"}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setModalCard(false)} className="text-slate-400 hover:text-red-500"><X className="w-5 h-5"/></Button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">O que precisa ser feito? *</label>
+                <Input value={cardForm.titulo} onChange={e => setCardForm({...cardForm, titulo: e.target.value})} placeholder="Título resumido..." className="text-base font-medium h-10" autoFocus/>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Coluna / Etapa Atual</label>
+                  <Select value={cardForm.coluna_id} onValueChange={v => setCardForm({...cardForm, coluna_id: v})}>
+                    <SelectTrigger className="bg-white z-[99999]"><SelectValue placeholder="Selecione a coluna..."/></SelectTrigger>
+                    <SelectContent className="bg-white z-[99999]">
+                      {workflowAtivo === "global" ? (
+                        STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
+                      ) : (
+                        colunas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Responsável</label>
+                  <Input value={cardForm.responsavel} onChange={e => setCardForm({...cardForm, responsavel: e.target.value})} placeholder="Nome de quem vai executar" />
                 </div>
               </div>
-            )}
-
-            <Table>
-              <TableHeader className="bg-slate-100">
-                <TableRow className="text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-100">
-                  <TableHead onClick={() => handleSort('data_entrada')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Entrada {renderSortIcon('data_entrada')}</TableHead>
-                  <TableHead onClick={() => handleSort('previsao_prazo')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Previsão {renderSortIcon('previsao_prazo')}</TableHead>
-                  <TableHead onClick={() => handleSort('solicitante')} className="cursor-pointer font-semibold p-4">Solicitante {renderSortIcon('solicitante')}</TableHead>
-                  <TableHead onClick={() => handleSort('processo_projeto')} className="cursor-pointer font-semibold p-4">Projeto {renderSortIcon('processo_projeto')}</TableHead>
-                  <TableHead onClick={() => handleSort('departamento')} className="cursor-pointer font-semibold p-4">Depto {renderSortIcon('departamento')}</TableHead>
-                  <TableHead onClick={() => handleSort('lider_card')} className="cursor-pointer font-semibold p-4">Líder {renderSortIcon('lider_card')}</TableHead>
-                  <TableHead onClick={() => handleSort('tarefa_atual')} className="cursor-pointer font-semibold p-4">Tarefa Atual {renderSortIcon('tarefa_atual')}</TableHead>
-                  <TableHead onClick={() => handleSort('status')} className="cursor-pointer font-semibold text-center p-4">Status {renderSortIcon('status')}</TableHead>
-                  <TableHead onClick={() => handleSort('data_conclusao')} className="cursor-pointer font-semibold whitespace-nowrap p-4">Conclusão {renderSortIcon('data_conclusao')}</TableHead>
-                  <TableHead className="font-semibold p-4">Resumo</TableHead>
-                  <TableHead className="font-semibold text-center p-4">Ação</TableHead>
-                  <TableHead className="w-10 text-center">
-                    <input 
-                      type="checkbox"
-                      checked={paginated.length > 0 && selecionados.length === paginated.length}
-                      onChange={() => toggleTodos(paginated)}
-                      className="rounded border-slate-300 w-4 h-4 cursor-pointer"
-                    />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="divide-y divide-slate-100">
-                {loading ? <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Analisando banco de dados...</TableCell></TableRow> : paginated.length === 0 ? <TableRow><TableCell colSpan={12} className="text-center text-slate-400 font-medium py-12">Nenhum projeto corresponde aos filtros aplicados.</TableCell></TableRow> : paginated.map(a => (
-                    <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
-                      <TableCell className="whitespace-nowrap text-sm font-medium text-slate-600 p-4">{formatarData(a.data_entrada)}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm font-bold text-amber-600 p-4">{formatarData(a.previsao_prazo)}</TableCell>
-                      <TableCell className="text-xs font-semibold text-slate-700 p-4">{a.solicitante || "—"}</TableCell>
-                      <TableCell className="font-bold text-sm text-slate-800 p-4">{a.processo_projeto || "—"}</TableCell>
-                      <TableCell className="text-xs text-slate-500 font-medium p-4">{a.departamento || "—"}</TableCell>
-                      <TableCell className="text-xs font-bold text-indigo-700 p-4">{a.lider_card || "—"}</TableCell>
-                      <TableCell className="text-xs text-slate-600 font-medium p-4">{a.tarefa_atual || "—"}</TableCell>
-                      <TableCell className="text-center p-4"><span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border border-white ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : a.status === 'waiting' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{formatarStatus(a.status)}</span></TableCell>
-                      <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
-                      <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
-                      <TableCell className="text-center p-4"><Button variant="ghost" size="icon" onClick={() => excluirRegistro(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="h-4 w-4" /></Button></TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox"
-                          checked={selecionados.includes(a.id)}
-                          onChange={() => toggleSelecao(a.id)}
-                          className="rounded border-slate-300 w-4 h-4 cursor-pointer"
-                        />
-                      </TableCell>
-                    </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Data de Vencimento</label>
+                  <Input type="date" value={cardForm.vencimento} onChange={e => setCardForm({...cardForm, vencimento: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Prioridade</label>
+                  <Select value={cardForm.prioridade} onValueChange={v => setCardForm({...cardForm, prioridade: v})}>
+                    <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                    <SelectContent className="bg-white z-[99999]">
+                      <SelectItem value="Baixa">Baixa</SelectItem>
+                      <SelectItem value="Normal">Normal</SelectItem>
+                      <SelectItem value="Alta">Alta</SelectItem>
+                      <SelectItem value="Urgente">Urgente</SelectItem>
+                      <SelectItem value="Emergência">Emergência</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Detalhes e Informações Adicionais</label>
+                <textarea value={cardForm.descricao} onChange={e => setCardForm({...cardForm, descricao: e.target.value})} className="w-full min-h-[120px] p-3 border rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Adicione links, observações ou checklist do que deve ser feito..."></textarea>
+              </div>
+            </div>
+            <div className="p-5 border-t bg-slate-50 rounded-b-xl flex justify-between items-center">
+              {cardSendoEditado ? (
+                <Button variant="ghost" onClick={() => deletarCard(cardSendoEditado.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 gap-2"><Trash2 className="w-4 h-4"/> Excluir Tarefa</Button>
+              ) : <div></div>}
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setModalCard(false)}>Cancelar</Button>
+                <Button className="bg-indigo-600 text-white shadow-sm" onClick={salvarCard}>Salvar Tarefa</Button>
+              </div>
+            </div>
           </div>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm bg-white p-3 rounded-xl border border-slate-200 shadow-sm"><span className="text-slate-500 font-medium pl-2">Página <strong className="text-slate-800">{page + 1}</strong> de {totalPages}</span><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="font-semibold text-slate-600">Anterior</Button><Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="font-semibold text-slate-600">Próxima</Button></div></div>
-        )}
-      </div>
+      )}
     </AppLayout>
   );
 }
