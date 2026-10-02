@@ -1,16 +1,8 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowDown,
-  ArrowUp,
-  CalendarRange,
-  ChevronDown, 
-  FileText,
-  Filter,
-  Loader2,
-  Table as TableIcon,
-  Trash2, 
-  X } from "lucide-react";
+  ArrowDown, ArrowUp, CalendarRange, ChevronDown, FileText, Filter, Loader2, Table as TableIcon, Trash2, X 
+} from "lucide-react";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -21,7 +13,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/AppLayout";
-
 import { supabase } from "../integrations/supabase/client"; 
 
 const PAGE_SIZE = 15;
@@ -75,7 +66,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [exportando, setExportando] = useState(false);
 
-  // estados filtros e ordenac
   const [filterLideres, setFilterLideres] = useState<string[]>([]);
   const [filterDepartamentos, setFilterDepartamentos] = useState<string[]>([]);
   const [filterSolicitantes, setFilterSolicitantes] = useState<string[]>([]);
@@ -90,34 +80,31 @@ export default function DashboardPage() {
   
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
   const [page, setPage] = useState(0);
-
   const [selecionados, setSelecionados] = useState<number[]>([]);
+
   const toggleSelecao = (id: number) => {
     setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
+
   const toggleTodos = (itensDaPagina: any[]) => {
     setSelecionados(selecionados.length === itensDaPagina.length ? [] : itensDaPagina.map(item => item.id));
   };
+
   const excluirEmLote = async () => {
     if (!window.confirm(`Tem certeza que deseja excluir ${selecionados.length} projetos definitivamente?`)) return;
-    
     try {
       setLoading(true);
       const { error } = await supabase.from('programacao_tc').delete().in('id', selecionados);
       if (error) throw error;
-    
       setAllData(prev => prev.filter(item => !selecionados.includes(item.id)));
       setSelecionados([]);
     } catch (error) {
-      console.error("Erro ao excluir em lote:", error);
       alert("Erro ao excluir. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
-
-  // autosave
   useEffect(() => {
     const savedFilters = sessionStorage.getItem("agenda_ummense_filtros");
     if (savedFilters) {
@@ -140,11 +127,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const stateToSave = {
-      filterLideres, filterDepartamentos, filterSolicitantes, filterStatus,
-      dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim,
-      sortConfig, page
-    };
+    const stateToSave = { filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page };
     sessionStorage.setItem("agenda_ummense_filtros", JSON.stringify(stateToSave));
   }, [filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page]);
 
@@ -152,12 +135,9 @@ export default function DashboardPage() {
     async function fetchData() {
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !user.email) return; 
-        
+        // O Supabase RLS tratará da restrição e segurança automaticamente
         const { data, error } = await supabase.from('programacao_tc').select('*').order('data_entrada', { ascending: false });
         if (error) throw error;
-        
         if (data) {
            setAllData(data); 
         }
@@ -184,7 +164,6 @@ export default function DashboardPage() {
       if (filterDepartamentos.length > 0 && !filterDepartamentos.includes(a.departamento)) return false;
       if (filterSolicitantes.length > 0 && !filterSolicitantes.includes(a.solicitante)) return false;
       if (filterStatus.length > 0 && !filterStatus.includes(formatarStatus(a.status))) return false;
-      
       if (dataEntradaInicio && a.data_entrada < dataEntradaInicio) return false;
       if (dataEntradaFim && a.data_entrada > dataEntradaFim + "T23:59:59") return false;
       if (dataPrevisaoInicio && a.previsao_prazo < dataPrevisaoInicio) return false;
@@ -236,7 +215,6 @@ export default function DashboardPage() {
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
-  // Função Auxiliar para carregar a imagem de forma segura
   const getBase64ImageFromUrl = async (imageUrl: string): Promise<string | null> => {
     try {
       const res = await fetch(imageUrl);
@@ -253,157 +231,92 @@ export default function DashboardPage() {
     }
   };
 
-const exportarPDF = async () => {
+  const exportarPDF = async () => {
     setExportando(true);
     try {
-      const doc = new jsPDF("landscape");
-      const logoData = await getBase64ImageFromUrl("/logo.png");
-      
+      const doc = new jsPDF("landscape"); 
+      const logoBase64 = await getBase64ImageFromUrl("/logo.png");
       const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3 };
 
-      // ORDENAÇÃO MULTINÍVEL: Líder sempre em primeiro, depois a ordenação da tela
       const dadosOrdenados = [...filtered].sort((a, b) => {
-        // 1. PRIMAZIA DO LÍDER (Sempre agrupa por ele primeiro)
-        const liderA = a.lider_card || "Sem Líder";
-        const liderB = b.lider_card || "Sem Líder";
+        const liderA = a.lider_card || "Sem Responsável";
+        const liderB = b.lider_card || "Sem Responsável";
         if (liderA < liderB) return -1;
         if (liderA > liderB) return 1;
-
-        // 2. ORDENAÇÃO DA TELA (Secundária - aplicada dentro do bloco do líder)
-        if (sortConfig) {
-          let valA = a[sortConfig.key];
-          let valB = b[sortConfig.key];
-          if (sortConfig.key === 'status') {
-            valA = formatarStatus(a.status);
-            valB = formatarStatus(b.status);
-          }
-          if (!valA) valA = "";
-          if (!valB) valB = "";
-          if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-          if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-        }
         
-        // 3. Status e Datas (Terciária, se empatar o resto)
         const stA = formatarStatus(a.status);
         const stB = formatarStatus(b.status);
-        const ordemA = pesoStatus[stA] || 99;
+        const ordemA = pesoStatus[stA] || 99; 
         const ordemB = pesoStatus[stB] || 99;
         if (ordemA !== ordemB) return ordemA - ordemB;
-        
-        return new Date(a.data_entrada || 0).getTime() - new Date(b.data_entrada || 0).getTime();
+
+        const dataA = new Date(a.data_entrada || 0).getTime();
+        const dataB = new Date(b.data_entrada || 0).getTime();
+        return dataA - dataB;
       });
 
-      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Solicitante", "Projeto/Processo", "Depto", "Líder", "Tarefa Atual", "Status", "Resumo/Obs"];
+      const tableColumn = ["Entrada", "Previsão", "Conclusão", "Solicitante", "Projeto/Processo", "Depto", "Tarefa Atual", "Status", "Resumo/Obs"];
       const tableRows: any[] = [];
-      let grupoAtual = null;
+      let liderAtual: string | null = null; 
 
       dadosOrdenados.forEach(item => {
-        // BLOQUEIO: O Agrupador sempre será o Líder, independente da ordenação da tela
-        let valGrupo = item.lider_card || "Sem Líder";
-        let labelGrupo = "Líder Responsável";
-
-        if (valGrupo !== grupoAtual) {
+        const liderItem = item.lider_card || "Sem Responsável";
+        if (liderItem !== liderAtual) {
           tableRows.push([{
-            content: `${labelGrupo}: ${valGrupo}`, colSpan: 10, 
+            content: `Responsável: ${liderItem}`, colSpan: 9, 
             styles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold', halign: 'left' }
           }]);
-          grupoAtual = valGrupo;
+          liderAtual = liderItem;
         }
-        
+
         tableRows.push([
           formatarData(item.data_entrada), formatarData(item.previsao_prazo), formatarData(item.data_conclusao),
           item.solicitante || "-", item.processo_projeto || "-", item.departamento || "-",
-          item.lider_card || "-", item.tarefa_atual || "-", formatarStatus(item.status), item.resumo_observacoes || "-"
+          item.tarefa_atual || "-", formatarStatus(item.status), item.resumo_observacoes || "-"
         ]);
       });
 
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 45, // Tabela desce para não bater na logo/barra preta superior
-        margin: { top: 45, bottom: 40, left: 14, right: 14 },
+        startY: 35, 
+        margin: { bottom: 35 }, 
         theme: 'grid', 
-        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
-        columnStyles: { 
-          0: { cellWidth: 16, halign: 'center' }, 
-          1: { cellWidth: 16, halign: 'center' }, 
-          2: { cellWidth: 16, halign: 'center' }, 
-          3: { cellWidth: 25 }, 
-          4: { cellWidth: 35 }, 
-          5: { cellWidth: 20 }, 
-          6: { cellWidth: 20 }, 
-          7: { cellWidth: 30 }, 
-          8: { cellWidth: 22, halign: 'center' }, 
-          9: { cellWidth: 'auto', halign: 'left' } 
+        styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak', lineColor: [200, 200, 200], lineWidth: 0.1 },
+        columnStyles: {
+          0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' },
+          5: { halign: 'center' }, 7: { halign: 'center' },
+          8: { cellWidth: 40, halign: 'left' } 
         },
-        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' }, // Cabeçalho da tabela combinando com a identidade visual preta
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         
-        didDrawPage: function (data) {
+        didDrawPage: function () {
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
-
-          // ==========================================
-          // BLINDAGEM DE BACKGROUND (Limpa áreas do cabeçalho e rodapé)
-          // ==========================================
-          doc.setFillColor(255, 255, 255);
-          doc.rect(0, 0, pageWidth, 42, "F"); // Limpa o topo
-          doc.rect(0, pageHeight - 35, pageWidth, 35, "F"); // Limpa o rodapé
-
-          // ==========================================
-          // CABEÇALHO (Barra Preta + Logo)
-          // ==========================================
-          doc.setFillColor(0, 0, 0); // Preto
-          doc.rect(0, 0, pageWidth, 15, "F"); // Barra no topo absoluto
-
-          if (logoData) {
-            // A logo fica flutuando abaixo da barra preta, à esquerda
-            doc.addImage(logoData, "PNG", 14, 18, 40, 15);
-          }
-          
+          if (logoBase64) { doc.addImage(logoBase64, "PNG", 14, 10, 40, 15); }
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
           doc.setTextColor(0, 0, 0);
-          // Título centralizado ao lado da logo
-          doc.text("Gestão de Projetos e Processos", pageWidth / 2, 28, { align: "center" });
-
-          // Linha divisória fina
+          doc.text("Agenda TC Copiadoras", pageWidth / 2, 20, { align: "center" });
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.5);
-          doc.line(14, 38, pageWidth - 14, 38);
-
-          // Data (Canto direito inferior do cabeçalho)
-          const today = new Date();
-          const dia = String(today.getDate()).padStart(2, '0');
-          const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-          const textoData = `Belém, ${dia} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`;
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(9);
-          doc.setTextColor(80, 80, 80);
-          doc.text(textoData, pageWidth - 14, 35, { align: "right" });
-
-          // ==========================================
-          // RODAPÉ (Barra Preta)
-          // ==========================================
-          doc.setFillColor(0, 0, 0); // Preto
+          doc.line(14, 28, pageWidth - 14, 28);
+          doc.setFillColor(235, 235, 235);
           doc.rect(0, pageHeight - 25, pageWidth, 25, "F");
-
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.5);
-          doc.setTextColor(255, 255, 255); // Texto branco no fundo preto
-
-          // Informações do Endereço (Esquerda)
-          const infoEsq = "Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0";
-          doc.text(infoEsq, 14, pageHeight - 16);
-
-          // Contatos Telefônicos e Email (Direita)
-          const infoDir = "(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br";
-          doc.text(infoDir, pageWidth - 14, pageHeight - 16, { align: "right" });
+          doc.setFontSize(6.5);
+          doc.setTextColor(100, 100, 100);
+          const col1Text = "Trav. Angustura 2813;\nMarco - Belém - PA - Brasil.\nCEP: 66.093-040\nF.: 055 (91) 3366-5107/5108\nFAX: 055 (91) 3366-5100 Wp: 055 (91) 98156-6556\nCNPJ: 07.679.989/0001-50   //   I.E.: 15.250.057-0";
+          doc.text(col1Text, 14, pageHeight - 20);
+          doc.setTextColor(59, 130, 246);
+          const col2Text = "vendas@tccopiadoras.com.br\nvendas2@tccopiadoras.com.br\nlicitacoes1@tccopiadoras.com.br\nlicitacoes2@tccopiadoras.com.br\nlicitacoes3@tccopiadoras.com.br";
+          doc.text(col2Text, pageWidth / 2 - 45, pageHeight - 20);
+          const col3Text = "diretoria@tccopiadoras.com.br\nsuportetecnico@tccopiadoras.com.br\nsuportetecnico1@tccopiadoras.com.br\nsuportetecnico2@tccopiadoras.com.br\ntcservicos@tccopiadoras.com.br";
+          doc.text(col3Text, pageWidth / 2 + 45, pageHeight - 20);
         },
-        
         didParseCell: function (data) {
-          // Índice 8 = Coluna de Status na AgendaUmmense
-          if (data.section === 'body' && data.column.index === 8 && data.cell.raw && (data.row.raw as any[]).length > 1) {
+          if (data.section === 'body' && data.column.index === 7 && data.cell.raw && (data.row.raw as any[]).length > 1) {
             const status = data.cell.raw as string;
             if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
             else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
@@ -411,33 +324,26 @@ const exportarPDF = async () => {
           }
         }
       });
-      doc.save("Agenda_Projetos_Processos.pdf");
+      doc.save("Agenda_TC_Copiadoras.pdf");
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF.");
     } finally {
       setExportando(false);
     }
   };
 
-  // ==========================================
-  // EXPORTAÇÃO EXCEL
-  // ==========================================
   const exportarExcel = async () => {
     setExportando(true);
     try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Projetos");
       const logoBase64 = await getBase64ImageFromUrl("/logo.png");
-      
       let startRow = 1;
-      
       if (logoBase64) {
         const imageId = workbook.addImage({ base64: logoBase64, extension: "png" });
         worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });
-        startRow = 5; // Empurra a tabela para baixo se tiver logo
+        startRow = 5; 
       }
-      
       worksheet.getRow(startRow).values = ["Data Entrada", "Data Previsão", "Data Conclusão", "Líder", "Solicitante", "Projeto", "Departamento", "Tarefa Atual", "Status", "Resumo"];
       worksheet.getRow(startRow).font = { bold: true };
       
@@ -453,7 +359,6 @@ const exportarPDF = async () => {
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), "Acompanhamento_Projetos.xlsx");
     } catch (error) { 
-      console.error("Erro ao gerar Excel:", error); 
       alert("Erro ao gerar Excel."); 
     } finally {
       setExportando(false);
@@ -518,7 +423,6 @@ const exportarPDF = async () => {
 
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto min-h-[400px]">
-
             {selecionados.length > 0 && (
               <div className="bg-red-50 border-b border-red-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2 mb-4 rounded-lg m-4">
                 <span className="text-red-800 font-semibold">{selecionados.length} projeto(s) selecionado(s)</span>
@@ -530,7 +434,6 @@ const exportarPDF = async () => {
                 </div>
               </div>
             )}
-
             <Table>
               <TableHeader className="bg-slate-100">
                 <TableRow className="text-xs uppercase tracking-wider text-slate-600 hover:bg-slate-100">
@@ -546,12 +449,7 @@ const exportarPDF = async () => {
                   <TableHead className="font-semibold p-4">Resumo</TableHead>
                   <TableHead className="font-semibold text-center p-4">Ação</TableHead>
                   <TableHead className="w-10 text-center">
-                    <input 
-                      type="checkbox"
-                      checked={paginated.length > 0 && selecionados.length === paginated.length}
-                      onChange={() => toggleTodos(paginated)}
-                      className="rounded border-slate-300 w-4 h-4 cursor-pointer"
-                    />
+                    <input type="checkbox" checked={paginated.length > 0 && selecionados.length === paginated.length} onChange={() => toggleTodos(paginated)} className="rounded border-slate-300 w-4 h-4 cursor-pointer" />
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -569,14 +467,7 @@ const exportarPDF = async () => {
                       <TableCell className="whitespace-nowrap text-sm font-bold text-emerald-600 p-4">{formatarData(a.data_conclusao)}</TableCell>
                       <TableCell className="max-w-[150px] truncate text-xs text-slate-500 italic p-4" title={a.resumo_observacoes}>{a.resumo_observacoes || "—"}</TableCell>
                       <TableCell className="text-center p-4"><Button variant="ghost" size="icon" onClick={() => excluirRegistro(a.id)} className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="h-4 w-4" /></Button></TableCell>
-                      <TableCell className="text-center">
-                        <input 
-                          type="checkbox"
-                          checked={selecionados.includes(a.id)}
-                          onChange={() => toggleSelecao(a.id)}
-                          className="rounded border-slate-300 w-4 h-4 cursor-pointer"
-                        />
-                      </TableCell>
+                      <TableCell className="text-center"><input type="checkbox" checked={selecionados.includes(a.id)} onChange={() => toggleSelecao(a.id)} className="rounded border-slate-300 w-4 h-4 cursor-pointer" /></TableCell>
                     </TableRow>
                 ))}
               </TableBody>
