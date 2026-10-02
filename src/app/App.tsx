@@ -30,7 +30,6 @@ const DepartamentoPessoal = lazy(() => import("@/pages/DepartamentoPessoal"));
 const Comissoes = lazy(() => import("@/pages/Comissoes"));
 const GestaoPatrimonio = lazy(() => import("@/pages/GestaoPatrimonio"));
 const Financeiro = lazy(() => import("@/pages/Financeiro"));
-const DashboardFinanceiro = lazy(() => import("@/pages/DashboardFinanceiro"));
 const Logistica = lazy(() => import("@/pages/Logistica"));
 const EntradasProdutos = lazy(() => import("@/pages/EntradasProdutos"));
 const Compras = lazy(() => import("@/pages/Compras"));
@@ -93,7 +92,6 @@ export default function App() {
               <Route path="/deppessoal" element={<RotaProtegida><DepartamentoPessoal /></RotaProtegida>} />
               <Route path="/comissoes" element={<RotaProtegida><Comissoes /></RotaProtegida>} />
               <Route path="/patrimonio" element={<RotaProtegida><GestaoPatrimonio /></RotaProtegida>} />
-              <Route path="/dashboardfinanceiro" element={<RotaProtegida><DashboardFinanceiro /></RotaProtegida>} />
               <Route path="/entradasprodutos" element={<RotaProtegida><EntradasProdutos /></RotaProtegida>} />
               <Route path="/compras" element={<RotaProtegida><Compras /></RotaProtegida>} />
               <Route path="/requisicoes" element={<RotaProtegida><Requisicoes /></RotaProtegida>} />
