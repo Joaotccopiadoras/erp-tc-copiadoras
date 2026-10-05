@@ -83,7 +83,7 @@ export default function AgendaKanban() {
         supabase.from('kanban_cards').select('*, kanban_colunas(status_global, nome), kanban_workflows(nome)')
       ]);
       if (colsRes.data) setColunas(colsRes.data);
-      if (cardsRes.data) setCards(cardsRes.data); // Delegação completa do filtro ao banco de dados RLS
+      if (cardsRes.data) setCards(cardsRes.data);
     } else {
       const [colsRes, cardsRes] = await Promise.all([
         supabase.from('kanban_colunas').select('*').eq('workflow_id', workflowAtivo).order('ordem'),
