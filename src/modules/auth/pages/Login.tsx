@@ -28,8 +28,18 @@ export default function Login() {
 
     setIsSubmitting(true);
     try {
+      // 1. Traduz o nome de usuário (ex: joaogaia) para o e-mail real da sessão
+      let emailFinal = email.trim().toLowerCase();
+      
+      const { data: emailTraduzido, error: rpcError } = await supabase.rpc('get_email_by_username', { p_username: emailFinal });
+      
+      if (!rpcError && emailTraduzido) {
+        emailFinal = emailTraduzido;
+      }
+
+      // 2. Tenta o login oficial com o e-mail traduzido
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: emailFinal,
         password: senha,
       });
 
@@ -38,7 +48,7 @@ export default function Login() {
     } catch (error: any) {
       toast({
         title: "Acesso Negado",
-        description: "Credenciais inválidas. Verifique seu e-mail e senha.",
+        description: "Credenciais inválidas. Verifique seu usuário/e-mail e senha.",
         variant: "destructive",
       });
       setIsSubmitting(false);
