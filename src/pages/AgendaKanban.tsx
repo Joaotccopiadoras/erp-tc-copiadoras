@@ -349,35 +349,43 @@ export default function AgendaKanban() {
       const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
       const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
       
+      // Validação de Criação
       let matchCriacao = true;
-      if (dataCriacaoInicio) matchCriacao = matchCriacao && new Date(c.created_at || '2999-01-01') >= new Date(dataCriacaoInicio);
-      if (dataCriacaoFim) matchCriacao = matchCriacao && new Date(c.created_at || '1970-01-01') <= new Date(dataCriacaoFim + "T23:59:59");
+      if (dataCriacaoInicio) matchCriacao = new Date(c.created_at || '2999-01-01T00:00:00') >= new Date(dataCriacaoInicio + 'T00:00:00');
+      if (dataCriacaoFim) matchCriacao = matchCriacao && new Date(c.created_at || '1970-01-01T00:00:00') <= new Date(dataCriacaoFim + "T23:59:59");
 
+      // Validação de Previsão
       let matchPrevisao = true;
-      if (dataPrevisaoInicio) matchPrevisao = matchPrevisao && new Date(c.data_vencimento || '2999-01-01') >= new Date(dataPrevisaoInicio);
-      if (dataPrevisaoFim) matchPrevisao = matchPrevisao && new Date(c.data_vencimento || '1970-01-01') <= new Date(dataPrevisaoFim + "T23:59:59");
+      if (dataPrevisaoInicio) matchPrevisao = new Date(c.data_vencimento || '2999-01-01T00:00:00') >= new Date(dataPrevisaoInicio + 'T00:00:00');
+      if (dataPrevisaoFim) matchPrevisao = matchPrevisao && new Date(c.data_vencimento || '1970-01-01T00:00:00') <= new Date(dataPrevisaoFim + "T23:59:59");
 
+      // Validação de Conclusão (O campo no Supabase foi padronizado para data_conclusao pelo sistema de edição anterior)
       let matchConclusao = true;
-      if (dataConclusaoInicio) matchConclusao = matchConclusao && new Date(c.data_conclusao || '2999-01-01') >= new Date(dataConclusaoInicio);
-      if (dataConclusaoFim) matchConclusao = matchConclusao && new Date(c.data_conclusao || '1970-01-01') <= new Date(dataConclusaoFim + "T23:59:59");
+      if (dataConclusaoInicio) matchConclusao = new Date(c.data_conclusao || '2999-01-01T00:00:00') >= new Date(dataConclusaoInicio + 'T00:00:00');
+      if (dataConclusaoFim) matchConclusao = matchConclusao && new Date(c.data_conclusao || '1970-01-01T00:00:00') <= new Date(dataConclusaoFim + "T23:59:59");
       
       return matchBusca && matchResp && matchCriacao && matchPrevisao && matchConclusao;
     });
 
-    // Ordenação garantindo que o mais antigo venha primeiro em cada categoria
+    // Ordenação do Menos Recente para o Mais Recente (Ascendente)
     result.sort((a, b) => {
-      let dateA, dateB;
       if (ordenacao === "previsao") {
-        dateA = new Date(a.data_vencimento || '2999-01-01').getTime();
-        dateB = new Date(b.data_vencimento || '2999-01-01').getTime();
-      } else if (ordenacao === "conclusao") {
-        dateA = new Date(a.data_conclusao || '2999-01-01').getTime();
-        dateB = new Date(b.data_conclusao || '2999-01-01').getTime();
-      } else {
-        dateA = new Date(a.created_at || '2999-01-01').getTime();
-        dateB = new Date(b.created_at || '2999-01-01').getTime();
+        // Se a data for null, jogamos para o final ('2999') para não atrapalhar quem tem data real
+        const dateA = new Date(a.data_vencimento || '2999-01-01').getTime();
+        const dateB = new Date(b.data_vencimento || '2999-01-01').getTime();
+        return dateA - dateB;
+      } 
+      else if (ordenacao === "conclusao") {
+        const dateA = new Date(a.data_conclusao || '2999-01-01').getTime();
+        const dateB = new Date(b.data_conclusao || '2999-01-01').getTime();
+        return dateA - dateB;
+      } 
+      else {
+        // Ordenação Padrão por Criação
+        const dateA = new Date(a.created_at || '2999-01-01').getTime();
+        const dateB = new Date(b.created_at || '2999-01-01').getTime();
+        return dateA - dateB;
       }
-      return dateA - dateB;
     });
 
     return result;
