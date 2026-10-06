@@ -34,6 +34,12 @@ type Card = {
 
 const STATUS_GLOBAIS = ["Backlog", "Andamento", "Aguardando", "Concluído"];
 
+// Utilitário para pegar a data de hoje no fuso local no formato YYYY-MM-DD
+const getHojeStr = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+};
+
 export default function AgendaKanban() {
   const [usuarioAtual, setUsuarioAtual] = useState<any>(null);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -48,7 +54,7 @@ export default function AgendaKanban() {
   // ==========================================
   const [busca, setBusca] = useState("");
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
-  const [ordenacao, setOrdenacao] = useState("criacao"); // criacao, previsao, conclusao
+  const [ordenacao, setOrdenacao] = useState("criacao"); 
   
   const [dataCriacaoInicio, setDataCriacaoInicio] = useState("");
   const [dataCriacaoFim, setDataCriacaoFim] = useState("");
@@ -196,6 +202,9 @@ export default function AgendaKanban() {
     for (const u of listaAtualizada) { await supabase.from('kanban_colunas').update({ ordem: u.ordem }).eq('id', u.id); }
   };
 
+  // ==========================================
+  // AUTOMAÇÃO 1: SALVAMENTO VIA MODAL (Ajuste de Data de Conclusão)
+  // ==========================================
   const salvarCard = async () => {
     if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna/Etapa são obrigatórios.");
     let finalColunaId = cardForm.coluna_id;
@@ -233,6 +242,22 @@ export default function AgendaKanban() {
       finalWfId = colSelecionada?.workflow_id || workflowAtivo;
     }
 
+    // Inteligência Artificial: Carimbar ou limpar a Data de Conclusão
+    let statusGlobalAlvo = "Backlog";
+    if (workflowAtivo === "global") {
+        statusGlobalAlvo = cardForm.coluna_id; // Na visão global, a opção do select é o próprio status
+    } else {
+        const colSel = colunas.find(c => c.id === finalColunaId);
+        if (colSel) statusGlobalAlvo = colSel.status_global;
+    }
+
+    let dataConclusaoFinal = cardForm.conclusao || null;
+    if (statusGlobalAlvo === "Concluído") {
+        if (!dataConclusaoFinal) dataConclusaoFinal = getHojeStr(); // Carimba automático
+    } else {
+        dataConclusaoFinal = null; // Limpa se foi retrocedido para outra etapa
+    }
+
     const payload = {
       workflow_id: finalWfId,
       coluna_id: finalColunaId,
@@ -242,7 +267,7 @@ export default function AgendaKanban() {
       responsavel_email: usuarioAtual?.email,
       prioridade: cardForm.prioridade,
       data_vencimento: cardForm.vencimento || null,
-      data_conclusao: cardForm.conclusao || null,
+      data_conclusao: dataConclusaoFinal,
       atualizado_em: new Date().toISOString()
     };
 
@@ -295,6 +320,9 @@ export default function AgendaKanban() {
     e.dataTransfer.setData("type", "column");
   };
 
+  // ==========================================
+  // AUTOMAÇÃO 2: ARRASTAR E SOLTAR (Data Automática)
+  // ==========================================
   const handleDrop = async (e: React.DragEvent, dropTargetId: string, isGlobal: boolean) => {
     e.preventDefault();
     e.stopPropagation();
@@ -334,12 +362,35 @@ export default function AgendaKanban() {
       novaColunaId = colunaEquivalente.id;
     }
 
-    if (cardMovido.coluna_id === novaColunaId) return;
-    setCards(prev => prev.map(c => c.id === cardId ? { ...c, coluna_id: novaColunaId, kanban_colunas: { ...c.kanban_colunas, status_global: isGlobal ? dropTargetId : (colunas.find(x => x.id === novaColunaId)?.status_global || 'Backlog') } as any } : c));
-    await supabase.from('kanban_cards').update({ coluna_id: novaColunaId, atualizado_em: new Date().toISOString() }).eq('id', cardId);
+    // Inteligência Artificial: Carimbar ou limpar a Data de Conclusão ao arrastar
+    let novoStatusGlobal = isGlobal ? dropTargetId : colunas.find(x => x.id === novaColunaId)?.status_global || 'Backlog';
+    let dataConclusaoFinal = cardMovido.data_conclusao;
+    
+    if (novoStatusGlobal === "Concluído") {
+        if (!dataConclusaoFinal) dataConclusaoFinal = getHojeStr(); // Carimba a data de hoje se recém-concluído
+    } else {
+        dataConclusaoFinal = null; // Apaga se foi voltado para andamento
+    }
+
+    if (cardMovido.coluna_id === novaColunaId && cardMovido.data_conclusao === dataConclusaoFinal) return;
+
+    // Atualização Otimista
+    setCards(prev => prev.map(c => c.id === cardId ? { 
+        ...c, 
+        coluna_id: novaColunaId, 
+        data_conclusao: dataConclusaoFinal,
+        kanban_colunas: { ...c.kanban_colunas, status_global: novoStatusGlobal } as any 
+    } : c));
+
+    // Salvar no Banco
+    await supabase.from('kanban_cards').update({ 
+        coluna_id: novaColunaId, 
+        data_conclusao: dataConclusaoFinal,
+        atualizado_em: new Date().toISOString() 
+    }).eq('id', cardId);
   };
 
-// ==========================================
+  // ==========================================
   // APLICAÇÃO DOS FILTROS E ORDENAÇÃO
   // ==========================================
   const responsaveisUnicos = Array.from(new Set(cards.map(c => c.responsavel_nome).filter(Boolean)));
@@ -349,17 +400,14 @@ export default function AgendaKanban() {
       const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
       const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
       
-      // Validação de Criação
       let matchCriacao = true;
       if (dataCriacaoInicio) matchCriacao = new Date(c.created_at || '2999-01-01T00:00:00') >= new Date(dataCriacaoInicio + 'T00:00:00');
       if (dataCriacaoFim) matchCriacao = matchCriacao && new Date(c.created_at || '1970-01-01T00:00:00') <= new Date(dataCriacaoFim + "T23:59:59");
 
-      // Validação de Previsão
       let matchPrevisao = true;
       if (dataPrevisaoInicio) matchPrevisao = new Date(c.data_vencimento || '2999-01-01T00:00:00') >= new Date(dataPrevisaoInicio + 'T00:00:00');
       if (dataPrevisaoFim) matchPrevisao = matchPrevisao && new Date(c.data_vencimento || '1970-01-01T00:00:00') <= new Date(dataPrevisaoFim + "T23:59:59");
 
-      // Validação de Conclusão (O campo no Supabase foi padronizado para data_conclusao pelo sistema de edição anterior)
       let matchConclusao = true;
       if (dataConclusaoInicio) matchConclusao = new Date(c.data_conclusao || '2999-01-01T00:00:00') >= new Date(dataConclusaoInicio + 'T00:00:00');
       if (dataConclusaoFim) matchConclusao = matchConclusao && new Date(c.data_conclusao || '1970-01-01T00:00:00') <= new Date(dataConclusaoFim + "T23:59:59");
@@ -367,10 +415,8 @@ export default function AgendaKanban() {
       return matchBusca && matchResp && matchCriacao && matchPrevisao && matchConclusao;
     });
 
-    // Ordenação do Menos Recente para o Mais Recente (Ascendente)
     result.sort((a, b) => {
       if (ordenacao === "previsao") {
-        // Se a data for null, jogamos para o final ('2999') para não atrapalhar quem tem data real
         const dateA = new Date(a.data_vencimento || '2999-01-01').getTime();
         const dateB = new Date(b.data_vencimento || '2999-01-01').getTime();
         return dateA - dateB;
@@ -381,7 +427,6 @@ export default function AgendaKanban() {
         return dateA - dateB;
       } 
       else {
-        // Ordenação Padrão por Criação
         const dateA = new Date(a.created_at || '2999-01-01').getTime();
         const dateB = new Date(b.created_at || '2999-01-01').getTime();
         return dateA - dateB;
@@ -422,7 +467,6 @@ export default function AgendaKanban() {
 
   const formatarStatus = (str: string | undefined) => str ? str.toUpperCase() : "";
 
-  // Exportações respeitam agrupamento e a ordenação escolhida no filtro
   const exportarPDF = async () => {
     setExportando(true);
     try {
@@ -434,7 +478,6 @@ export default function AgendaKanban() {
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
         if (respA > respB) return 1;
-        // Se for o mesmo responsável, a ordenação selecionada pelo usuário (cardsFiltrados) já prevalece.
         return 0; 
       });
 
@@ -574,10 +617,9 @@ export default function AgendaKanban() {
             </div>
           </div>
 
-          {/* BARRA DE FILTROS AVANÇADOS (BLINDADA CONTRA ESMAGAMENTO CSS) */}
+          {/* BARRA DE FILTROS AVANÇADOS */}
           <div className="bg-white p-4 border-b border-slate-200 shrink-0 z-20 space-y-4">
             
-            {/* Primeira Linha: Busca e Selects */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="relative md:col-span-2">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -602,7 +644,6 @@ export default function AgendaKanban() {
               </Select>
             </div>
             
-            {/* Segunda Linha: Triplo Filtro de Datas no padrão solicitado */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-100">
               <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Criação (Entrada)</span>
