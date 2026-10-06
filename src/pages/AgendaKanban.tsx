@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import AppLayout from "@/shared/components/layout/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Search, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
+  FileText, KanbanSquare, Plus, Search, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2, ArrowDownAZ 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 
@@ -25,6 +25,7 @@ type Card = {
   responsavel_email: string; 
   prioridade: string; 
   data_vencimento: string; 
+  data_conclusao?: string;
   created_at?: string;
   atualizado_em?: string;
   kanban_colunas?: { status_global: string, nome: string }; 
@@ -43,12 +44,18 @@ export default function AgendaKanban() {
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   
   // ==========================================
-  // ESTADOS DOS FILTROS (Restaurados)
+  // ESTADOS DOS FILTROS AVANÇADOS
   // ==========================================
   const [busca, setBusca] = useState("");
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
-  const [filterDataInicio, setFilterDataInicio] = useState("");
-  const [filterDataFim, setFilterDataFim] = useState("");
+  const [ordenacao, setOrdenacao] = useState("criacao"); // criacao, previsao, conclusao
+  
+  const [dataCriacaoInicio, setDataCriacaoInicio] = useState("");
+  const [dataCriacaoFim, setDataCriacaoFim] = useState("");
+  const [dataPrevisaoInicio, setDataPrevisaoInicio] = useState("");
+  const [dataPrevisaoFim, setDataPrevisaoFim] = useState("");
+  const [dataConclusaoInicio, setDataConclusaoInicio] = useState("");
+  const [dataConclusaoFim, setDataConclusaoFim] = useState("");
   
   const [modalWF, setModalWF] = useState(false);
   const [modalColuna, setModalColuna] = useState(false);
@@ -60,9 +67,9 @@ export default function AgendaKanban() {
   const [nomeColuna, setNomeColuna] = useState("");
   const [statusGlobalColuna, setStatusGlobalColuna] = useState("Backlog");
   
-  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: "" });
+  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", conclusao: "", coluna_id: "" });
 
-  // Auto-Save dos Filtros (Diretriz DIRETRIZES_TC.md)
+  // Auto-Save dos Filtros
   useEffect(() => {
     const saved = sessionStorage.getItem("agenda_kanban_filtros");
     if (saved) {
@@ -70,17 +77,22 @@ export default function AgendaKanban() {
         const parsed = JSON.parse(saved);
         if (parsed.busca !== undefined) setBusca(parsed.busca);
         if (parsed.filterResponsavel) setFilterResponsavel(parsed.filterResponsavel);
-        if (parsed.filterDataInicio) setFilterDataInicio(parsed.filterDataInicio);
-        if (parsed.filterDataFim) setFilterDataFim(parsed.filterDataFim);
+        if (parsed.ordenacao) setOrdenacao(parsed.ordenacao);
+        if (parsed.dataCriacaoInicio) setDataCriacaoInicio(parsed.dataCriacaoInicio);
+        if (parsed.dataCriacaoFim) setDataCriacaoFim(parsed.dataCriacaoFim);
+        if (parsed.dataPrevisaoInicio) setDataPrevisaoInicio(parsed.dataPrevisaoInicio);
+        if (parsed.dataPrevisaoFim) setDataPrevisaoFim(parsed.dataPrevisaoFim);
+        if (parsed.dataConclusaoInicio) setDataConclusaoInicio(parsed.dataConclusaoInicio);
+        if (parsed.dataConclusaoFim) setDataConclusaoFim(parsed.dataConclusaoFim);
       } catch (e) {}
     }
   }, []);
 
   useEffect(() => {
     sessionStorage.setItem("agenda_kanban_filtros", JSON.stringify({
-      busca, filterResponsavel, filterDataInicio, filterDataFim
+      busca, filterResponsavel, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim
     }));
-  }, [busca, filterResponsavel, filterDataInicio, filterDataFim]);
+  }, [busca, filterResponsavel, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
 
   useEffect(() => {
     fetchInitData();
@@ -230,6 +242,7 @@ export default function AgendaKanban() {
       responsavel_email: usuarioAtual?.email,
       prioridade: cardForm.prioridade,
       data_vencimento: cardForm.vencimento || null,
+      data_conclusao: cardForm.conclusao || null,
       atualizado_em: new Date().toISOString()
     };
 
@@ -239,7 +252,7 @@ export default function AgendaKanban() {
       await supabase.from('kanban_cards').insert([payload]);
     }
     setModalCard(false); setCardSendoEditado(null);
-    setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: "" });
+    setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", conclusao: "", coluna_id: "" });
     fetchQuadro();
   };
 
@@ -247,10 +260,18 @@ export default function AgendaKanban() {
     if (card) {
       setCardSendoEditado(card);
       const initialCol = workflowAtivo === "global" ? (card.kanban_colunas?.status_global || "Backlog") : card.coluna_id;
-      setCardForm({ titulo: card.titulo, descricao: card.descricao || "", responsavel: card.responsavel_nome || "", prioridade: card.prioridade || "Normal", vencimento: card.data_vencimento ? card.data_vencimento.split('T')[0] : "", coluna_id: initialCol });
+      setCardForm({ 
+        titulo: card.titulo, 
+        descricao: card.descricao || "", 
+        responsavel: card.responsavel_nome || "", 
+        prioridade: card.prioridade || "Normal", 
+        vencimento: card.data_vencimento ? card.data_vencimento.split('T')[0] : "", 
+        conclusao: card.data_conclusao ? card.data_conclusao.split('T')[0] : "", 
+        coluna_id: initialCol 
+      });
     } else {
       setCardSendoEditado(null);
-      setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: workflowAtivo === "global" ? "Backlog" : (defaultColId || (colunas[0]?.id || "")) });
+      setCardForm({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", conclusao: "", coluna_id: workflowAtivo === "global" ? "Backlog" : (defaultColId || (colunas[0]?.id || "")) });
     }
     setModalCard(true);
   };
@@ -319,19 +340,48 @@ export default function AgendaKanban() {
   };
 
   // ==========================================
-  // APLICAÇÃO DOS FILTROS
+  // APLICAÇÃO DOS FILTROS E ORDENAÇÃO
   // ==========================================
   const responsaveisUnicos = Array.from(new Set(cards.map(c => c.responsavel_nome).filter(Boolean)));
   
-  const cardsFiltrados = cards.filter(c => {
-    const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
-    const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
-    let matchData = true;
-    if (filterDataInicio) matchData = matchData && new Date(c.data_vencimento || '2999-01-01') >= new Date(filterDataInicio);
-    if (filterDataFim) matchData = matchData && new Date(c.data_vencimento || '1970-01-01') <= new Date(filterDataFim);
-    
-    return matchBusca && matchResp && matchData;
-  });
+  const cardsFiltrados = useMemo(() => {
+    let result = cards.filter(c => {
+      const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
+      const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
+      
+      let matchCriacao = true;
+      if (dataCriacaoInicio) matchCriacao = matchCriacao && new Date(c.created_at || '2999-01-01') >= new Date(dataCriacaoInicio);
+      if (dataCriacaoFim) matchCriacao = matchCriacao && new Date(c.created_at || '1970-01-01') <= new Date(dataCriacaoFim + "T23:59:59");
+
+      let matchPrevisao = true;
+      if (dataPrevisaoInicio) matchPrevisao = matchPrevisao && new Date(c.data_vencimento || '2999-01-01') >= new Date(dataPrevisaoInicio);
+      if (dataPrevisaoFim) matchPrevisao = matchPrevisao && new Date(c.data_vencimento || '1970-01-01') <= new Date(dataPrevisaoFim + "T23:59:59");
+
+      let matchConclusao = true;
+      if (dataConclusaoInicio) matchConclusao = matchConclusao && new Date(c.data_conclusao || '2999-01-01') >= new Date(dataConclusaoInicio);
+      if (dataConclusaoFim) matchConclusao = matchConclusao && new Date(c.data_conclusao || '1970-01-01') <= new Date(dataConclusaoFim + "T23:59:59");
+      
+      return matchBusca && matchResp && matchCriacao && matchPrevisao && matchConclusao;
+    });
+
+    // Ordenação garantindo que o mais antigo venha primeiro em cada categoria
+    result.sort((a, b) => {
+      let dateA, dateB;
+      if (ordenacao === "previsao") {
+        dateA = new Date(a.data_vencimento || '2999-01-01').getTime();
+        dateB = new Date(b.data_vencimento || '2999-01-01').getTime();
+      } else if (ordenacao === "conclusao") {
+        dateA = new Date(a.data_conclusao || '2999-01-01').getTime();
+        dateB = new Date(b.data_conclusao || '2999-01-01').getTime();
+      } else {
+        dateA = new Date(a.created_at || '2999-01-01').getTime();
+        dateB = new Date(b.created_at || '2999-01-01').getTime();
+      }
+      return dateA - dateB;
+    });
+
+    return result;
+  }, [cards, busca, filterResponsavel, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
 
   const getColunasRenderizacao = () => {
     if (workflowAtivo === "global") {
@@ -357,31 +407,27 @@ export default function AgendaKanban() {
     } catch (e) { return null; }
   };
 
-  const formatarData = (dataStr: string) => {
+  const formatarData = (dataStr: string | undefined) => {
     if (!dataStr) return "—";
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
-  const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
+  const formatarStatus = (str: string | undefined) => str ? str.toUpperCase() : "";
 
-  // Exportações agora respeitam os filtros
+  // Exportações respeitam agrupamento e a ordenação escolhida no filtro
   const exportarPDF = async () => {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape");
       const logoData = await getBase64ImageFromUrl("/logo.png");
-      const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3, "BACKLOG": 4 };
+      
       const dadosOrdenados = [...cardsFiltrados].sort((a, b) => {
         const respA = a.responsavel_nome || "Sem Responsável";
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
         if (respA > respB) return 1;
-        const stA = formatarStatus(a.kanban_colunas?.status_global || "BACKLOG");
-        const stB = formatarStatus(b.kanban_colunas?.status_global || "BACKLOG");
-        const ordemA = pesoStatus[stA] || 99;
-        const ordemB = pesoStatus[stB] || 99;
-        if (ordemA !== ordemB) return ordemA - ordemB;
-        return new Date(a.data_vencimento || 0).getTime() - new Date(b.data_vencimento || 0).getTime();
+        // Se for o mesmo responsável, a ordenação selecionada pelo usuário (cardsFiltrados) já prevalece.
+        return 0; 
       });
 
       const tableColumn = ["Data de Criação", "Título do Card", "Etapa", "Responsável", "Prazo/Previsão", "Status", "Observações"];
@@ -450,15 +496,16 @@ export default function AgendaKanban() {
         worksheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 50 } });
         startRow = 5; 
       }
-      worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
+      worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Criação", "Previsão", "Conclusão", "Workflow", "Status Global", "Resumo"];
       worksheet.getRow(startRow).font = { bold: true };
       cardsFiltrados.forEach((item) => {
         worksheet.addRow([
           item.kanban_colunas?.nome || "-", item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", 
-          formatarData(item.data_vencimento), item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
+          formatarData(item.created_at), formatarData(item.data_vencimento), formatarData(item.data_conclusao), 
+          item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
         ]);
       });
-      worksheet.columns.forEach(column => { column.width = 20; });
+      worksheet.columns.forEach(column => { column.width = 18; });
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), "Agenda_Kanban_TC_Copiadoras.xlsx");
     } catch (error) { alert("Erro ao gerar Excel."); } finally { setExportando(false); }
@@ -519,25 +566,62 @@ export default function AgendaKanban() {
             </div>
           </div>
 
-          {/* BARRA DE FILTROS AVANÇADOS */}
-          <div className="bg-slate-100/80 p-3 border-b border-slate-200 shrink-0 z-20">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 max-w-5xl">
+          {/* BARRA DE FILTROS AVANÇADOS (BLINDADA CONTRA ESMAGAMENTO CSS) */}
+          <div className="bg-white p-4 border-b border-slate-200 shrink-0 z-20 space-y-4">
+            
+            {/* Primeira Linha: Busca e Selects */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="relative md:col-span-2">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Filtrar por título ou descrição..." className="pl-9 h-9 bg-white" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Filtrar por título ou descrição..." className="pl-9 bg-slate-50" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
-                <SelectTrigger className="h-9 bg-white z-[99999] text-sm"><SelectValue placeholder="Líder / Responsável" /></SelectTrigger>
+                <SelectTrigger className="bg-slate-50 z-[99999]"><SelectValue placeholder="Responsável" /></SelectTrigger>
                 <SelectContent className="bg-white z-[99999]">
                   <SelectItem value="todos">Todos os Responsáveis</SelectItem>
                   {responsaveisUnicos.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <div className="flex gap-2">
-                <Input type="date" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} className="h-9 bg-white text-xs" title="Data Inicial" />
-                <Input type="date" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} className="h-9 bg-white text-xs" title="Data Final" />
+              <Select value={ordenacao} onValueChange={setOrdenacao}>
+                <SelectTrigger className="bg-indigo-50 border-indigo-100 text-indigo-700 font-bold z-[99999]">
+                  <div className="flex items-center gap-2"><ArrowDownAZ className="w-4 h-4"/> <SelectValue /></div>
+                </SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
+                  <SelectItem value="criacao">Ordenar por Data de Criação</SelectItem>
+                  <SelectItem value="previsao">Ordenar por Data de Previsão</SelectItem>
+                  <SelectItem value="conclusao">Ordenar por Data de Conclusão</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Segunda Linha: Triplo Filtro de Datas no padrão solicitado */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-100">
+              <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Criação (Entrada)</span>
+                <div className="flex gap-2 items-center">
+                  <Input type="date" className="text-xs h-8 bg-white" value={dataCriacaoInicio} onChange={e => setDataCriacaoInicio(e.target.value)} />
+                  <span className="text-xs text-slate-400 font-medium">até</span>
+                  <Input type="date" className="text-xs h-8 bg-white" value={dataCriacaoFim} onChange={e => setDataCriacaoFim(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Previsão (Prazo)</span>
+                <div className="flex gap-2 items-center">
+                  <Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoInicio} onChange={e => setDataPrevisaoInicio(e.target.value)} />
+                  <span className="text-xs text-slate-400 font-medium">até</span>
+                  <Input type="date" className="text-xs h-8 bg-white" value={dataPrevisaoFim} onChange={e => setDataPrevisaoFim(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-col space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Período de Conclusão</span>
+                <div className="flex gap-2 items-center">
+                  <Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoInicio} onChange={e => setDataConclusaoInicio(e.target.value)} />
+                  <span className="text-xs text-slate-400 font-medium">até</span>
+                  <Input type="date" className="text-xs h-8 bg-white" value={dataConclusaoFim} onChange={e => setDataConclusaoFim(e.target.value)} />
+                </div>
               </div>
             </div>
+            
           </div>
 
           {/* QUADRO KANBAN (BOARD) */}
@@ -596,7 +680,7 @@ export default function AgendaKanban() {
                             </span>
                             {card.data_vencimento && (
                               <span className={`flex items-center gap-1 text-[10px] font-bold ${new Date(card.data_vencimento) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
-                                <CalendarIcon className="w-3 h-3"/> {new Date(card.data_vencimento).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                                <CalendarIcon className="w-3 h-3"/> Prev: {new Date(card.data_vencimento).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
                               </span>
                             )}
                           </div>
@@ -707,10 +791,14 @@ export default function AgendaKanban() {
                   <Input value={cardForm.responsavel} onChange={e => setCardForm({...cardForm, responsavel: e.target.value})} placeholder="Nome de quem vai executar" />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Data de Vencimento</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase">Data de Previsão</label>
                   <Input type="date" value={cardForm.vencimento} onChange={e => setCardForm({...cardForm, vencimento: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-emerald-600 uppercase">Data de Conclusão</label>
+                  <Input type="date" value={cardForm.conclusao} onChange={e => setCardForm({...cardForm, conclusao: e.target.value})} className="border-emerald-200 bg-emerald-50/50" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-500 uppercase">Prioridade</label>
