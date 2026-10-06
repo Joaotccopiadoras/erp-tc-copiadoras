@@ -1,7 +1,6 @@
 import { supabase } from "@/shared/lib/supabase/client";
 import { createClient } from "@supabase/supabase-js";
 
-// 1. Buscas de Dados
 export const carregarPermissoes = async () => {
   const { data, error } = await supabase
     .from("permissoes")
@@ -22,12 +21,10 @@ export const carregarColaboradoresDP = async () => {
   return data || [];
 };
 
-// 2. Validação de Sessão Atual (Com Fallback de Emergência)
 export const buscarPerfilAtual = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) return null;
 
-  // Tentativa 1: Busca avançada (suporta o recurso de login por Nome de Usuário / Pseudo-email)
   const { data, error } = await supabase
     .from("permissoes")
     .select("is_admin, nome, email, email_auth")
@@ -38,7 +35,6 @@ export const buscarPerfilAtual = async () => {
   if (error) {
     console.warn("Aviso Supabase (Busca Avançada Falhou):", error.message);
     
-    // Tentativa 2 (Fallback de Emergência): Busca simples apenas pelo e-mail padrão
     const fallback = await supabase
       .from("permissoes")
       .select("is_admin, nome, email")
@@ -55,14 +51,11 @@ export const buscarPerfilAtual = async () => {
   return data && data.length > 0 ? data[0] : null;
 };
 
-// 3. Mutações (CRUD de Utilizadores)
 export const criarNovoUsuario = async (email: string, nomeUsuario: string, senha: string) => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
-
-  const { error: authError } = await authGhost.auth.signUp({
-    email: email.toLowerCase().trim(),
+  const emailAutenticacao = `${nomeUsuario.toLowerCase().trim().replace(/\s+/g, '')}@sistema.local`;
+  
+  const { error: authError } = await supabase.auth.signUp({
+    email: emailAutenticacao,
     password: senha,
   });
 
@@ -70,6 +63,7 @@ export const criarNovoUsuario = async (email: string, nomeUsuario: string, senha
 
   const { error: dbError } = await supabase.from("permissoes").insert([{ 
     email: email.toLowerCase().trim(), 
+    email_auth: emailAutenticacao,
     nome_usuario: nomeUsuario.toLowerCase().trim(),
     acesso_financeiro: false, 
     is_admin: false, 
@@ -77,7 +71,7 @@ export const criarNovoUsuario = async (email: string, nomeUsuario: string, senha
     perfil_operacional: 'Nenhum' 
   }]);
   
-  if (dbError) throw new Error("Erro ao salvar permissões: O nome de utilizador ou e-mail já pode estar em uso.");
+  if (dbError) throw new Error("Erro ao salvar permissões: " + dbError.message);
 };
 
 export const revogarAcessoUsuario = async (id: string) => {
@@ -100,7 +94,6 @@ export const atualizarPermissoesUsuario = async (usuarioEditando: any) => {
   const { error } = await supabase.from('permissoes').update(payload).eq('id', usuarioEditando.id);
   if (error) throw new Error("Erro ao atualizar perfil");
   
-  // Atualiza nome na sessão (opcional)
   const { data: { user } } = await supabase.auth.getUser();
   if (user && user.email === usuarioEditando.email) {
       await supabase.auth.updateUser({ data: { nome: usuarioEditando.nome } });

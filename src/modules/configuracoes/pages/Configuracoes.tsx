@@ -1,35 +1,32 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import AppLayout from "@/shared/components/layout/AppLayout";
-import { Settings, Lock, Wrench, Database, Landmark, Loader2, ShieldAlert, RefreshCw } from "lucide-react";
+import { Settings, Lock, Wrench, Database, Landmark, Loader2, ShieldAlert, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 
-// Importação das fatias (Componentes) do Módulo
 import TabSeguranca from "../components/TabSeguranca";
 import TabTabelas from "../components/TabTabelas";
 import TabEquipe from "../components/TabEquipe";
+import TabLogs from "../components/TabLogs";
 import TabEmails from "../components/TabEmails";
 
-// Importações Globais
 import { useAuth } from "@/shared/contexts/AuthContext";
 import { buscarPerfilAtual } from "../api/usuarios";
 
 export default function ConfiguracoesPage() {
-  const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "equipe" | "tabelas" | "automacoes">("seguranca");
+  const [abaAtiva, setAbaAtiva] = useState<"seguranca" | "equipe" | "tabelas" | "logs" | "automacoes">("seguranca");
   
   const { session, loading: carregandoSessao } = useAuth();
   const queryClient = useQueryClient();
   
-  // React Query com revalidação forçada via refetch
   const { data: perfil, isLoading: carregandoPerfil, refetch } = useQuery({
     queryKey: ["perfilUsuarioLogado"],
     queryFn: buscarPerfilAtual,
-    staleTime: 1000 * 60 * 30, // 30 minutos de cache
+    staleTime: 1000 * 60 * 30,
   });
 
   const isCurrentUserAdmin = perfil?.is_admin === true;
 
-  // 1. Tela de Carregamento
   if (carregandoSessao || carregandoPerfil) {
     return (
       <AppLayout>
@@ -41,7 +38,6 @@ export default function ConfiguracoesPage() {
     );
   }
 
-  // 2. Blindagem com Painel de Diagnóstico (Em caso de falha)
   if (!isCurrentUserAdmin) {
     return (
       <AppLayout>
@@ -132,12 +128,17 @@ export default function ConfiguracoesPage() {
             <button onClick={() => setAbaAtiva("tabelas")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors ${abaAtiva === "tabelas" ? "bg-emerald-50 text-emerald-700" : "text-slate-600 hover:bg-slate-50"}`}>
               <Landmark className="w-4 h-4 mr-3" /> Tabelas Auxiliares
             </button>
+
+            <button onClick={() => setAbaAtiva("logs")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors ${abaAtiva === "logs" ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
+              <Activity className="w-4 h-4 mr-3" /> Logs e Auditoria
+            </button>
           </div>
 
           <div className="flex-1 w-full min-w-0">
             {abaAtiva === "seguranca" && <TabSeguranca isCurrentUserAdmin={isCurrentUserAdmin} />}
             {abaAtiva === "equipe" && <TabEquipe />}
             {abaAtiva === "tabelas" && <TabTabelas />}
+            {abaAtiva === "logs" && <TabLogs />}
             {abaAtiva === "automacoes" && <TabEmails />}
           </div>
 
