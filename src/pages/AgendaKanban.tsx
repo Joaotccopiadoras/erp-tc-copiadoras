@@ -339,7 +339,7 @@ export default function AgendaKanban() {
     await supabase.from('kanban_cards').update({ coluna_id: novaColunaId, atualizado_em: new Date().toISOString() }).eq('id', cardId);
   };
 
-  // ==========================================
+// ==========================================
   // APLICAÇÃO DOS FILTROS E ORDENAÇÃO
   // ==========================================
   const responsaveisUnicos = Array.from(new Set(cards.map(c => c.responsavel_nome).filter(Boolean)));
