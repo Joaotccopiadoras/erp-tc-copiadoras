@@ -4,7 +4,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
+  FileText, KanbanSquare, Plus, Search, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 
@@ -42,6 +42,14 @@ export default function AgendaKanban() {
   const [exportando, setExportando] = useState(false);
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   
+  // ==========================================
+  // ESTADOS DOS FILTROS (Restaurados)
+  // ==========================================
+  const [busca, setBusca] = useState("");
+  const [filterResponsavel, setFilterResponsavel] = useState("todos");
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
+  
   const [modalWF, setModalWF] = useState(false);
   const [modalColuna, setModalColuna] = useState(false);
   const [modalCard, setModalCard] = useState(false);
@@ -53,6 +61,26 @@ export default function AgendaKanban() {
   const [statusGlobalColuna, setStatusGlobalColuna] = useState("Backlog");
   
   const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", responsavel: "", prioridade: "Normal", vencimento: "", coluna_id: "" });
+
+  // Auto-Save dos Filtros (Diretriz DIRETRIZES_TC.md)
+  useEffect(() => {
+    const saved = sessionStorage.getItem("agenda_kanban_filtros");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.busca !== undefined) setBusca(parsed.busca);
+        if (parsed.filterResponsavel) setFilterResponsavel(parsed.filterResponsavel);
+        if (parsed.filterDataInicio) setFilterDataInicio(parsed.filterDataInicio);
+        if (parsed.filterDataFim) setFilterDataFim(parsed.filterDataFim);
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem("agenda_kanban_filtros", JSON.stringify({
+      busca, filterResponsavel, filterDataInicio, filterDataFim
+    }));
+  }, [busca, filterResponsavel, filterDataInicio, filterDataFim]);
 
   useEffect(() => {
     fetchInitData();
@@ -290,11 +318,26 @@ export default function AgendaKanban() {
     await supabase.from('kanban_cards').update({ coluna_id: novaColunaId, atualizado_em: new Date().toISOString() }).eq('id', cardId);
   };
 
+  // ==========================================
+  // APLICAÇÃO DOS FILTROS
+  // ==========================================
+  const responsaveisUnicos = Array.from(new Set(cards.map(c => c.responsavel_nome).filter(Boolean)));
+  
+  const cardsFiltrados = cards.filter(c => {
+    const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
+    const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
+    let matchData = true;
+    if (filterDataInicio) matchData = matchData && new Date(c.data_vencimento || '2999-01-01') >= new Date(filterDataInicio);
+    if (filterDataFim) matchData = matchData && new Date(c.data_vencimento || '1970-01-01') <= new Date(filterDataFim);
+    
+    return matchBusca && matchResp && matchData;
+  });
+
   const getColunasRenderizacao = () => {
     if (workflowAtivo === "global") {
-      return STATUS_GLOBAIS.map(status => ({ id: status, nome: status, isGlobal: true, statusBadge: status, cards: cards.filter(c => c.kanban_colunas?.status_global === status) }));
+      return STATUS_GLOBAIS.map(status => ({ id: status, nome: status, isGlobal: true, statusBadge: status, cards: cardsFiltrados.filter(c => c.kanban_colunas?.status_global === status) }));
     } else {
-      return colunas.map(col => ({ id: col.id, nome: col.nome, isGlobal: false, statusBadge: col.status_global, cards: cards.filter(c => c.coluna_id === col.id) }));
+      return colunas.map(col => ({ id: col.id, nome: col.nome, isGlobal: false, statusBadge: col.status_global, cards: cardsFiltrados.filter(c => c.coluna_id === col.id) }));
     }
   };
 
@@ -321,13 +364,14 @@ export default function AgendaKanban() {
 
   const formatarStatus = (str: string) => str ? str.toUpperCase() : "";
 
+  // Exportações agora respeitam os filtros
   const exportarPDF = async () => {
     setExportando(true);
     try {
       const doc = new jsPDF("landscape");
       const logoData = await getBase64ImageFromUrl("/logo.png");
       const pesoStatus: Record<string, number> = { "CONCLUÍDO": 1, "ANDAMENTO": 2, "AGUARDANDO": 3, "BACKLOG": 4 };
-      const dadosOrdenados = [...cards].sort((a, b) => {
+      const dadosOrdenados = [...cardsFiltrados].sort((a, b) => {
         const respA = a.responsavel_nome || "Sem Responsável";
         const respB = b.responsavel_nome || "Sem Responsável";
         if (respA < respB) return -1;
@@ -408,7 +452,7 @@ export default function AgendaKanban() {
       }
       worksheet.getRow(startRow).values = ["Etapa/Coluna", "Título", "Responsável", "Prioridade", "Vencimento", "Workflow", "Status Global", "Resumo/Descrição"];
       worksheet.getRow(startRow).font = { bold: true };
-      cards.forEach((item) => {
+      cardsFiltrados.forEach((item) => {
         worksheet.addRow([
           item.kanban_colunas?.nome || "-", item.titulo || "-", item.responsavel_nome || "-", item.prioridade || "-", 
           formatarData(item.data_vencimento), item.kanban_workflows?.nome || "-", item.kanban_colunas?.status_global || "-", item.descricao || "-"
@@ -423,7 +467,9 @@ export default function AgendaKanban() {
   return (
     <AppLayout>
       <div className="flex h-[calc(100vh-6rem)] max-w-[1600px] mx-auto overflow-hidden bg-slate-50 rounded-xl border shadow-sm">
-        <div className="w-64 bg-slate-900 text-slate-300 flex flex-col">
+        
+        {/* MENU LATERAL */}
+        <div className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
           <div className="p-5 border-b border-slate-800">
             <h2 className="text-white font-bold flex items-center gap-2 text-lg"><KanbanSquare className="w-5 h-5 text-indigo-400"/> Agenda Kanban</h2>
           </div>
@@ -445,8 +491,11 @@ export default function AgendaKanban() {
           </div>
         </div>
 
+        {/* ÁREA PRINCIPAL */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4">
+          
+          {/* CABEÇALHO E BOTÕES DE AÇÃO */}
+          <div className="bg-white p-4 border-b flex justify-between items-center shadow-sm z-10 flex-wrap gap-4 shrink-0">
             <div>
               <h2 className="text-xl font-bold text-slate-800">
                 {workflowAtivo === "global" ? "Programação da Semana" : workflows.find(w => w.id === workflowAtivo)?.nome}
@@ -456,10 +505,10 @@ export default function AgendaKanban() {
               </p>
             </div>
             <div className="flex gap-2 items-center flex-wrap">
-              <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || cards.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
+              <Button variant="outline" size="sm" onClick={exportarExcel} disabled={exportando || cardsFiltrados.length === 0} className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 font-bold shadow-sm">
                 {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <TableIcon className="h-4 w-4" />} Excel
               </Button>
-              <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || cards.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
+              <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportando || cardsFiltrados.length === 0} className="border-rose-200 text-rose-700 hover:bg-rose-50 gap-2 font-bold shadow-sm">
                 {exportando ? <Loader2 className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4" />} PDF
               </Button>
               <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
@@ -470,6 +519,28 @@ export default function AgendaKanban() {
             </div>
           </div>
 
+          {/* BARRA DE FILTROS AVANÇADOS */}
+          <div className="bg-slate-100/80 p-3 border-b border-slate-200 shrink-0 z-20">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 max-w-5xl">
+              <div className="relative md:col-span-2">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input placeholder="Filtrar por título ou descrição..." className="pl-9 h-9 bg-white" value={busca} onChange={e => setBusca(e.target.value)} />
+              </div>
+              <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
+                <SelectTrigger className="h-9 bg-white z-[99999] text-sm"><SelectValue placeholder="Líder / Responsável" /></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
+                  <SelectItem value="todos">Todos os Responsáveis</SelectItem>
+                  {responsaveisUnicos.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Input type="date" value={filterDataInicio} onChange={e => setFilterDataInicio(e.target.value)} className="h-9 bg-white text-xs" title="Data Inicial" />
+                <Input type="date" value={filterDataFim} onChange={e => setFilterDataFim(e.target.value)} className="h-9 bg-white text-xs" title="Data Final" />
+              </div>
+            </div>
+          </div>
+
+          {/* QUADRO KANBAN (BOARD) */}
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar flex gap-6">
             {colunasAtivas.map(col => {
               const isConcluido = col.statusBadge === "Concluído" || col.id === "Concluído" || col.nome.toLowerCase() === "concluído";
@@ -564,6 +635,7 @@ export default function AgendaKanban() {
         </div>
       </div>
 
+      {/* MODAL DE WORKFLOW */}
       {modalWF && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
           <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
@@ -576,6 +648,7 @@ export default function AgendaKanban() {
         </div>
       )}
 
+      {/* MODAL DE COLUNA */}
       {modalColuna && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in">
           <div className="bg-white p-6 rounded-xl shadow-xl w-[400px]">
@@ -601,6 +674,7 @@ export default function AgendaKanban() {
         </div>
       )}
 
+      {/* MODAL DO CARD */}
       {modalCard && (
         <div className="fixed inset-0 bg-slate-900/50 z-[100] flex items-center justify-center animate-in fade-in p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
