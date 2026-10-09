@@ -54,6 +54,7 @@ export default function AgendaKanban() {
   // ==========================================
   const [busca, setBusca] = useState("");
   const [filterResponsavel, setFilterResponsavel] = useState("todos");
+  const [filterStatus, setFilterStatus] = useState("todos");
   const [ordenacao, setOrdenacao] = useState("criacao"); 
   
   const [dataCriacaoInicio, setDataCriacaoInicio] = useState("");
@@ -83,6 +84,7 @@ export default function AgendaKanban() {
         const parsed = JSON.parse(saved);
         if (parsed.busca !== undefined) setBusca(parsed.busca);
         if (parsed.filterResponsavel) setFilterResponsavel(parsed.filterResponsavel);
+        if (parsed.filterStatus) setFilterStatus(parsed.filterStatus);
         if (parsed.ordenacao) setOrdenacao(parsed.ordenacao);
         if (parsed.dataCriacaoInicio) setDataCriacaoInicio(parsed.dataCriacaoInicio);
         if (parsed.dataCriacaoFim) setDataCriacaoFim(parsed.dataCriacaoFim);
@@ -96,9 +98,9 @@ export default function AgendaKanban() {
 
   useEffect(() => {
     sessionStorage.setItem("agenda_kanban_filtros", JSON.stringify({
-      busca, filterResponsavel, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim
+      busca, filterResponsavel, filterStatus, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim
     }));
-  }, [busca, filterResponsavel, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
+  }, [busca, filterResponsavel, filterStatus, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
 
   useEffect(() => {
     fetchInitData();
@@ -400,6 +402,9 @@ export default function AgendaKanban() {
       const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
       const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
       
+      const statusAtual = c.kanban_colunas?.status_global || "Backlog";
+      const matchStatus = filterStatus === "todos" || statusAtual === filterStatus;
+      
       let matchCriacao = true;
       if (dataCriacaoInicio) matchCriacao = new Date(c.created_at || '2999-01-01T00:00:00') >= new Date(dataCriacaoInicio + 'T00:00:00');
       if (dataCriacaoFim) matchCriacao = matchCriacao && new Date(c.created_at || '1970-01-01T00:00:00') <= new Date(dataCriacaoFim + "T23:59:59");
@@ -412,7 +417,7 @@ export default function AgendaKanban() {
       if (dataConclusaoInicio) matchConclusao = new Date(c.data_conclusao || '2999-01-01T00:00:00') >= new Date(dataConclusaoInicio + 'T00:00:00');
       if (dataConclusaoFim) matchConclusao = matchConclusao && new Date(c.data_conclusao || '1970-01-01T00:00:00') <= new Date(dataConclusaoFim + "T23:59:59");
       
-      return matchBusca && matchResp && matchCriacao && matchPrevisao && matchConclusao;
+      return matchBusca && matchResp && matchStatus && matchCriacao && matchPrevisao && matchConclusao;
     });
 
     result.sort((a, b) => {
@@ -434,11 +439,11 @@ export default function AgendaKanban() {
     });
 
     return result;
-  }, [cards, busca, filterResponsavel, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
+  }, [cards, busca, filterResponsavel, filterStatus, ordenacao, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim]);
 
   const getColunasRenderizacao = () => {
     if (workflowAtivo === "global") {
-      return STATUS_GLOBAIS.map(status => ({ id: status, nome: status, isGlobal: true, statusBadge: status, cards: cardsFiltrados.filter(c => c.kanban_colunas?.status_global === status) }));
+      return STATUS_GLOBAIS.map(status => ({ id: status, nome: status, isGlobal: true, statusBadge: status, cards: cardsFiltrados.filter(c => (c.kanban_colunas?.status_global || "Backlog") === status) }));
     } else {
       return colunas.map(col => ({ id: col.id, nome: col.nome, isGlobal: false, statusBadge: col.status_global, cards: cardsFiltrados.filter(c => c.coluna_id === col.id) }));
     }
@@ -620,7 +625,7 @@ export default function AgendaKanban() {
           {/* BARRA DE FILTROS AVANÇADOS */}
           <div className="bg-white p-4 border-b border-slate-200 shrink-0 z-20 space-y-4">
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative md:col-span-2">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input placeholder="Filtrar por título ou descrição..." className="pl-9 bg-slate-50" value={busca} onChange={e => setBusca(e.target.value)} />
@@ -630,6 +635,13 @@ export default function AgendaKanban() {
                 <SelectContent className="bg-white z-[99999]">
                   <SelectItem value="todos">Todos os Responsáveis</SelectItem>
                   {responsaveisUnicos.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="bg-slate-50 z-[99999]"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
+                  <SelectItem value="todos">Todos os Status</SelectItem>
+                  {STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={ordenacao} onValueChange={setOrdenacao}>
