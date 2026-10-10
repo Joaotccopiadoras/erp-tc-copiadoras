@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import AppLayout from "@/shared/components/layout/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import {
-  FileText, KanbanSquare, Plus, Search, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2, ArrowDownAZ 
+  FileText, KanbanSquare, Plus, Search, Calendar as CalendarIcon, Settings, Layers, FolderKanban, Trash2, X, Table as TableIcon, Loader2, ArrowLeft, ArrowRight, Edit2, CheckCircle2, ArrowDownAZ, ChevronDown
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 
@@ -40,6 +40,71 @@ const getHojeStr = () => {
   return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 };
 
+// Componente Multi-Select com Pesquisa Integrada
+function MultiSelectSearchDropdown({ title, options, selected, onChange }: { title: string, options: string[], selected: string[], onChange: (val: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button 
+        variant="outline" 
+        onClick={() => setOpen(!open)} 
+        className="w-full justify-between bg-slate-50 text-left font-normal h-10 px-3 border-slate-200 hover:bg-slate-100 transition-colors"
+      >
+        <span className="truncate text-slate-600 text-sm">
+          {selected.length === 0 ? title : <span className="font-bold text-indigo-600">{title} ({selected.length})</span>}
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </Button>
+      {open && (
+        <div className="absolute z-[99999] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-slate-100 bg-slate-50">
+            <input
+              type="text"
+              placeholder="Pesquisar..."
+              className="w-full h-8 px-2 text-xs rounded-md border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto custom-scrollbar p-1.5">
+            {filteredOptions.length === 0 ? (
+              <div className="p-3 text-xs text-slate-400 text-center italic">Nenhum resultado...</div>
+            ) : (
+              filteredOptions.map(opt => (
+                <label key={opt} className="flex items-center space-x-2.5 p-2 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer" 
+                    checked={selected.includes(opt)} 
+                    onChange={(e) => { 
+                      if (e.target.checked) onChange([...selected, opt]); 
+                      else onChange(selected.filter(x => x !== opt)); 
+                    }} 
+                  />
+                  <span className="text-xs text-slate-700 truncate font-medium">{opt}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AgendaKanban() {
   const [usuarioAtual, setUsuarioAtual] = useState<any>(null);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -53,8 +118,8 @@ export default function AgendaKanban() {
   // ESTADOS DOS FILTROS AVANÇADOS
   // ==========================================
   const [busca, setBusca] = useState("");
-  const [filterResponsavel, setFilterResponsavel] = useState("todos");
-  const [filterStatus, setFilterStatus] = useState("todos");
+  const [filterResponsavel, setFilterResponsavel] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [ordenacao, setOrdenacao] = useState("criacao"); 
   
   const [dataCriacaoInicio, setDataCriacaoInicio] = useState("");
@@ -83,8 +148,8 @@ export default function AgendaKanban() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.busca !== undefined) setBusca(parsed.busca);
-        if (parsed.filterResponsavel) setFilterResponsavel(parsed.filterResponsavel);
-        if (parsed.filterStatus) setFilterStatus(parsed.filterStatus);
+        if (parsed.filterResponsavel !== undefined) setFilterResponsavel(Array.isArray(parsed.filterResponsavel) ? parsed.filterResponsavel : []);
+        if (parsed.filterStatus !== undefined) setFilterStatus(Array.isArray(parsed.filterStatus) ? parsed.filterStatus : []);
         if (parsed.ordenacao) setOrdenacao(parsed.ordenacao);
         if (parsed.dataCriacaoInicio) setDataCriacaoInicio(parsed.dataCriacaoInicio);
         if (parsed.dataCriacaoFim) setDataCriacaoFim(parsed.dataCriacaoFim);
@@ -204,9 +269,6 @@ export default function AgendaKanban() {
     for (const u of listaAtualizada) { await supabase.from('kanban_colunas').update({ ordem: u.ordem }).eq('id', u.id); }
   };
 
-  // ==========================================
-  // AUTOMAÇÃO 1: SALVAMENTO VIA MODAL (Ajuste de Data de Conclusão)
-  // ==========================================
   const salvarCard = async () => {
     if (!cardForm.titulo || !cardForm.coluna_id) return alert("Título e Coluna/Etapa são obrigatórios.");
     let finalColunaId = cardForm.coluna_id;
@@ -244,10 +306,9 @@ export default function AgendaKanban() {
       finalWfId = colSelecionada?.workflow_id || workflowAtivo;
     }
 
-    // Inteligência Artificial: Carimbar ou limpar a Data de Conclusão
     let statusGlobalAlvo = "Backlog";
     if (workflowAtivo === "global") {
-        statusGlobalAlvo = cardForm.coluna_id; // Na visão global, a opção do select é o próprio status
+        statusGlobalAlvo = cardForm.coluna_id;
     } else {
         const colSel = colunas.find(c => c.id === finalColunaId);
         if (colSel) statusGlobalAlvo = colSel.status_global;
@@ -255,9 +316,9 @@ export default function AgendaKanban() {
 
     let dataConclusaoFinal = cardForm.conclusao || null;
     if (statusGlobalAlvo === "Concluído") {
-        if (!dataConclusaoFinal) dataConclusaoFinal = getHojeStr(); // Carimba automático
+        if (!dataConclusaoFinal) dataConclusaoFinal = getHojeStr(); 
     } else {
-        dataConclusaoFinal = null; // Limpa se foi retrocedido para outra etapa
+        dataConclusaoFinal = null; 
     }
 
     const payload = {
@@ -322,9 +383,6 @@ export default function AgendaKanban() {
     e.dataTransfer.setData("type", "column");
   };
 
-  // ==========================================
-  // AUTOMAÇÃO 2: ARRASTAR E SOLTAR (Data Automática)
-  // ==========================================
   const handleDrop = async (e: React.DragEvent, dropTargetId: string, isGlobal: boolean) => {
     e.preventDefault();
     e.stopPropagation();
@@ -364,19 +422,17 @@ export default function AgendaKanban() {
       novaColunaId = colunaEquivalente.id;
     }
 
-    // Inteligência Artificial: Carimbar ou limpar a Data de Conclusão ao arrastar
     let novoStatusGlobal = isGlobal ? dropTargetId : colunas.find(x => x.id === novaColunaId)?.status_global || 'Backlog';
     let dataConclusaoFinal = cardMovido.data_conclusao;
     
     if (novoStatusGlobal === "Concluído") {
-        if (!dataConclusaoFinal) dataConclusaoFinal = getHojeStr(); // Carimba a data de hoje se recém-concluído
+        if (!dataConclusaoFinal) dataConclusaoFinal = getHojeStr(); 
     } else {
-        dataConclusaoFinal = null; // Apaga se foi voltado para andamento
+        dataConclusaoFinal = null; 
     }
 
     if (cardMovido.coluna_id === novaColunaId && cardMovido.data_conclusao === dataConclusaoFinal) return;
 
-    // Atualização Otimista
     setCards(prev => prev.map(c => c.id === cardId ? { 
         ...c, 
         coluna_id: novaColunaId, 
@@ -384,7 +440,6 @@ export default function AgendaKanban() {
         kanban_colunas: { ...c.kanban_colunas, status_global: novoStatusGlobal } as any 
     } : c));
 
-    // Salvar no Banco
     await supabase.from('kanban_cards').update({ 
         coluna_id: novaColunaId, 
         data_conclusao: dataConclusaoFinal,
@@ -395,15 +450,15 @@ export default function AgendaKanban() {
   // ==========================================
   // APLICAÇÃO DOS FILTROS E ORDENAÇÃO
   // ==========================================
-  const responsaveisUnicos = Array.from(new Set(cards.map(c => c.responsavel_nome).filter(Boolean)));
+  const responsaveisUnicos = useMemo(() => Array.from(new Set(cards.map(c => c.responsavel_nome).filter(Boolean))).sort(), [cards]);
   
   const cardsFiltrados = useMemo(() => {
     let result = cards.filter(c => {
       const matchBusca = busca === "" || c.titulo.toLowerCase().includes(busca.toLowerCase()) || (c.descricao && c.descricao.toLowerCase().includes(busca.toLowerCase()));
-      const matchResp = filterResponsavel === "todos" || c.responsavel_nome === filterResponsavel;
+      const matchResp = filterResponsavel.length === 0 || (c.responsavel_nome && filterResponsavel.includes(c.responsavel_nome));
       
       const statusAtual = c.kanban_colunas?.status_global || "Backlog";
-      const matchStatus = filterStatus === "todos" || statusAtual === filterStatus;
+      const matchStatus = filterStatus.length === 0 || filterStatus.includes(statusAtual);
       
       let matchCriacao = true;
       if (dataCriacaoInicio) matchCriacao = new Date(c.created_at || '2999-01-01T00:00:00') >= new Date(dataCriacaoInicio + 'T00:00:00');
@@ -470,8 +525,6 @@ export default function AgendaKanban() {
     return new Date(dataStr).toLocaleDateString("pt-BR", { timeZone: 'UTC' });
   };
 
-  const formatarStatus = (str: string | undefined) => str ? str.toUpperCase() : "";
-
   const exportarPDF = async () => {
     setExportando(true);
     try {
@@ -526,14 +579,6 @@ export default function AgendaKanban() {
           doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(255, 255, 255);
           doc.text("Av. Gov. José Malcher, 2266.\nSão Brás, Belém - PA. CEP: 66060-232\n\nCNPJ: 07.679.989/0001-50 | I.E.: 15.250.057-0", 14, pageHeight - 16);
           doc.text("(91) 988159-2777\n(91) 3366-5100\nequipetc@tccopiadoras.com.br", pageWidth - 14, pageHeight - 16, { align: "right" });
-        },
-        didParseCell: function (data) {
-          if (data.section === 'body' && data.column.index === 5 && data.cell.raw) {
-            const status = String(data.cell.raw).toUpperCase();
-            if (status === 'CONCLUÍDO') { data.cell.styles.textColor = [21, 128, 61]; data.cell.styles.fontStyle = 'bold'; } 
-            else if (status === 'AGUARDANDO') { data.cell.styles.textColor = [161, 98, 7]; data.cell.styles.fontStyle = 'bold'; } 
-            else if (status === 'ANDAMENTO') { data.cell.styles.textColor = [29, 78, 216]; data.cell.styles.fontStyle = 'bold'; }
-          }
         }
       });
       doc.save("Agenda_Kanban_TC_Copiadoras.pdf");
@@ -628,24 +673,22 @@ export default function AgendaKanban() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative md:col-span-2">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input placeholder="Filtrar por título ou descrição..." className="pl-9 bg-slate-50" value={busca} onChange={e => setBusca(e.target.value)} />
+                <Input placeholder="Filtrar por título ou descrição..." className="pl-9 bg-slate-50 h-10" value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
-              <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
-                <SelectTrigger className="bg-slate-50 z-[99999]"><SelectValue placeholder="Responsável" /></SelectTrigger>
-                <SelectContent className="bg-white z-[99999]">
-                  <SelectItem value="todos">Todos os Responsáveis</SelectItem>
-                  {responsaveisUnicos.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="bg-slate-50 z-[99999]"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent className="bg-white z-[99999]">
-                  <SelectItem value="todos">Todos os Status</SelectItem>
-                  {STATUS_GLOBAIS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MultiSelectSearchDropdown 
+                title="Líder / Responsável" 
+                options={responsaveisUnicos} 
+                selected={filterResponsavel} 
+                onChange={setFilterResponsavel} 
+              />
+              <MultiSelectSearchDropdown 
+                title="Status Global" 
+                options={STATUS_GLOBAIS} 
+                selected={filterStatus} 
+                onChange={setFilterStatus} 
+              />
               <Select value={ordenacao} onValueChange={setOrdenacao}>
-                <SelectTrigger className="bg-indigo-50 border-indigo-100 text-indigo-700 font-bold z-[99999]">
+                <SelectTrigger className="bg-indigo-50 border-indigo-100 text-indigo-700 font-bold z-[99999] h-10">
                   <div className="flex items-center gap-2"><ArrowDownAZ className="w-4 h-4"/> <SelectValue /></div>
                 </SelectTrigger>
                 <SelectContent className="bg-white z-[99999]">
