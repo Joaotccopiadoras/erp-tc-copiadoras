@@ -202,7 +202,7 @@ export default function Configuracoes() {
     carregarWebhooks();
   };
 
-  if (loading) return <AppLayout><div className="p-8 text-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-600 mb-4" /> Carregando portal de administração...</div></AppLayout>;
+  if (loading) return <AppLayout><div className="p-8 text-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-600 mb-4" /> Carregando configurações de Administrator...</div></AppLayout>;
   
   if (isCurrentUserAdmin === false) return (
     <AppLayout>
