@@ -5,11 +5,11 @@ import { useAuth } from "@/shared/contexts/AuthContext";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { useToast } from "@/shared/hooks/use-toast";
-import { Loader2, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Loader2, Lock, Mail, Eye, EyeOff } from "lucide-react";
 import ReCAPTCHA from "react-google-recaptcha";
 
 export default function Login() {
-  const [credencial, setCredencial] = useState("");
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,7 +27,9 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!credencial || !senha) return;
+    const emailLimpo = email.trim().toLowerCase();
+    
+    if (!emailLimpo || !senha) return;
     
     if (!captchaValido) {
       return toast({
@@ -39,17 +41,9 @@ export default function Login() {
 
     setIsSubmitting(true);
     try {
-      let emailFinal = credencial.trim().toLowerCase();
-      
-      // Traduz o Nome de Usuário para o e-mail real cadastrado na base
-      const { data: emailTraduzido, error: rpcError } = await supabase.rpc('get_email_by_username', { p_username: emailFinal });
-      
-      if (!rpcError && emailTraduzido) {
-        emailFinal = emailTraduzido;
-      }
-
+      // Autenticação direta e nativa por e-mail real
       const { error } = await supabase.auth.signInWithPassword({
-        email: emailFinal,
+        email: emailLimpo,
         password: senha,
       });
 
@@ -58,7 +52,7 @@ export default function Login() {
     } catch (error: any) {
       toast({
         title: "Acesso Negado",
-        description: "Credenciais inválidas. Verifique seu usuário e senha.",
+        description: "E-mail ou palavra-passe incorretos.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -81,15 +75,14 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-600 uppercase">Credencial (Usuário ou E-mail)</label>
+            <label className="text-xs font-bold text-slate-600 uppercase">Credencial (E-mail)</label>
             <div className="relative">
-              <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              {/* type mudado para "text" para não exigir o @ */}
+              <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <Input 
-                type="text" 
-                placeholder="Ex: joao.gaia" 
-                value={credencial}
-                onChange={(e) => setCredencial(e.target.value)}
+                type="email" 
+                placeholder="ex: nome@tccopiadoras.com.br" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="pl-9 bg-slate-50"
                 required
               />
@@ -119,7 +112,6 @@ export default function Login() {
           </div>
 
           <div className="flex justify-center py-2">
-            {/* Chave de teste pública do Google para localhost/desenvolvimento. Troque pela sua chave real se for para produção */}
             <ReCAPTCHA
               sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
               onChange={(token) => setCaptchaValido(!!token)}
