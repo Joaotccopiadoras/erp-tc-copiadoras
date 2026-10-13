@@ -81,14 +81,12 @@ export default function Configuracoes() {
     if (data) setWebhooks(data);
   };
 
-  // ==========================================
-  // LÓGICA DE CADASTRO DE USUÁRIOS
-  // ==========================================
   const adicionarUsuario = async (e?: React.MouseEvent | React.FormEvent) => {
     if (e) e.preventDefault();
+
     try {
       if (!novoEmail || !novoEmail.includes("@") || !novoNomeUsuario || !novoNomeUsuario.trim() || !novaSenha || !novaSenha.trim()) {
-        window.alert("⚠️ Erro: Preencha todos os campos obrigatórios (Nome de Usuário, E-mail com @ e Senha).");
+        window.alert("⚠️ Erro: Preencha todos os campos obrigatórios (Nome, E-mail com @ e Senha).");
         return;
       }
       if (novaSenha.length < 6) {
@@ -97,23 +95,19 @@ export default function Configuracoes() {
       }
 
       setSalvandoSeguranca(true);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      if (!supabaseUrl || !supabaseKey) {
-        window.alert("❌ Erro Crítico: Chaves do Supabase não encontradas. Verifique o arquivo .env");
-        setSalvandoSeguranca(false);
-        return;
+
+      // Usar DIRETAMENTE a conexão global do seu projeto (supabase importado no topo)
+      // Como não usamos um "fantasma", pode ser que você precise logar novamente depois (se o Supabase te desconectar)
+      const { error: authError } = await supabase.auth.signUp({
+        email: novoEmail.toLowerCase().trim(),
+        password: novaSenha,
+      });
+
+      if (authError) {
+        throw new Error(`Erro do Supabase (Autenticação): ${authError.message}`);
       }
 
-      // Cliente temporário para não deslogar o admin ativo
-      const authGhost = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
-
-      // Cadastro via e-mail real (Garante a autenticação oficial)
-      const { error: authError } = await authGhost.auth.signUp({ email: novoEmail.toLowerCase().trim(), password: novaSenha });
-      if (authError) throw new Error("Erro no Supabase Auth: " + authError.message);
-
-      // Inserção das permissões e hierarquias
+      // 3. Salva a Ficha do Usuário na Tabela de Permissões
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
         email: novoEmail.toLowerCase().trim(), 
         nome_usuario: novoNomeUsuario.toLowerCase().trim(),
@@ -125,12 +119,17 @@ export default function Configuracoes() {
       
       if (dbError) throw new Error("Erro na tabela de permissões: " + dbError.message);
 
+      window.alert("🎉 Utilizador cadastrado com sucesso!");
       toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
-      setNovoEmail(""); setNovoNomeUsuario(""); setNovaSenha("");
+      
+      setNovoEmail(""); 
+      setNovoNomeUsuario(""); 
+      setNovaSenha("");
       carregarDadosSeguranca();
+      
     } catch (erro: any) { 
       window.alert("❌ Falha ao cadastrar: " + erro.message);
-      toast({ title: "Erro", description: erro.message, variant: "destructive" }); 
+      toast({ title: "Erro no Cadastro", description: erro.message, variant: "destructive" }); 
     } finally {
       setSalvandoSeguranca(false);
     }
