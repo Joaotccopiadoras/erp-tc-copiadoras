@@ -82,6 +82,69 @@ export default function DashboardPage() {
   const [page, setPage] = useState(0);
   const [selecionados, setSelecionados] = useState<number[]>([]);
 
+  // Carrega os dados do banco primeiro
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        // Garante a busca isolando possíveis nulos do RLS
+        const { data, error } = await supabase.from('programacao_tc').select('*').order('data_entrada', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+           setAllData(data);
+           
+           // Agora tenta recuperar os filtros do cache
+           const savedFilters = sessionStorage.getItem("agenda_ummense_filtros");
+           if (savedFilters) {
+             try {
+               const parsed = JSON.parse(savedFilters);
+               
+               // Trava de Segurança: Só aplica o filtro de líder salvo se esse líder realmente existir nos dados retornados para este usuário
+               const lideresDisponiveis = [...new Set(data.map((a: any) => a.lider_card).filter(Boolean))];
+               
+               if (parsed.filterLideres && Array.isArray(parsed.filterLideres)) {
+                  // Mantém no filtro apenas os líderes que o usuário atual tem permissão para ver
+                  const lideresValidos = parsed.filterLideres.filter((l: string) => lideresDisponiveis.includes(l));
+                  setFilterLideres(lideresValidos);
+               }
+               
+               if (parsed.filterDepartamentos) setFilterDepartamentos(parsed.filterDepartamentos);
+               if (parsed.filterSolicitantes) setFilterSolicitantes(parsed.filterSolicitantes);
+               if (parsed.filterStatus) setFilterStatus(parsed.filterStatus);
+               if (parsed.dataEntradaInicio) setDataEntradaInicio(parsed.dataEntradaInicio);
+               if (parsed.dataEntradaFim) setDataEntradaFim(parsed.dataEntradaFim);
+               if (parsed.dataPrevisaoInicio) setDataPrevisaoInicio(parsed.dataPrevisaoInicio);
+               if (parsed.dataPrevisaoFim) setDataPrevisaoFim(parsed.dataPrevisaoFim);
+               if (parsed.dataConclusaoInicio) setDataConclusaoInicio(parsed.dataConclusaoInicio);
+               if (parsed.dataConclusaoFim) setDataConclusaoFim(parsed.dataConclusaoFim);
+               if (parsed.sortConfig !== undefined) setSortConfig(parsed.sortConfig);
+               if (parsed.page !== undefined) setPage(parsed.page);
+             } catch (e) {
+               console.error("Erro ao carregar filtros salvos:", e);
+             }
+           }
+        }
+      } catch (error) {
+        console.error("Erro ao buscar dados:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  // Salva os filtros no Cache
+  useEffect(() => {
+    // Só salva se os dados já carregaram para não sobescrever com vazio
+    if (!loading) {
+      const stateToSave = { filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page };
+      sessionStorage.setItem("agenda_ummense_filtros", JSON.stringify(stateToSave));
+    }
+  }, [filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page, loading]);
+
+
   const toggleSelecao = (id: number) => {
     setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
@@ -104,51 +167,6 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    const savedFilters = sessionStorage.getItem("agenda_ummense_filtros");
-    if (savedFilters) {
-      try {
-        const parsed = JSON.parse(savedFilters);
-        if (parsed.filterLideres) setFilterLideres(parsed.filterLideres);
-        if (parsed.filterDepartamentos) setFilterDepartamentos(parsed.filterDepartamentos);
-        if (parsed.filterSolicitantes) setFilterSolicitantes(parsed.filterSolicitantes);
-        if (parsed.filterStatus) setFilterStatus(parsed.filterStatus);
-        if (parsed.dataEntradaInicio) setDataEntradaInicio(parsed.dataEntradaInicio);
-        if (parsed.dataEntradaFim) setDataEntradaFim(parsed.dataEntradaFim);
-        if (parsed.dataPrevisaoInicio) setDataPrevisaoInicio(parsed.dataPrevisaoInicio);
-        if (parsed.dataPrevisaoFim) setDataPrevisaoFim(parsed.dataPrevisaoFim);
-        if (parsed.dataConclusaoInicio) setDataConclusaoInicio(parsed.dataConclusaoInicio);
-        if (parsed.dataConclusaoFim) setDataConclusaoFim(parsed.dataConclusaoFim);
-        if (parsed.sortConfig !== undefined) setSortConfig(parsed.sortConfig);
-        if (parsed.page !== undefined) setPage(parsed.page);
-      } catch (e) {}
-    }
-  }, []);
-
-  useEffect(() => {
-    const stateToSave = { filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page };
-    sessionStorage.setItem("agenda_ummense_filtros", JSON.stringify(stateToSave));
-  }, [filterLideres, filterDepartamentos, filterSolicitantes, filterStatus, dataEntradaInicio, dataEntradaFim, dataPrevisaoInicio, dataPrevisaoFim, dataConclusaoInicio, dataConclusaoFim, sortConfig, page]);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        // O Supabase RLS tratará da restrição e segurança automaticamente
-        const { data, error } = await supabase.from('programacao_tc').select('*').order('data_entrada', { ascending: false });
-        if (error) throw error;
-        if (data) {
-           setAllData(data); 
-        }
-      } catch (error) {
-        console.error("Erro ao buscar dados:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
 
   const excluirRegistro = async (id: number) => {
     if (!window.confirm("Tem certeza que deseja excluir este registro definitivamente?")) return;
