@@ -113,7 +113,7 @@ export default function Login() {
 
           <div className="flex justify-center py-2">
             <ReCAPTCHA
-              sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
+              sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || "6Lc1xO4tAAAAAAyYalBGgRfxubLuOh7yXmlLEWw2"}
               onChange={(token) => setCaptchaValido(!!token)}
             />
           </div>
