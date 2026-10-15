@@ -63,4 +63,4 @@ export function useExportacaoN8N() {
   };
 
   return { dispararExportacao, exportando };
-}  
+}

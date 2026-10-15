@@ -10,7 +10,7 @@ import {
   Table as TableIcon, Database, Printer, MapPin, X, ArrowLeftRight, FileText, Activity
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N";
+import { useExportacaoN8N } from "@/shared/hooks/useExportacaon8n";
 
 const ITENS_POR_PAGINA = 15;
 
