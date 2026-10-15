@@ -30,7 +30,7 @@ const DepartamentoPessoal = lazy(() => import("@/pages/DepartamentoPessoal"));
 const Comissoes = lazy(() => import("@/pages/Comissoes"));
 const GestaoPatrimonio = lazy(() => import("@/pages/GestaoPatrimonio"));
 const Financeiro = lazy(() => import("@/pages/Financeiro"));
-const Logistica = lazy(() => import("@/pages/Logistica"));
+const Logistica = lazy(() => import("@/modules/logistica/pages/Logistica"));
 const EntradasProdutos = lazy(() => import("@/pages/EntradasProdutos"));
 const Compras = lazy(() => import("@/pages/Compras"));
 const Requisicoes = lazy(() => import("@/pages/Requisicoes"));
