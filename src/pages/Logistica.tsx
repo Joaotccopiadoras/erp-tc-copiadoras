@@ -1,17 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import AppLayout from "@/shared/components/layout/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import {
-  Barcode, CheckCircle2, Edit, Package, Plus, Search, FileDigit, DollarSign, Settings2, 
-  Image as ImageIcon, Sparkles, ShoppingCart, Loader2, ListChecks, FileDown, 
-  Table as TableIcon, Database, Printer, Layers, MapPin, Save, X, ArrowLeftRight, FileText, Activity
+  Barcode, CheckCircle2, Edit, Package, Plus, Search, DollarSign, Settings2, 
+  Image as ImageIcon, Sparkles, Loader2, ListChecks, FileDown, 
+  Table as TableIcon, Database, Printer, MapPin, X, ArrowLeftRight, FileText, Activity
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N";
+
+const ITENS_POR_PAGINA = 15;
 
 export default function Logistica() {
   const [modo, setModo] = useState<"lista" | "editar" | "lote">("lista");
@@ -26,6 +27,7 @@ export default function Logistica() {
   const [filtroFamilia, setFiltroFamilia] = useState("todas");
   const [filtroPerfil, setFiltroPerfil] = useState("todos");
   const [ordenacao, setOrdenacao] = useState("nome_asc");
+  const [paginaAtual, setPaginaAtual] = useState(0);
 
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [loteCampo, setLoteCampo] = useState("");
@@ -60,7 +62,6 @@ export default function Logistica() {
 
   const [carregandoIAFiscal, setCarregandoIAFiscal] = useState(false);
   const [carregandoIAMercado, setCarregandoIAMercado] = useState(false);
-  const [carregandoPDF, setCarregandoPDF] = useState(false);
   const [cotacoesMercado, setCotacoesMercado] = useState<any[]>([]);
 
   // ESTADOS DO MODAL DE INVENTÁRIO
@@ -69,14 +70,15 @@ export default function Logistica() {
   const [saldosLocais, setSaldosLocais] = useState<any[]>([]);
   const [salvandoSaldos, setSalvandoSaldos] = useState(false);
 
-  // ==========================================
   // ESTADOS DO MODAL DE EXTRATO/HISTÓRICO
-  // ==========================================
   const [modalExtratoAberto, setModalExtratoAberto] = useState(false);
   const [produtoExtrato, setProdutoExtrato] = useState<any | null>(null);
   const [movimentacoesProduto, setMovimentacoesProduto] = useState<any[]>([]);
   const [saldosAtuaisProduto, setSaldosAtuaisProduto] = useState<any[]>([]);
   const [carregandoExtrato, setCarregandoExtrato] = useState(false);
+
+  // HOOK GLOBAL DE EXPORTAÇÃO
+  const { dispararExportacao, exportando } = useExportacaoN8N();
 
   useEffect(() => {
     const rascunhoSalvo = sessionStorage.getItem("logistica_rascunho");
@@ -121,6 +123,11 @@ export default function Logistica() {
           fetchLocaisEstoque();
       }
   }, [modo]);
+
+  // Reseta a paginação ao mudar os filtros
+  useEffect(() => {
+    setPaginaAtual(0);
+  }, [busca, filtroCategoria, filtroFabricante, filtroCondicao, filtroFamilia, filtroPerfil, ordenacao]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -195,9 +202,6 @@ export default function Logistica() {
     else { alert("Produto salvo com sucesso!"); sessionStorage.removeItem("logistica_rascunho"); setModo("lista"); }
   };
 
-  // ==========================================
-  // FUNÇÕES DE INVENTÁRIO (SALDOS E SINCRONIZAÇÃO)
-  // ==========================================
   const abrirSaldosEstoque = async (prod: any) => {
       setProdutoSaldos(prod);
       setModalSaldosAberto(true);
@@ -224,17 +228,14 @@ export default function Logistica() {
           const estoqueGlobalRecalculado = saldosLocais.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
           const diferenca = estoqueGlobalRecalculado - (produtoSaldos.estoque_atual || 0);
 
-          // 1. Atualiza os saldos nas prateleiras
           for (const s of saldosLocais) {
               await supabase.from('log_produto_saldos').upsert({
                   produto_id: produtoSaldos.id, local_id: s.local_id, quantidade: s.quantidade
               }, { onConflict: 'produto_id, local_id' });
           }
 
-          // 2. Atualiza o saldo global
           await supabase.from('log_produtos').update({ estoque_atual: estoqueGlobalRecalculado }).eq('id', produtoSaldos.id);
 
-          // 3. Registra a movimentação de inventário (se houve mudança)
           if (diferenca !== 0) {
               await supabase.from('log_movimentacoes').insert({
                   produto_id: produtoSaldos.id, tipo: 'Ajuste', quantidade: diferenca, 
@@ -250,16 +251,12 @@ export default function Logistica() {
       finally { setSalvandoSaldos(false); }
   };
 
-  // ==========================================
-  // FUNÇÕES DE EXTRATO (FICHA DO PRODUTO)
-  // ==========================================
   const abrirExtrato = async (prod: any) => {
     setProdutoExtrato(prod);
     setModalExtratoAberto(true);
     setCarregandoExtrato(true);
 
     try {
-        // Busca os saldos positivos cruzando com a tabela de locais manualmente
         const { data: saldosSalvos } = await supabase.from('log_produto_saldos').select('*').eq('produto_id', prod.id).gt('quantidade', 0);
         const saldosMapeados = (saldosSalvos || []).map(s => {
             const localEncontrado = locaisEstoque.find(l => l.id === s.local_id);
@@ -267,13 +264,11 @@ export default function Logistica() {
         });
         setSaldosAtuaisProduto(saldosMapeados);
 
-        // Busca o histórico de movimentações
         const { data: movs } = await supabase.from('log_movimentacoes').select('*').eq('produto_id', prod.id).order('data_movimentacao', { ascending: false }).limit(50);
         if (movs) setMovimentacoesProduto(movs);
     } catch(e) { console.error(e); }
     finally { setCarregandoExtrato(false); }
   };
-
 
   const toggleSelecao = (id: string) => { setSelecionados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
 
@@ -296,13 +291,6 @@ export default function Logistica() {
     } catch (error) { alert("Erro na IA."); } finally { setCarregandoIAFiscal(false); }
   };
 
-  const cotarNoMercadoComIA = async () => {
-    if (!nome) return alert("Digite o nome do produto!");
-    setCarregandoIAMercado(true);
-    try { setTimeout(() => { setCotacoesMercado([{ loja: "Mercado Livre", preco: "R$ 145,90", link: "#" }, { loja: "Shopee", preco: "R$ 129,00", link: "#" }]); }, 3000); } 
-    catch (error) {} finally { setCarregandoIAMercado(false); }
-  };
-
   const extrairUnicos = (campo: string) => Array.from(new Set(produtos.map(p => p[campo]).filter(f => f && f.trim() !== ""))).sort();
   const fabricantesUnicos = extrairUnicos("fabricante");
   const familiasUnicas = extrairUnicos("familia");
@@ -311,28 +299,29 @@ export default function Logistica() {
   const cestUnicos = extrairUnicos("cest");
   const condicoesUnicas = extrairUnicos("condicao");
   
-  let produtosFiltrados = produtos.filter(prod => {
-    const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
-    const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
-    const bateCondicao = filtroCondicao === "todas" || prod.condicao === filtroCondicao;
-    const bateFamilia = filtroFamilia === "todas" || prod.familia === filtroFamilia;
-    const batePerfil = filtroPerfil === "todos" || prod.perfil === filtroPerfil;
-    const termoBusca = busca.toLowerCase();
-    const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca) || (prod.familia?.toLowerCase() || "").includes(termoBusca) || (prod.perfil?.toLowerCase() || "").includes(termoBusca) || (prod.modelo?.toLowerCase() || "").includes(termoBusca);
-    return bateCategoria && bateFabricante && bateCondicao && bateFamilia && batePerfil && bateBusca;
-  });
+  const produtosFiltrados = useMemo(() => {
+    let filtrados = produtos.filter(prod => {
+      const bateCategoria = filtroCategoria === "todas" || prod.categoria === filtroCategoria;
+      const bateFabricante = filtroFabricante === "todos" || prod.fabricante === filtroFabricante;
+      const bateCondicao = filtroCondicao === "todas" || prod.condicao === filtroCondicao;
+      const bateFamilia = filtroFamilia === "todas" || prod.familia === filtroFamilia;
+      const batePerfil = filtroPerfil === "todos" || prod.perfil === filtroPerfil;
+      const termoBusca = busca.toLowerCase();
+      const bateBusca = (prod.nome?.toLowerCase() || "").includes(termoBusca) || (prod.sku?.toLowerCase() || "").includes(termoBusca) || (prod.familia?.toLowerCase() || "").includes(termoBusca) || (prod.perfil?.toLowerCase() || "").includes(termoBusca) || (prod.modelo?.toLowerCase() || "").includes(termoBusca);
+      return bateCategoria && bateFabricante && bateCondicao && bateFamilia && batePerfil && bateBusca;
+    });
 
-  produtosFiltrados = produtosFiltrados.sort((a, b) => {
-    if (ordenacao === "nome_asc") return (a.nome || "").localeCompare(b.nome || "");
-    if (ordenacao === "categoria_asc") return (a.categoria || "").localeCompare(b.categoria || "");
-    if (ordenacao === "fabricante_asc") return (a.fabricante || "").localeCompare(b.fabricante || "");
-    return 0;
-  });
+    return filtrados.sort((a, b) => {
+      if (ordenacao === "nome_asc") return (a.nome || "").localeCompare(b.nome || "");
+      if (ordenacao === "categoria_asc") return (a.categoria || "").localeCompare(b.categoria || "");
+      if (ordenacao === "fabricante_asc") return (a.fabricante || "").localeCompare(b.fabricante || "");
+      return 0;
+    });
+  }, [produtos, busca, filtroCategoria, filtroFabricante, filtroCondicao, filtroFamilia, filtroPerfil, ordenacao]);
 
-  const exportarPDFProdutos = async () => { /* mantém código original */ };
-  const exportarExcelProdutos = () => { /* mantém código original */ };
-  const exportarAuxiliaresPDF = () => { /* mantém código original */ };
-  const exportarAuxiliaresExcel = () => { /* mantém código original */ };
+  // Lógica de Paginação Local
+  const totalPaginas = Math.ceil(produtosFiltrados.length / ITENS_POR_PAGINA);
+  const produtosPaginados = produtosFiltrados.slice(paginaAtual * ITENS_POR_PAGINA, (paginaAtual + 1) * ITENS_POR_PAGINA);
 
   return (
     <AppLayout>
@@ -343,9 +332,7 @@ export default function Logistica() {
         <datalist id="lista-ncm">{ncmUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
         <datalist id="lista-cest">{cestUnicos.map((f, i) => <option key={i} value={f as string} />)}</datalist>
 
-        {/* ========================================================================= */}
         {/* MODAL DE INVENTÁRIO (Sincronização de Saldos) */}
-        {/* ========================================================================= */}
         {modalSaldosAberto && produtoSaldos && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col">
@@ -399,9 +386,7 @@ export default function Logistica() {
             </div>
         )}
 
-        {/* ========================================================================= */}
         {/* MODAL DE EXTRATO (FICHA DO PRODUTO) */}
-        {/* ========================================================================= */}
         {modalExtratoAberto && produtoExtrato && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col h-[90vh]">
@@ -416,7 +401,6 @@ export default function Logistica() {
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         
-                        {/* Seção 1: Saldos Distribuídos */}
                         <div className="space-y-3">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="w-4 h-4"/> Onde está guardado? (Saldos Físicos)</h3>
                             <div className="flex gap-3 flex-wrap">
@@ -433,7 +417,6 @@ export default function Logistica() {
                             </div>
                         </div>
 
-                        {/* Seção 2: Histórico de Movimentações */}
                         <div className="space-y-3 pt-6 border-t border-slate-100">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Activity className="w-4 h-4"/> Extrato de Movimentações (Auditoria)</h3>
                             
@@ -495,8 +478,12 @@ export default function Logistica() {
           </div>
           {modo === "lista" ? (
             <div className="flex gap-2 flex-wrap justify-end">
-              <Button onClick={exportarExcelProdutos} variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"><TableIcon className="w-4 h-4"/> Excel</Button>
-              <Button onClick={exportarPDFProdutos} disabled={carregandoPDF} variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50">{carregandoPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4"/>} PDF</Button>
+              <Button onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'excel', dados: produtosFiltrados })} disabled={exportando} variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
+                {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <TableIcon className="w-4 h-4"/>} Excel
+              </Button>
+              <Button onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'pdf', dados: produtosFiltrados })} disabled={exportando} variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50">
+                {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} PDF
+              </Button>
               <Button onClick={novoProduto} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
             </div>
           ) : (
@@ -543,8 +530,8 @@ export default function Logistica() {
             <div className="bg-stone-50 border-b p-3 px-4 flex justify-between items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2"><Database className="w-4 h-4 text-stone-500" /><span className="text-sm font-semibold text-stone-700">Relatórios Auxiliares:</span></div>
               <div className="flex gap-2 flex-wrap">
-                <Button onClick={exportarAuxiliaresPDF} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><FileDown className="w-4 h-4"/> PDF</Button>
-                <Button onClick={exportarAuxiliaresExcel} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><TableIcon className="w-4 h-4"/> Excel</Button>
+                <Button onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'pdf', dados: produtosFiltrados })} disabled={exportando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><FileDown className="w-4 h-4"/> PDF</Button>
+                <Button onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })} disabled={exportando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><TableIcon className="w-4 h-4"/> Excel</Button>
               </div>
             </div>
 
@@ -570,11 +557,11 @@ export default function Logistica() {
               <Select value={filtroPerfil} onValueChange={setFiltroPerfil}><SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Perfil" /></SelectTrigger><SelectContent className="bg-white z-50"><SelectItem value="todos">Perfil (Todos)</SelectItem>{perfisUnicos.map((perf, idx) => (<SelectItem key={idx} value={perf as string}>{perf as string}</SelectItem>))}</SelectContent></Select>
             </div>
 
-            <div className="divide-y">
-              {produtosFiltrados.length === 0 ? (
+            <div className="divide-y min-h-[400px]">
+              {produtosPaginados.length === 0 ? (
                 <div className="p-8 text-center text-slate-500">Nenhum produto encontrado.</div>
               ) : (
-                produtosFiltrados.map(prod => {
+                produtosPaginados.map(prod => {
                     let sp = { ano: "", formato: "", ppm: "" };
                     if (prod.is_equipamento && prod.especificacoes) { try { sp = typeof prod.especificacoes === 'string' ? JSON.parse(prod.especificacoes) : prod.especificacoes; } catch(e){} }
 
@@ -603,7 +590,6 @@ export default function Logistica() {
                         </div>
                         
                         <div className="flex flex-col gap-1 ml-2 border-l border-slate-200 pl-3">
-                            {/* NOVO BOTÃO DE EXTRATO / FICHA DO PRODUTO */}
                             <Button variant="outline" size="sm" onClick={() => abrirExtrato(prod)} className="h-7 text-xs font-bold text-indigo-700 border-indigo-200 hover:bg-indigo-50 gap-1 bg-indigo-50/30" title="Ver saldos por local e histórico">
                                 <Search className="w-3 h-3"/> Extrato
                             </Button>
@@ -620,6 +606,17 @@ export default function Logistica() {
                 )})
               )}
             </div>
+
+            {/* CONTROLES DE PAGINAÇÃO */}
+            {totalPaginas > 1 && (
+              <div className="p-4 border-t flex justify-between items-center bg-slate-50">
+                <span className="text-sm text-slate-500 font-medium">Página <strong className="text-slate-800">{paginaAtual + 1}</strong> de {totalPaginas}</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPaginaAtual(p => Math.max(0, p - 1))} disabled={paginaAtual === 0} className="font-semibold">Anterior</Button>
+                  <Button variant="outline" size="sm" onClick={() => setPaginaAtual(p => Math.min(totalPaginas - 1, p + 1))} disabled={paginaAtual >= totalPaginas - 1} className="font-semibold">Próxima</Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

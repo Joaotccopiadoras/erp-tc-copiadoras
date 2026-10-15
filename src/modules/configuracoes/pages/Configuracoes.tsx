@@ -339,6 +339,7 @@ export default function Configuracoes() {
                       <Select value={eventoWebhook} onValueChange={setEventoWebhook} required>
                         <SelectTrigger className="bg-slate-50 z-[99999]"><SelectValue placeholder="Selecione o evento..."/></SelectTrigger>
                         <SelectContent className="bg-white z-[99999]">
+                          <SelectItem value="exportacao_relatorio">Exportação Assíncrona de Relatórios (PDF/Excel)</SelectItem>
                           <SelectItem value="nova_os_tecnica">Nova OS Técnica Aberta</SelectItem>
                           <SelectItem value="os_tecnica_concluida">OS Técnica Concluída</SelectItem>
                           <SelectItem value="nova_osg_grafica">Nova OS Gráfica</SelectItem>
