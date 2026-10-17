@@ -1,4 +1,3 @@
-// src/shared/hooks/useExportacaoN8N.ts
 import { useState } from 'react';
 import { supabase } from '@/shared/lib/supabase/client';
 import { useToast } from '@/shared/hooks/use-toast';
