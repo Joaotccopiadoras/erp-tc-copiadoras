@@ -19,8 +19,6 @@ export function useExportacaoN8N() {
       return;
     }
 
-    // 1. ABRE A ABA IMEDIATAMENTE NO CLIQUE (Síncrono)
-    // Isso impede o Google Chrome de acionar o Bloqueador de Pop-ups
     const novaAba = window.open('', '_blank');
     if (novaAba) {
       novaAba.document.write(`
@@ -37,10 +35,7 @@ export function useExportacaoN8N() {
           </style>
         </head>
         <body>
-          <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"></circle>
-            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" opacity="0.75"></path>
-          </svg>
+          <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" opacity="0.75"></path></svg>
           <h2>A processar o seu documento...</h2>
           <p>A Inteligência do Servidor está a montar o ficheiro. Aguarde um instante.</p>
         </body>
@@ -50,17 +45,9 @@ export function useExportacaoN8N() {
 
     setExportando(true);
     try {
-      const { data: webhook, error: dbError } = await supabase
-        .from('sistema_webhooks')
-        .select('url')
-        .eq('evento', 'exportacao_relatorio')
-        .eq('ativo', true)
-        .limit(1)
-        .single();
+      const { data: webhook, error: dbError } = await supabase.from('sistema_webhooks').select('url').eq('evento', 'exportacao_relatorio').eq('ativo', true).limit(1).single();
 
-      if (dbError || !webhook?.url) {
-        throw new Error("Webhook não configurado. Vá a Configurações > Gatilhos e cadastre a URL do n8n.");
-      }
+      if (dbError || !webhook?.url) throw new Error("Webhook não configurado. Vá a Configurações > Gatilhos e cadastre a URL.");
 
       toast({ title: "Processando...", description: "A IA está a gerar o seu relatório na nuvem." });
 
@@ -70,15 +57,10 @@ export function useExportacaoN8N() {
         body: JSON.stringify(params)
       });
 
-      if (!response.ok) {
-        throw new Error(`O servidor (n8n) recusou o pedido (${response.status}).`);
-      }
+      if (!response.ok) throw new Error(`O servidor (n8n) recusou o pedido (${response.status}).`);
 
       const textoResposta = await response.text();
-      
-      if (!textoResposta || textoResposta.trim() === "") {
-        throw new Error("O n8n não devolveu o link. Verifique a aba Executions do n8n.");
-      }
+      if (!textoResposta || textoResposta.trim() === "") throw new Error("O n8n não devolveu o link.");
 
       let resultado;
       try {
@@ -88,9 +70,14 @@ export function useExportacaoN8N() {
       }
       
       if (resultado && resultado.file_url) {
-        // Sucesso: Redireciona a aba que já estava com a tela de "Loading" para o PDF/Excel final!
         if (novaAba) {
-          novaAba.location.href = resultado.file_url;
+          // Injeta um script na aba para iniciar o download e fechar-se a si mesma após 2 segundos
+          novaAba.document.write(`
+            <script>
+              window.location.href = "${resultado.file_url}";
+              setTimeout(() => { window.close(); }, 2000);
+            </script>
+          `);
         } else {
           window.open(resultado.file_url, '_blank');
         }
@@ -98,11 +85,8 @@ export function useExportacaoN8N() {
       } else {
         throw new Error("O n8n não devolveu a propriedade 'file_url'.");
       }
-
     } catch (error: any) {
-      // Se algo falhar no meio do caminho, fecha a aba de carregamento para não confundir o usuário
       if (novaAba) novaAba.close();
-      console.error(error);
       toast({ title: "Falha na Exportação", description: error.message, variant: "destructive" });
     } finally {
       setExportando(false);

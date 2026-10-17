@@ -7,7 +7,7 @@ import {
   Table as TableIcon, Database, Edit, ArrowLeftRight, Trash2, X 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import { useExportacaoN8N } from "@/shared/hooks/useExportN8N"; 
+import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N"; 
 
 interface ListaProdutosProps {
   produtos: any[];
@@ -103,12 +103,37 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
         </div>
         {!modoLote ? (
           <div className="flex gap-2 flex-wrap justify-end">
-            <Button onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'excel', dados: produtosFiltrados })} disabled={exportando || carregando} variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
-              {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <TableIcon className="w-4 h-4"/>} Excel
+            <Button 
+              onClick={() => dispararExportacao({ 
+                modulo: 'Catálogo de Produtos', 
+                tipo: 'excel', 
+                // A Lógica aqui decide: Envia os selecionados, ou todos os filtrados
+                dados: selecionados.length > 0 
+                  ? produtosFiltrados.filter(p => selecionados.includes(p.id)) 
+                  : produtosFiltrados 
+              })} 
+              disabled={exportando || carregando} 
+              variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+            >
+              {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <TableIcon className="w-4 h-4"/>} 
+              {selecionados.length > 0 ? `Excel (${selecionados.length})` : 'Excel'}
             </Button>
-            <Button onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'pdf', dados: produtosFiltrados })} disabled={exportando || carregando} variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50">
-              {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} PDF
+
+            <Button 
+              onClick={() => dispararExportacao({ 
+                modulo: 'Catálogo de Produtos', 
+                tipo: 'pdf', 
+                dados: selecionados.length > 0 
+                  ? produtosFiltrados.filter(p => selecionados.includes(p.id)) 
+                  : produtosFiltrados 
+              })} 
+              disabled={exportando || carregando} 
+              variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"
+            >
+              {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
+              {selecionados.length > 0 ? `PDF (${selecionados.length})` : 'PDF'}
             </Button>
+            
             <Button onClick={onNovo} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
           </div>
         ) : (
