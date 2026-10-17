@@ -27,7 +27,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
   const [loteCampo, setLoteCampo] = useState("");
   const [loteValor, setLoteValor] = useState("");
 
-  // Filtros e Paginação
   const [busca, setBusca] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroFabricante, setFiltroFabricante] = useState("todos");
@@ -39,7 +38,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
 
   const { dispararExportacao, exportando } = useExportacaoN8N();
 
-  // Resetar paginação ao filtrar
   useEffect(() => {
     setPaginaAtual(0);
   }, [busca, filtroCategoria, filtroFabricante, filtroCondicao, filtroFamilia, filtroPerfil, ordenacao]);
@@ -96,7 +94,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho principal */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
@@ -119,7 +116,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
         )}
       </div>
 
-      {/* MODO LOTE (Edição em Massa) */}
       {modoLote && (
         <div className="bg-white rounded-xl border shadow-sm p-8 max-w-2xl mx-auto mt-8">
           <div className="flex items-center gap-4 mb-6 border-b pb-4">
@@ -130,8 +126,8 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
             <div className="space-y-2">
               <label className="text-sm font-medium">Qual campo deseja alterar em todos?</label>
               <Select value={loteCampo} onValueChange={(val) => { setLoteCampo(val); setLoteValor(""); }}>
-                <SelectTrigger className="bg-white z-50"><SelectValue placeholder="Selecione o campo..." /></SelectTrigger>
-                <SelectContent className="bg-white z-50">
+                <SelectTrigger className="bg-white z-[99999]"><SelectValue placeholder="Selecione o campo..." /></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
                   <SelectItem value="fabricante">Fabricante (Marca)</SelectItem>
                   <SelectItem value="familia">Família de Produto</SelectItem>
                   <SelectItem value="perfil">Perfil de Produto</SelectItem>
@@ -144,12 +140,11 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Nova Categoria:</label>
                 <Select value={loteValor} onValueChange={setLoteValor}>
-                  <SelectTrigger className="bg-white z-50"><SelectValue/></SelectTrigger>
-                  <SelectContent className="bg-white z-50"><SelectItem value="Equipamento">Equipamento</SelectItem><SelectItem value="Peça">Peça</SelectItem><SelectItem value="Suprimento">Suprimento</SelectItem></SelectContent>
+                  <SelectTrigger className="bg-white z-[99999]"><SelectValue/></SelectTrigger>
+                  <SelectContent className="bg-white z-[99999]"><SelectItem value="Equipamento">Equipamento</SelectItem><SelectItem value="Peça">Peça</SelectItem><SelectItem value="Suprimento">Suprimento</SelectItem></SelectContent>
                 </Select>
               </div>
             )}
-            {/* Outros campos Lote mantidos pelo State Local */}
             {(loteCampo === "fabricante" || loteCampo === "familia" || loteCampo === "perfil" || loteCampo === "condicao") && (
                <div className="space-y-2"><label className="text-sm font-medium">Novo Valor:</label><Input value={loteValor} onChange={e => setLoteValor(e.target.value)} /></div>
             )}
@@ -161,7 +156,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
         </div>
       )}
 
-      {/* MODO LISTA */}
       {!modoLote && (
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
           <div className="bg-stone-50 border-b p-3 px-4 flex justify-between items-center gap-4 flex-wrap">
@@ -182,20 +176,18 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
             </div>
           )}
 
-          {/* Filtros */}
           <div className="p-4 border-b flex flex-wrap gap-3 bg-white items-center">
             <div className="relative flex-1 min-w-[200px] max-w-md">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <Input placeholder="Buscar Nome, SKU, Compatibilidade..." className="pl-9" value={busca} onChange={e => setBusca(e.target.value)} />
             </div>
-            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}><SelectTrigger className="w-[160px] bg-white z-50 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger><SelectContent className="bg-white z-50"><SelectItem value="todas">Todas as Categorias</SelectItem><SelectItem value="Equipamento">Equipamentos</SelectItem><SelectItem value="Peça">Peças</SelectItem><SelectItem value="Suprimento">Suprimentos</SelectItem></SelectContent></Select>
-            <Select value={filtroFabricante} onValueChange={setFiltroFabricante}><SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Fabricante" /></SelectTrigger><SelectContent className="bg-white z-50"><SelectItem value="todos">Fabricantes (Todos)</SelectItem>{fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}</SelectContent></Select>
-            <Select value={filtroCondicao} onValueChange={setFiltroCondicao}><SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Condição" /></SelectTrigger><SelectContent className="bg-white z-50"><SelectItem value="todas">Condição (Todas)</SelectItem>{condicoesUnicas.map((cond, idx) => (<SelectItem key={idx} value={cond as string}>{cond as string}</SelectItem>))}</SelectContent></Select>
-            <Select value={filtroFamilia} onValueChange={setFiltroFamilia}><SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Família" /></SelectTrigger><SelectContent className="bg-white z-50"><SelectItem value="todas">Família (Todas)</SelectItem>{familiasUnicas.map((fam, idx) => (<SelectItem key={idx} value={fam as string}>{fam as string}</SelectItem>))}</SelectContent></Select>
-            <Select value={filtroPerfil} onValueChange={setFiltroPerfil}><SelectTrigger className="w-[150px] bg-white z-50 text-xs"><SelectValue placeholder="Perfil" /></SelectTrigger><SelectContent className="bg-white z-50"><SelectItem value="todos">Perfil (Todos)</SelectItem>{perfisUnicos.map((perf, idx) => (<SelectItem key={idx} value={perf as string}>{perf as string}</SelectItem>))}</SelectContent></Select>
+            <Select value={filtroCategoria} onValueChange={setFiltroCategoria}><SelectTrigger className="w-[160px] bg-white z-[99999] text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="todas">Todas as Categorias</SelectItem><SelectItem value="Equipamento">Equipamentos</SelectItem><SelectItem value="Peça">Peças</SelectItem><SelectItem value="Suprimento">Suprimentos</SelectItem></SelectContent></Select>
+            <Select value={filtroFabricante} onValueChange={setFiltroFabricante}><SelectTrigger className="w-[150px] bg-white z-[99999] text-xs"><SelectValue placeholder="Fabricante" /></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="todos">Fabricantes (Todos)</SelectItem>{fabricantesUnicos.map((fab, idx) => (<SelectItem key={idx} value={fab as string}>{fab as string}</SelectItem>))}</SelectContent></Select>
+            <Select value={filtroCondicao} onValueChange={setFiltroCondicao}><SelectTrigger className="w-[150px] bg-white z-[99999] text-xs"><SelectValue placeholder="Condição" /></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="todas">Condição (Todas)</SelectItem>{condicoesUnicas.map((cond, idx) => (<SelectItem key={idx} value={cond as string}>{cond as string}</SelectItem>))}</SelectContent></Select>
+            <Select value={filtroFamilia} onValueChange={setFiltroFamilia}><SelectTrigger className="w-[150px] bg-white z-[99999] text-xs"><SelectValue placeholder="Família" /></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="todas">Família (Todas)</SelectItem>{familiasUnicas.map((fam, idx) => (<SelectItem key={idx} value={fam as string}>{fam as string}</SelectItem>))}</SelectContent></Select>
+            <Select value={filtroPerfil} onValueChange={setFiltroPerfil}><SelectTrigger className="w-[150px] bg-white z-[99999] text-xs"><SelectValue placeholder="Perfil" /></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="todos">Perfil (Todos)</SelectItem>{perfisUnicos.map((perf, idx) => (<SelectItem key={idx} value={perf as string}>{perf as string}</SelectItem>))}</SelectContent></Select>
           </div>
 
-          {/* Listagem Paginada */}
           <div className="divide-y min-h-[400px]">
             {carregando ? (
               <div className="p-12 text-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-indigo-600"/> Carregando catálogo...</div>
@@ -243,7 +235,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
             )}
           </div>
 
-          {/* Paginação */}
           {totalPaginas > 1 && (
             <div className="p-4 border-t flex justify-between items-center bg-slate-50">
               <span className="text-sm text-slate-500 font-medium">Página <strong className="text-slate-800">{paginaAtual + 1}</strong> de {totalPaginas}</span>

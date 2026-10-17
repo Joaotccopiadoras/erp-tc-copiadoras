@@ -1,3 +1,4 @@
+// src/shared/hooks/useExportacaoN8N.ts
 import { useState } from 'react';
 import { supabase } from '@/shared/lib/supabase/client';
 import { useToast } from '@/shared/hooks/use-toast';
@@ -21,7 +22,6 @@ export function useExportacaoN8N() {
 
     setExportando(true);
     try {
-      // 1. Busca a URL do Webhook
       const { data: webhook, error: dbError } = await supabase
         .from('sistema_webhooks')
         .select('url')
@@ -36,7 +36,6 @@ export function useExportacaoN8N() {
 
       toast({ title: "Processando...", description: "A IA está a gerar o seu relatório na nuvem." });
 
-      // 2. Envia os dados
       const response = await fetch(webhook.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,14 +46,12 @@ export function useExportacaoN8N() {
         throw new Error(`O servidor (n8n) recusou o pedido (${response.status}). Verifique os erros no n8n.`);
       }
 
-      // 3. Captura o texto da resposta primeiro (para evitar o erro "Unexpected end of JSON")
       const textoResposta = await response.text();
       
       if (!textoResposta || textoResposta.trim() === "") {
         throw new Error("O n8n não devolveu o link. O fluxo pode ter parado a meio. Verifique a aba Executions do n8n.");
       }
 
-      // 4. Tenta converter para JSON
       let resultado;
       try {
         resultado = JSON.parse(textoResposta);
@@ -62,7 +59,6 @@ export function useExportacaoN8N() {
         throw new Error(`O n8n devolveu texto inválido em vez de JSON: ${textoResposta.substring(0, 40)}...`);
       }
       
-      // 5. Conclui abrindo o ficheiro
       if (resultado && resultado.file_url) {
         window.open(resultado.file_url, '_blank');
         toast({ title: "Concluído", description: "Relatório gerado com sucesso!" });
