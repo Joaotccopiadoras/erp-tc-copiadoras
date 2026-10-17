@@ -4,7 +4,7 @@ import { supabase } from "@/shared/lib/supabase/client";
 
 // Importações dos nossos subcomponentes (vamos criá-los a seguir)
 import ListaProdutos from "../components/ListaProdutos";
-import FormProduto from "../components/FormProduto";
+import FormProduto from "../components/FormProdutos";
 import ModalInventario from "../components/ModalInventario";
 import ModalExtrato from "../components/ModalExtrato";
 
