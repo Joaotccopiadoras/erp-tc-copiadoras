@@ -19,6 +19,35 @@ export function useExportacaoN8N() {
       return;
     }
 
+    // 1. ABRE A ABA IMEDIATAMENTE NO CLIQUE (Síncrono)
+    // Isso impede o Google Chrome de acionar o Bloqueador de Pop-ups
+    const novaAba = window.open('', '_blank');
+    if (novaAba) {
+      novaAba.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Gerando Relatório...</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f8fafc; color: #334155; }
+            .spinner { animation: spin 1s linear infinite; width: 50px; height: 50px; color: #4f46e5; margin-bottom: 24px; }
+            @keyframes spin { 100% { transform: rotate(360deg); } }
+            h2 { margin: 0 0 8px 0; font-size: 24px; color: #0f172a; }
+            p { margin: 0; font-size: 15px; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"></circle>
+            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" opacity="0.75"></path>
+          </svg>
+          <h2>A processar o seu documento...</h2>
+          <p>A Inteligência do Servidor está a montar o ficheiro. Aguarde um instante.</p>
+        </body>
+        </html>
+      `);
+    }
+
     setExportando(true);
     try {
       const { data: webhook, error: dbError } = await supabase
@@ -42,30 +71,37 @@ export function useExportacaoN8N() {
       });
 
       if (!response.ok) {
-        throw new Error(`O servidor (n8n) recusou o pedido (${response.status}). Verifique os erros no n8n.`);
+        throw new Error(`O servidor (n8n) recusou o pedido (${response.status}).`);
       }
 
       const textoResposta = await response.text();
       
       if (!textoResposta || textoResposta.trim() === "") {
-        throw new Error("O n8n não devolveu o link. O fluxo pode ter parado a meio. Verifique a aba Executions do n8n.");
+        throw new Error("O n8n não devolveu o link. Verifique a aba Executions do n8n.");
       }
 
       let resultado;
       try {
         resultado = JSON.parse(textoResposta);
       } catch (e) {
-        throw new Error(`O n8n devolveu texto inválido em vez de JSON: ${textoResposta.substring(0, 40)}...`);
+        throw new Error(`O n8n devolveu um formato inválido. Garanta que ativou o "fx" (Expressão) no Response Body.`);
       }
       
       if (resultado && resultado.file_url) {
-        window.open(resultado.file_url, '_blank');
+        // Sucesso: Redireciona a aba que já estava com a tela de "Loading" para o PDF/Excel final!
+        if (novaAba) {
+          novaAba.location.href = resultado.file_url;
+        } else {
+          window.open(resultado.file_url, '_blank');
+        }
         toast({ title: "Concluído", description: "Relatório gerado com sucesso!" });
       } else {
-        throw new Error("O n8n não devolveu a propriedade 'file_url' no formato JSON esperado.");
+        throw new Error("O n8n não devolveu a propriedade 'file_url'.");
       }
 
     } catch (error: any) {
+      // Se algo falhar no meio do caminho, fecha a aba de carregamento para não confundir o usuário
+      if (novaAba) novaAba.close();
       console.error(error);
       toast({ title: "Falha na Exportação", description: error.message, variant: "destructive" });
     } finally {
