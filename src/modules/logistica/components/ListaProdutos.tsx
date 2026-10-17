@@ -7,7 +7,7 @@ import {
   Table as TableIcon, Database, Edit, ArrowLeftRight, Trash2, X 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N"; 
+import { useExportacaoN8N } from "@/shared/hooks/useExportN8N"; 
 
 interface ListaProdutosProps {
   produtos: any[];
