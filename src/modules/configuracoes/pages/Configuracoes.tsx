@@ -86,7 +86,7 @@ export default function Configuracoes() {
 
     try {
       if (!novoEmail || !novoEmail.includes("@") || !novoNomeUsuario || !novoNomeUsuario.trim() || !novaSenha || !novaSenha.trim()) {
-        window.alert("⚠️ Erro: Preencha todos os campos obrigatórios (Nome, E-mail com @ e Senha).");
+        window.alert("⚠️ Erro: Preencha todos os campos obrigatórios (Nome, E-mail válido e Senha).");
         return;
       }
       if (novaSenha.length < 6) {
@@ -96,19 +96,47 @@ export default function Configuracoes() {
 
       setSalvandoSeguranca(true);
 
-      // Usar DIRETAMENTE a conexão global do seu projeto (supabase importado no topo)
-      // Como não usamos um "fantasma", pode ser que você precise logar novamente depois (se o Supabase te desconectar)
-      const { error: authError } = await supabase.auth.signUp({
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        window.alert("❌ Erro Crítico: Chaves do Supabase não encontradas.");
+        setSalvandoSeguranca(false);
+        return;
+      }
+
+      // Descobre o tenant_id do Administrador que está a fazer o cadastro
+      const { data: adminData } = await supabase
+        .from('permissoes')
+        .select('tenant_id')
+        .or(`email.eq.${usuarioAtual},nome_usuario.eq.${usuarioAtual}`)
+        .limit(1)
+        .single();
+      
+      const adminTenantId = adminData?.tenant_id;
+
+      if (!adminTenantId) {
+         throw new Error("Erro de Segurança: O seu utilizador não possui um Tenant ID atrelado. Impossível vincular o novo colaborador à sua empresa.");
+      }
+
+      // Cliente fantasma para criar o utilizador sem deslogar o Administrador
+      const authGhost = createClient(supabaseUrl, supabaseKey, { 
+        auth: { persistSession: false, autoRefreshToken: false } 
+      });
+
+      // Cadastra no Supabase Auth
+      const { error: authError } = await authGhost.auth.signUp({
         email: novoEmail.toLowerCase().trim(),
         password: novaSenha,
       });
 
       if (authError) {
-        throw new Error(`Erro do Supabase (Autenticação): ${authError.message}`);
+        throw new Error(`Erro do Supabase: ${authError.message}`);
       }
 
-      // 3. Salva a Ficha do Usuário na Tabela de Permissões
+      // Salva a Ficha do Utilizador na Tabela de Permissões enviando o tenant_id da sua empresa
       const { error: dbError } = await supabase.from("permissoes").insert([{ 
+        tenant_id: adminTenantId,
         email: novoEmail.toLowerCase().trim(), 
         nome_usuario: novoNomeUsuario.toLowerCase().trim(),
         acesso_financeiro: false, 
