@@ -8,7 +8,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu"; 
 
@@ -145,8 +144,7 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
                 >
                   <FileDown className="w-4 h-4 text-rose-600"/> PDF {selecionados.length > 0 && `(${selecionados.length})`}
                 </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
+                <div className="h-px bg-slate-200 my-1 mx-2" />
                 
                 <DropdownMenuLabel>Cadastros Auxiliares</DropdownMenuLabel>
                 <DropdownMenuItem 
@@ -155,8 +153,7 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
                 >
                   <Database className="w-4 h-4 text-slate-400"/> Bases e Famílias (Excel)
                 </DropdownMenuItem>
-                
-                <DropdownMenuSeparator />
+                <div className="h-px bg-slate-200 my-1 mx-2" />
 
                 <DropdownMenuLabel className="text-slate-400">Performance (Em breve)</DropdownMenuLabel>
                 <DropdownMenuItem disabled className="gap-2 text-slate-400">
