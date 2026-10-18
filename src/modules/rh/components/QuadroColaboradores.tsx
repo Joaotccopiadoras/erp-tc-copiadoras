@@ -157,6 +157,7 @@ export default function QuadroColaboradores() {
                 <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o vínculo"/></SelectTrigger>
                 <SelectContent className="bg-white z-[99999]">
                   <SelectItem value="CLT">CLT (Registro)</SelectItem>
+                  <SelectItem value="EXP">CLT (Experiência)</SelectItem>
                   <SelectItem value="PJ">PJ / Prestador</SelectItem>
                   <SelectItem value="Estagiário">Estagiário</SelectItem>
                 </SelectContent>
