@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calculator,
   Users, FileSpreadsheet, Plus, Search, UserPlus, CheckCircle2, Landmark, Wallet, Briefcase, CalendarDays, FileSignature, FileWarning, Bus, Utensils, Printer, UploadCloud, Link as LinkIcon, Save, Loader2, ArrowRight } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
+import QuadroColaboradores from "@/modules/rh/components/QuadroColaboradores";
 
 export default function DepartamentoPessoal() {
   const [abaAtiva, setAbaAtiva] = useState<"colaboradores" | "folha" | "beneficios">("colaboradores");
@@ -456,111 +457,7 @@ export default function DepartamentoPessoal() {
         {/* ABA: COLABORADORES */}
         {/* ========================================================================= */}
         {abaAtiva === "colaboradores" && (
-          <div className="bg-white rounded-xl border shadow-sm overflow-hidden animate-in fade-in duration-200">
-            <div className="p-4 border-b flex flex-wrap items-center gap-4 bg-slate-50 justify-between">
-              <div className="relative w-80"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={buscaColab} onChange={e => setBuscaColab(e.target.value)} placeholder="Buscar nome, cargo ou vínculo..." className="pl-9 bg-white" /></div>
-              <Button onClick={() => { limparFormColab(); setMostrarFormColab(true); }} className="bg-sky-600 hover:bg-sky-700 text-white gap-2"><UserPlus className="w-4 h-4"/> Novo Colaborador</Button>
-            </div>
-
-            {mostrarFormColab && (
-              <div className="p-6 bg-sky-50/50 border-b border-sky-100 space-y-6">
-                <h3 className="font-bold text-sky-800 flex items-center gap-2 border-b border-sky-100 pb-2"><UserPlus className="w-5 h-5"/> {editandoId ? 'Editar Ficha do Colaborador' : 'Nova Ficha de Admissão'}</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                  <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome Completo *</label><Input value={nome} onChange={e => setNome(e.target.value)} className="bg-white" /></div>
-                  <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CPF</label><Input value={cpf} onChange={e => setCpf(e.target.value)} className="bg-white" /></div>
-                  <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data de Início *</label><Input type="date" value={dataAdmissao} onChange={e => setDataAdmissao(e.target.value)} className="bg-white" /></div>
-                  
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase">Vínculo / Tipo de Contrato *</label>
-                    <Select value={tipoContrato} onValueChange={setTipoContrato}>
-                        <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                        <SelectContent><SelectItem value="CLT">CLT (Por Dentro)</SelectItem><SelectItem value="PJ">Contrato PJ (Por Fora)</SelectItem><SelectItem value="Experiência">Período de Experiência</SelectItem><SelectItem value="Estágio">Estágio</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Cargo / Função *</label><Input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Ex: Técnico N1" className="bg-white" /></div>
-                  <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Setor *</label>
-                    <Select value={setor} onValueChange={setSetor}>
-                        <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..."/></SelectTrigger>
-                        <SelectContent><SelectItem value="Administrativo">Administrativo</SelectItem><SelectItem value="Técnico / Assistência">Técnico</SelectItem><SelectItem value="Comercial / Vendas">Comercial</SelectItem><SelectItem value="Gráfica / Produção">Gráfica</SelectItem><SelectItem value="Compras/Estoque">Compras</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-white rounded-lg border border-slate-200">
-                    <h4 className="text-sm font-bold text-slate-700 mb-3">Remuneração e Configuração de Benefícios</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Salário Base (R$) *</label><Input type="number" step="0.01" value={salarioBase} onChange={e => setSalarioBase(e.target.value)} placeholder="0,00" className="bg-slate-50" /></div>
-                        
-                        <div className="space-y-2 border-l border-slate-100 pl-4"><label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Bus className="w-3 h-3 text-sky-500"/> Recebe VT?</label>
-                          <Select value={recebeVT} onValueChange={setRecebeVT}><SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select>
-                        </div>
-                        
-                        <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Utensils className="w-3 h-3 text-amber-500"/> Recebe VA?</label>
-                          <Select value={recebeVA} onValueChange={setRecebeVA}><SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select>
-                        </div>
-                        
-                        <div className="space-y-2 border-l border-slate-100 pl-4"><label className="text-xs font-bold text-slate-500 uppercase">Status</label>
-                          <Select value={statusColab} onValueChange={setStatusColab}>
-                              <SelectTrigger className="bg-slate-50"><SelectValue/></SelectTrigger>
-                              <SelectContent><SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Férias">Férias</SelectItem><SelectItem value="Afastado">Afastado</SelectItem><SelectItem value="Desligado">Desligado</SelectItem></SelectContent>
-                          </Select>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-sky-100">
-                  <Button variant="outline" onClick={limparFormColab}>Cancelar</Button>
-                  <Button onClick={salvarColaborador} className="bg-sky-600 hover:bg-sky-700 text-white">Salvar Ficha</Button>
-                </div>
-              </div>
-            )}
-
-            <div className="overflow-x-auto min-h-[400px]">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
-                    <th className="p-4 font-semibold border-b">Colaborador</th>
-                    <th className="p-4 font-semibold border-b">Vínculo</th>
-                    <th className="p-4 font-semibold border-b text-center">Benefícios</th>
-                    <th className="p-4 font-semibold border-b text-center">Admissão</th>
-                    <th className="p-4 font-semibold border-b text-center">Status</th>
-                    <th className="p-4 font-semibold border-b text-right">Salário Base</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {colaboradoresFiltrados.length === 0 ? (
-                    <tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum colaborador encontrado.</td></tr>
-                  ) : (
-                    colaboradoresFiltrados.map(c => {
-                        const corStatus = c.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : c.status === 'Férias' ? 'bg-amber-100 text-amber-700' : c.status === 'Desligado' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
-                        const corVinculo = c.tipo_contrato === 'CLT' ? 'border-sky-200 text-sky-700 bg-sky-50' : c.tipo_contrato === 'PJ' ? 'border-purple-200 text-purple-700 bg-purple-50' : 'border-amber-200 text-amber-700 bg-amber-50';
-
-                        return (
-                        <tr key={c.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => editarColaborador(c)}>
-                          <td className="p-4">
-                              <p className="font-bold text-slate-800">{c.nome}</p>
-                              <p className="text-[10px] uppercase text-slate-500 mt-0.5">{c.cargo} • {c.setor}</p>
-                          </td>
-                          <td className="p-4"><span className={`text-[10px] font-bold px-2 py-1 rounded border ${corVinculo}`}>{c.tipo_contrato || 'CLT'}</span></td>
-                          <td className="p-4 text-center">
-                              <div className="flex justify-center gap-1">
-                                  {c.recebe_vt && <span className="bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1" title="Vale Transporte"><Bus className="w-3 h-3"/> VT</span>}
-                                  {c.recebe_va && <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1" title="Vale Alimentação"><Utensils className="w-3 h-3"/> VA</span>}
-                                  {!c.recebe_vt && !c.recebe_va && <span className="text-[10px] text-slate-400 font-medium italic">Nenhum</span>}
-                              </div>
-                          </td>
-                          <td className="p-4 text-center text-xs text-slate-600 font-medium">{new Date(c.data_admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-                          <td className="p-4 text-center"><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${corStatus}`}>{c.status}</span></td>
-                          <td className="p-4 text-right font-bold text-sky-700">R$ {Number(c.salario_base).toFixed(2).replace('.', ',')}</td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <QuadroColaboradores />
         )}
 
         {/* ========================================================================= */}

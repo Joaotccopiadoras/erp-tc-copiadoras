@@ -7,12 +7,14 @@ import { Input } from "@/shared/components/ui/input";
 import { useToast } from "@/shared/hooks/use-toast";
 import { 
   Lock, Settings, UserPlus, Users, Wrench, Printer, Database, 
-  Activity, Webhook, Trash2, Edit2, Loader2, Eye, EyeOff, Save, Link
+  Activity, Webhook, Trash2, Edit2, Loader2, Eye, EyeOff, Save, Link,
+  Briefcase
 } from "lucide-react";
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/shared/components/ui/select";
-import TabLogs from "../components/TabLogs"; // Importação da aba de auditoria criada anteriormente
+import TabLogs from "../components/TabLogs";
+import QuadroColaboradores from "@/modules/rh/components/QuadroColaboradores";
 
 export default function Configuracoes() {
   const [abaAtiva, setAbaAtiva] = useState("seguranca");
@@ -262,13 +264,10 @@ export default function Configuracoes() {
               <Lock className="w-4 h-4 mr-3" /> Segurança e RLS
             </button>
             
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-6 mb-2">Equipe e Operação</div>
-            <button onClick={() => setAbaAtiva("tecnicos")} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${abaAtiva === "tecnicos" ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}>
-              <Wrench className="w-4 h-4 mr-3" /> Gestão de Técnicos
-            </button>
-            <button onClick={() => setAbaAtiva("operadores")} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${abaAtiva === "operadores" ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}>
-              <Printer className="w-4 h-4 mr-3" /> Operadores Gráficos
-            </button>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2 mt-4 mb-1">Equipa e Operação</h3>
+              <button onClick={() => setAbaAtiva("equipe")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "equipe" ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                <Briefcase className="w-4 h-4 mr-3" /> Quadro Operacional (RH)
+              </button>
 
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-6 mb-2">Inteligência SaaS</div>
             <button onClick={() => setAbaAtiva("webhooks")} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${abaAtiva === "webhooks" ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
@@ -430,9 +429,15 @@ export default function Configuracoes() {
             {abaAtiva === "logs" && <TabLogs />}
 
             {/* PLACEHOLDERS DE OUTRAS ABAS */}
-            {abaAtiva === "tecnicos" && <div className="p-8 text-center text-slate-500 bg-white rounded-xl border border-dashed">Interface de Gestão de Técnicos ativa e em operação...</div>}
-            {abaAtiva === "operadores" && <div className="p-8 text-center text-slate-500 bg-white rounded-xl border border-dashed">Interface de Operadores Gráficos ativa e em operação...</div>}
-
+            {abaAtiva === "equipe" && (
+              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="mb-2">
+                    <h2 className="text-xl font-bold text-slate-800">Gestão de Equipe e Perfis Operacionais</h2>
+                    <p className="text-sm text-slate-500">Módulo centralizado. Defina os perfis aqui para que os colaboradores apareçam corretamente como Técnicos, Vendedores ou Operadores nos seus respetivos módulos.</p>
+                </div>
+                <QuadroColaboradores />
+              </div>
+            )}
           </div>
         </div>
       </div>
