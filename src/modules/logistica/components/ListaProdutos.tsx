@@ -1,20 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-// 1. Adicionado os imports do DropdownMenu (Ajuste o caminho se seu shadcn salvou sem a pasta 'shared')
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/shared/components/ui/dropdown-menu"; 
-
 import { 
   Package, Plus, Search, Loader2, ListChecks, FileDown, 
-  Table as TableIcon, Database, Edit, ArrowLeftRight, Trash2, X,
-  Activity, RefreshCcw 
+  Table as TableIcon, Database, Edit, ArrowLeftRight, Activity, RefreshCcw
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 import { useExportacaoN8N } from "@/shared/hooks/useExportN8N";
@@ -30,6 +20,91 @@ interface ListaProdutosProps {
 }
 
 const ITENS_POR_PAGINA = 15;
+
+function ExportDropdown({ 
+  exportando, 
+  carregando, 
+  dispararExportacao, 
+  getDadosExportacao, 
+  produtosFiltrados, 
+  selecionadosLen 
+}: any) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleExport = (params: any) => {
+    dispararExportacao(params);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button 
+        disabled={exportando || carregando} 
+        variant="outline" 
+        size="sm" 
+        onClick={() => setOpen(!open)}
+        className="gap-2 text-slate-700 border-slate-200"
+      >
+        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
+        Exportar Relatórios
+      </Button>
+      
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-[99999] py-1 overflow-hidden">
+          <div className="px-2 py-1.5 text-xs font-semibold text-slate-500">Catálogo Principal</div>
+          
+          <button 
+            onClick={() => handleExport({ modulo: 'Catálogo de Produtos', tipo: 'excel', dados: getDadosExportacao() })}
+            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+          >
+            <TableIcon className="w-4 h-4 text-emerald-600"/> Excel {selecionadosLen > 0 && `(${selecionadosLen})`}
+          </button>
+          
+          <button 
+            onClick={() => handleExport({ modulo: 'Catálogo de Produtos', tipo: 'pdf', dados: getDadosExportacao() })}
+            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+          >
+            <FileDown className="w-4 h-4 text-rose-600"/> PDF {selecionadosLen > 0 && `(${selecionadosLen})`}
+          </button>
+
+          <div className="h-px bg-slate-200 my-1" />
+          
+          <div className="px-2 py-1.5 text-xs font-semibold text-slate-500">Cadastros Auxiliares</div>
+          
+          <button 
+            onClick={() => handleExport({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })}
+            className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 flex items-center gap-2"
+          >
+            <Database className="w-4 h-4 text-slate-400"/> Bases e Famílias (Excel)
+          </button>
+
+          <div className="h-px bg-slate-200 my-1" />
+          
+          <div className="px-2 py-1.5 text-xs font-semibold text-slate-400">Performance (Em breve)</div>
+          
+          <button disabled className="w-full text-left px-3 py-2 text-sm text-slate-400 flex items-center gap-2 opacity-70 cursor-not-allowed">
+            <Activity className="w-4 h-4"/> Curva ABC
+          </button>
+          
+          <button disabled className="w-full text-left px-3 py-2 text-sm text-slate-400 flex items-center gap-2 opacity-70 cursor-not-allowed">
+            <RefreshCcw className="w-4 h-4"/> Giro de Estoque
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, onInventario, onExtrato, refreshProdutos }: ListaProdutosProps) {
   const [modoLote, setModoLote] = useState(false);
@@ -102,7 +177,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
     }
   };
 
-  // 2. Simplificando a função para pegar os dados que serão exportados
   const getDadosExportacao = () => {
     if (selecionados.length > 0) {
       return produtosFiltrados.filter(p => selecionados.includes(p.id));
@@ -121,50 +195,14 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
         </div>
         {!modoLote ? (
           <div className="flex gap-2 flex-wrap justify-end">
-            
-            {/* 3. Dropdown Unificado Substituindo os Botões Antigos */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button disabled={exportando || carregando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200">
-                  {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
-                  Exportar Relatórios
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-white z-[99999]">
-                <DropdownMenuLabel>Catálogo Principal</DropdownMenuLabel>
-                <DropdownMenuItem 
-                  onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'excel', dados: getDadosExportacao() })}
-                  className="cursor-pointer gap-2"
-                >
-                  <TableIcon className="w-4 h-4 text-emerald-600"/> Excel {selecionados.length > 0 && `(${selecionados.length})`}
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'pdf', dados: getDadosExportacao() })}
-                  className="cursor-pointer gap-2"
-                >
-                  <FileDown className="w-4 h-4 text-rose-600"/> PDF {selecionados.length > 0 && `(${selecionados.length})`}
-                </DropdownMenuItem>
-                <div className="h-px bg-slate-200 my-1 mx-2" />
-                
-                <DropdownMenuLabel>Cadastros Auxiliares</DropdownMenuLabel>
-                <DropdownMenuItem 
-                  onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })}
-                  className="cursor-pointer gap-2 text-slate-600"
-                >
-                  <Database className="w-4 h-4 text-slate-400"/> Bases e Famílias (Excel)
-                </DropdownMenuItem>
-                <div className="h-px bg-slate-200 my-1 mx-2" />
-
-                <DropdownMenuLabel className="text-slate-400">Performance (Em breve)</DropdownMenuLabel>
-                <DropdownMenuItem disabled className="gap-2 text-slate-400">
-                  <Activity className="w-4 h-4"/> Curva ABC
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled className="gap-2 text-slate-400">
-                  <RefreshCcw className="w-4 h-4"/> Giro de Estoque
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
+            <ExportDropdown 
+              exportando={exportando} 
+              carregando={carregando} 
+              dispararExportacao={dispararExportacao} 
+              getDadosExportacao={getDadosExportacao} 
+              produtosFiltrados={produtosFiltrados} 
+              selecionadosLen={selecionados.length} 
+            />
             <Button onClick={onNovo} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
           </div>
         ) : (
@@ -214,9 +252,6 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
 
       {!modoLote && (
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          
-          {/* 4. A barra cinza de "Relatórios Auxiliares" foi completamente removida daqui! */}
-
           {selecionados.length > 0 && (
             <div className="bg-blue-50 border-b border-blue-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2">
               <span className="text-blue-800 font-semibold">{selecionados.length} produto(s) selecionado(s)</span>
