@@ -122,7 +122,7 @@ export default function Grafica() {
     const [prodRes, cliRes, opRes, eqRes] = await Promise.all([
       supabase.from('log_produtos' as any).select('id, sku, nome, custo_base, estoque_atual').order('nome'),
       supabase.from('log_clientes' as any).select('id, razao_social, nome_fantasia, cnpj_cpf').order('nome_fantasia'),
-      supabase.from('grafica_operadores' as any).select('id, nome').order('nome'),
+      supabase.from('rh_colaboradores' as any).select('id, nome').eq('perfil_operacional', 'Operador Gráfico').eq('status', 'Ativo').order('nome'),
       supabase.from('srv_equipamentos' as any).select('id, sequencial, numero_serie, log_produtos(nome, especificacoes), log_clientes(nome_fantasia, razao_social)')
     ]);
     if (prodRes.data) setProdutosBD(prodRes.data);
