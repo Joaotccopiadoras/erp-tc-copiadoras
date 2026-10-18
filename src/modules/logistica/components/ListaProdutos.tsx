@@ -18,7 +18,7 @@ import {
   Activity, RefreshCcw 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import { useExportacaoN8N } from "@/shared/hooks/useExport  N8N";
+import { useExportacaoN8N } from "@/shared/hooks/useExportN8N";
 
 interface ListaProdutosProps {
   produtos: any[];
