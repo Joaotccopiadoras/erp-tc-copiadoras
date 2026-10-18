@@ -4,7 +4,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { useToast } from "@/shared/hooks/use-toast";
-import { Search, UserPlus, Edit, Trash2, Loader2, Save, X } from "lucide-react";
+import { Search, UserPlus, Edit, Trash2, Loader2, Save } from "lucide-react";
 
 export default function QuadroColaboradores() {
   const { toast } = useToast();
@@ -17,17 +17,17 @@ export default function QuadroColaboradores() {
 
   // Estados do Formulário
   const [nome, setNome] = useState("");
-  const [cpf, setCpf] = useState("xxx.xxx.xxx-xx");
+  const [cpf, setCpf] = useState("");
   const [cargo, setCargo] = useState("");
   const [setor, setSetor] = useState("");
   const [dataAdmissao, setDataAdmissao] = useState("");
-  const [salarioBase, setSalarioBase] = useState("xxxx,xx");
+  const [salarioBase, setSalarioBase] = useState("");
   const [statusColab, setStatusColab] = useState("Ativo");
   const [tipoContrato, setTipoContrato] = useState("CLT");
   const [perfilOperacional, setPerfilOperacional] = useState("Geral");
   
-  // Campos Dinâmicos
-  const [valorHora, setValorHora] = useState("xx,xx");
+  // Atributos Gerais (CNH e Valor Hora)
+  const [valorHora, setValorHora] = useState("");
   const [tipoCnh, setTipoCnh] = useState("Nenhuma");
   const [formacao, setFormacao] = useState("");
 
@@ -40,10 +40,22 @@ export default function QuadroColaboradores() {
 
   useEffect(() => { fetchColaboradores(); }, []);
 
+  // Lógica de cálculo automático do Valor da Hora baseado no Salário Base (Cálculo CLT 220h)
+  useEffect(() => {
+      if(salarioBase && !editandoId) {
+          const salarioNum = parseFloat(salarioBase.replace(',', '.'));
+          if(!isNaN(salarioNum)) {
+             const calculoHora = (salarioNum / 220).toFixed(2);
+             setValorHora(calculoHora.replace('.', ','));
+          }
+      }
+  }, [salarioBase, editandoId]);
+
+
   const limparForm = () => {
-    setEditandoId(null); setNome(""); setCpf("xxx.xxx.xxx-xx"); setCargo(""); setSetor("");
-    setDataAdmissao(""); setSalarioBase("xxxx,xx"); setStatusColab("Ativo"); setTipoContrato("CLT"); 
-    setPerfilOperacional("Geral"); setValorHora("xx,xx"); setTipoCnh("Nenhuma"); setFormacao("");
+    setEditandoId(null); setNome(""); setCpf(""); setCargo(""); setSetor("");
+    setDataAdmissao(""); setSalarioBase(""); setStatusColab("Ativo"); setTipoContrato("CLT"); 
+    setPerfilOperacional("Geral"); setValorHora(""); setTipoCnh("Nenhuma"); setFormacao("");
     setMostrarForm(false);
   };
 
@@ -65,18 +77,21 @@ export default function QuadroColaboradores() {
     setSalvando(true);
     const payload = {
       nome, cpf, cargo, setor, status: statusColab, data_admissao: dataAdmissao,
-      salario_base: parseFloat(salarioBase) || 0, tipo_contrato: tipoContrato,
+      salario_base: parseFloat(salarioBase.replace(',', '.')) || 0, 
+      tipo_contrato: tipoContrato,
       perfil_operacional: perfilOperacional,
       valor_hora: parseFloat(valorHora?.replace(',','.')) || 0,
       tipo_cnh: tipoCnh, formacao
     };
 
     if (editandoId) {
-      await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
-      toast({ title: "Sucesso", description: "Colaborador atualizado!" });
+      const {error} = await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
+      if(error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+      else toast({ title: "Sucesso", description: "Colaborador atualizado!" });
     } else {
-      await supabase.from('rh_colaboradores').insert([payload]);
-      toast({ title: "Sucesso", description: "Novo colaborador cadastrado!" });
+      const {error} = await supabase.from('rh_colaboradores').insert([payload]);
+      if(error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+      else toast({ title: "Sucesso", description: "Novo colaborador cadastrado!" });
     }
     
     limparForm(); fetchColaboradores(); setSalvando(false);
@@ -115,19 +130,18 @@ export default function QuadroColaboradores() {
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome Completo *</label><Input value={nome} onChange={e => setNome(e.target.value)} className="bg-white" /></div>
-            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CPF</label><Input value={cpf} onChange={e => setCpf(e.target.value)} className="bg-white" /></div>
+            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CPF</label><Input value={cpf} onChange={e => setCpf(e.target.value)} className="bg-white" placeholder="xxx.xxx.xxx-xx" /></div>
             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data de Admissão *</label><Input type="date" value={dataAdmissao} onChange={e => setDataAdmissao(e.target.value)} className="bg-white" /></div>
 
-            {/* O PULO DO GATO: Definição de onde a pessoa atua no sistema */}
+            {/* Novo Campo: Vínculo do Colaborador */}
             <div className="space-y-2 md:col-span-1">
-              <label className="text-xs font-bold text-indigo-600 uppercase" title="Define em quais telas este colaborador aparecerá">Perfil Operacional (ERP) *</label>
-              <Select value={perfilOperacional} onValueChange={setPerfilOperacional}>
-                <SelectTrigger className="bg-white border-indigo-200"><SelectValue/></SelectTrigger>
+              <label className="text-xs font-bold text-slate-500 uppercase">Vínculo / Contrato *</label>
+              <Select value={tipoContrato} onValueChange={setTipoContrato}>
+                <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
                 <SelectContent className="z-[99999]">
-                  <SelectItem value="Geral">Geral (DP / Logística Livre)</SelectItem>
-                  <SelectItem value="Técnico">Técnico de Campo / Lab</SelectItem>
-                  <SelectItem value="Operador Gráfico">Operador Gráfico</SelectItem>
-                  <SelectItem value="Vendedor">Vendedor / Licitações</SelectItem>
+                  <SelectItem value="CLT">CLT (Registro)</SelectItem>
+                  <SelectItem value="PJ">PJ / Prestador</SelectItem>
+                  <SelectItem value="Estagiário">Estagiário</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -144,23 +158,41 @@ export default function QuadroColaboradores() {
               </Select>
             </div>
 
-            {/* Renderização Condicional baseada no Perfil Operacional */}
-            {perfilOperacional === 'Técnico' && (
-              <>
-                <div className="space-y-2 md:col-span-1">
-                  <label className="text-xs font-bold text-indigo-500 uppercase">Tipo CNH</label>
-                  <Select value={tipoCnh} onValueChange={setTipoCnh}>
-                    <SelectTrigger className="bg-white border-indigo-100"><SelectValue/></SelectTrigger>
-                    <SelectContent className="z-[99999]"><SelectItem value="A">A (Moto)</SelectItem><SelectItem value="B">B (Carro)</SelectItem><SelectItem value="AB">AB</SelectItem><SelectItem value="Nenhuma">Nenhuma</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-indigo-500 uppercase">Formação / Especialidade</label><Input value={formacao} onChange={e => setFormacao(e.target.value)} className="bg-white border-indigo-100" /></div>
-              </>
-            )}
+            {/* Perfil Operacional no ERP */}
+            <div className="space-y-2 md:col-span-1">
+              <label className="text-xs font-bold text-indigo-600 uppercase" title="Define em quais telas este colaborador aparecerá">Perfil Operacional (ERP) *</label>
+              <Select value={perfilOperacional} onValueChange={setPerfilOperacional}>
+                <SelectTrigger className="bg-white border-indigo-200"><SelectValue/></SelectTrigger>
+                <SelectContent className="z-[99999]">
+                  <SelectItem value="Geral">Geral (DP / Logística Livre)</SelectItem>
+                  <SelectItem value="Técnico">Técnico de Campo / Lab</SelectItem>
+                  <SelectItem value="Operador Gráfico">Operador Gráfico</SelectItem>
+                  <SelectItem value="Vendedor">Vendedor / Licitações</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            {(perfilOperacional === 'Técnico' || perfilOperacional === 'Operador Gráfico') && (
-              <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-indigo-500 uppercase">Valor Hora / Custo (R$)</label><Input value={valorHora} onChange={e => setValorHora(e.target.value)} placeholder="Ex: 15,50" className="bg-white border-indigo-100" /></div>
-            )}
+            {/* Atributos Gerais (Agora liberados para todos) */}
+            <div className="space-y-2 md:col-span-1">
+              <label className="text-xs font-bold text-emerald-600 uppercase">Salário Base (R$)</label>
+              <Input value={salarioBase} onChange={e => setSalarioBase(e.target.value)} placeholder="Ex: 1500,00" className="bg-white border-emerald-100" />
+            </div>
+            <div className="space-y-2 md:col-span-1">
+              <label className="text-xs font-bold text-indigo-500 uppercase" title="Calculado aut. via 220h mensais.">Valor Hora / Custo (R$)</label>
+              <Input value={valorHora} onChange={e => setValorHora(e.target.value)} placeholder="Ex: 6,82" className="bg-white border-indigo-100 font-bold text-indigo-700" />
+            </div>
+            
+            <div className="space-y-2 md:col-span-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Tipo CNH</label>
+                <Select value={tipoCnh} onValueChange={setTipoCnh}>
+                <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
+                <SelectContent className="z-[99999]"><SelectItem value="A">A (Moto)</SelectItem><SelectItem value="B">B (Carro)</SelectItem><SelectItem value="AB">AB</SelectItem><SelectItem value="Nenhuma">Nenhuma</SelectItem></SelectContent>
+                </Select>
+            </div>
+             <div className="space-y-2 md:col-span-4">
+                 <label className="text-xs font-bold text-slate-500 uppercase">Formação / Especialidade (Opcional)</label>
+                 <Input value={formacao} onChange={e => setFormacao(e.target.value)} className="bg-white" />
+             </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-sky-100">
@@ -175,23 +207,25 @@ export default function QuadroColaboradores() {
           <thead>
             <tr className="bg-slate-100 text-slate-600 text-[11px] uppercase tracking-wider">
               <th className="p-4 font-semibold border-b">Colaborador</th>
-              <th className="p-4 font-semibold border-b text-center">Perfil Operacional (ERP)</th>
+              <th className="p-4 font-semibold border-b text-center">Vínculo</th>
+              <th className="p-4 font-semibold border-b text-center">Perfil (ERP)</th>
               <th className="p-4 font-semibold border-b text-center">Setor / Função</th>
               <th className="p-4 font-semibold border-b text-center">Status</th>
               <th className="p-4 font-semibold border-b text-center">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {loading ? (<tr><td colSpan={5} className="p-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400"/></td></tr>) 
-            : filtrados.length === 0 ? (<tr><td colSpan={5} className="p-12 text-center text-slate-500">Nenhum colaborador registado.</td></tr>) 
+            {loading ? (<tr><td colSpan={6} className="p-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400"/></td></tr>) 
+            : filtrados.length === 0 ? (<tr><td colSpan={6} className="p-12 text-center text-slate-500">Nenhum colaborador registado.</td></tr>) 
             : (
               filtrados.map(c => {
                 const corStatus = c.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : c.status === 'Férias' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
                 const corPerfil = c.perfil_operacional === 'Técnico' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : c.perfil_operacional === 'Operador Gráfico' ? 'bg-purple-100 text-purple-700 border-purple-200' : c.perfil_operacional === 'Vendedor' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-700 border-slate-200';
-                
+                const corVinculo = c.tipo_contrato === 'CLT' ? 'text-sky-700 font-bold' : c.tipo_contrato === 'PJ' ? 'text-purple-700 font-bold' : 'text-amber-700 font-bold';
                 return (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="p-4"><p className="font-bold text-slate-800">{c.nome}</p><p className="text-xs text-slate-500 font-mono mt-0.5">CPF: {c.cpf || 'Não informado'}</p></td>
+                    <td className="p-4 text-center text-xs"><span className={corVinculo}>{c.tipo_contrato || 'CLT'}</span></td>
                     <td className="p-4 text-center"><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded border shadow-sm ${corPerfil}`}>{c.perfil_operacional || 'Geral'}</span></td>
                     <td className="p-4 text-center"><p className="text-sm font-semibold text-slate-700">{c.cargo}</p><p className="text-[10px] text-slate-500 uppercase mt-0.5">{c.setor}</p></td>
                     <td className="p-4 text-center"><span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${corStatus}`}>{c.status}</span></td>

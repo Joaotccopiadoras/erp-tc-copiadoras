@@ -264,8 +264,8 @@ export default function Configuracoes() {
               <Lock className="w-4 h-4 mr-3" /> Segurança e RLS
             </button>
             
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-2 mt-4 mb-1">Equipa e Operação</h3>
-              <button onClick={() => setAbaAtiva("equipe")} className={`flex items-center p-3 text-sm font-semibold rounded-lg transition-colors border ${abaAtiva === "equipe" ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-6 mb-2">Equipe e Operação</div>
+              <button onClick={() => setAbaAtiva("equipe")} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${abaAtiva === "equipe" ? "bg-sky-50 text-sky-700" : "text-slate-600 hover:bg-slate-50"}`}>
                 <Briefcase className="w-4 h-4 mr-3" /> Quadro Operacional (RH)
               </button>
 
