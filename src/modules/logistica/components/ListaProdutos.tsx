@@ -2,11 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { 
-  Package, Plus, Search, Loader2, ListChecks, FileDown, 
-  Table as TableIcon, Database, Edit, ArrowLeftRight, Trash2, X 
-} from "lucide-react";
-import { supabase } from "@/shared/lib/supabase/client";
+// 1. Adicionado os imports do DropdownMenu (Ajuste o caminho se seu shadcn salvou sem a pasta 'shared')
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,8 +10,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/shared/components/ui/dropdown-menu"; 
-import { useExportacaoN8N } from "@/shared/hooks/useExportN8N"; 
+} from "@/components/ui/dropdown-menu"; 
+
+import { 
+  Package, Plus, Search, Loader2, ListChecks, FileDown, 
+  Table as TableIcon, Database, Edit, ArrowLeftRight, Trash2, X,
+  Activity, RefreshCcw 
+} from "lucide-react";
+import { supabase } from "@/shared/lib/supabase/client";
+import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N";
 
 interface ListaProdutosProps {
   produtos: any[];
@@ -100,6 +103,14 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
     }
   };
 
+  // 2. Simplificando a função para pegar os dados que serão exportados
+  const getDadosExportacao = () => {
+    if (selecionados.length > 0) {
+      return produtosFiltrados.filter(p => selecionados.includes(p.id));
+    }
+    return produtosFiltrados;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -109,99 +120,54 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
           </h1>
           <p className="text-slate-500">Gestão unificada de equipamentos, peças e insumos.</p>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button disabled={exportando || carregando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200">
-        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
-        Exportar Relatórios
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-56 bg-white z-50">
-      <DropdownMenuLabel>Catálogo Principal</DropdownMenuLabel>
-      <DropdownMenuItem 
-        onClick={() => dispararExportacao({ 
-          modulo: 'Catálogo de Produtos', 
-          tipo: 'excel', 
-          dados: selecionados.length > 0 ? produtosFiltrados.filter(p => selecionados.includes(p.id)) : produtosFiltrados 
-        })}
-        className="cursor-pointer gap-2"
-      >
-        <TableIcon className="w-4 h-4 text-emerald-600"/> Excel {selecionados.length > 0 && `(${selecionados.length})`}
-      </DropdownMenuItem>
-      <DropdownMenuItem 
-        onClick={() => dispararExportacao({ 
-          modulo: 'Catálogo de Produtos', 
-          tipo: 'pdf', 
-          dados: selecionados.length > 0 ? produtosFiltrados.filter(p => selecionados.includes(p.id)) : produtosFiltrados 
-        })}
-        className="cursor-pointer gap-2"
-      >
-        <FileDown className="w-4 h-4 text-rose-600"/> PDF {selecionados.length > 0 && `(${selecionados.length})`}
-      </DropdownMenuItem>
-
-      <DropdownMenuSeparator />
-      
-      <DropdownMenuLabel>Cadastros Auxiliares</DropdownMenuLabel>
-      <DropdownMenuItem 
-        onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })}
-        className="cursor-pointer gap-2"
-      >
-        <TableIcon className="w-4 h-4 text-slate-500"/> Excel (Bases)
-      </DropdownMenuItem>
-      <DropdownMenuItem 
-        onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'pdf', dados: produtosFiltrados })}
-        className="cursor-pointer gap-2"
-      >
-        <FileDown className="w-4 h-4 text-slate-500"/> PDF (Bases)
-      </DropdownMenuItem>
-
-      {/* No futuro, adicionaremos aqui:
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>Performance (Em breve)</DropdownMenuLabel>
-      <DropdownMenuItem disabled className="gap-2"><Activity className="w-4 h-4"/> Curva ABC (Excel)</DropdownMenuItem>
-      <DropdownMenuItem disabled className="gap-2"><RefreshCcw className="w-4 h-4"/> Giro de Estoque</DropdownMenuItem>
-      */}
-    </DropdownMenuContent>
-  </DropdownMenu>
-
-  <Button onClick={onNovo} className="gap-2 bg-stone-700 hover:bg-stone-800">
-    <Plus className="w-4 h-4" /> Novo Produto
-  </Button>
-</div>
         {!modoLote ? (
           <div className="flex gap-2 flex-wrap justify-end">
-            <Button 
-              onClick={() => dispararExportacao({ 
-                modulo: 'Catálogo de Produtos', 
-                tipo: 'excel', 
-                // A Lógica aqui decide: Envia os selecionados, ou todos os filtrados
-                dados: selecionados.length > 0 
-                  ? produtosFiltrados.filter(p => selecionados.includes(p.id)) 
-                  : produtosFiltrados 
-              })} 
-              disabled={exportando || carregando} 
-              variant="outline" size="sm" className="gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-            >
-              {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <TableIcon className="w-4 h-4"/>} 
-              {selecionados.length > 0 ? `Excel (${selecionados.length})` : 'Excel'}
-            </Button>
-
-            <Button 
-              onClick={() => dispararExportacao({ 
-                modulo: 'Catálogo de Produtos', 
-                tipo: 'pdf', 
-                dados: selecionados.length > 0 
-                  ? produtosFiltrados.filter(p => selecionados.includes(p.id)) 
-                  : produtosFiltrados 
-              })} 
-              disabled={exportando || carregando} 
-              variant="outline" size="sm" className="gap-2 text-red-700 border-red-200 hover:bg-red-50"
-            >
-              {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
-              {selecionados.length > 0 ? `PDF (${selecionados.length})` : 'PDF'}
-            </Button>
             
+            {/* 3. Dropdown Unificado Substituindo os Botões Antigos */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button disabled={exportando || carregando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200">
+                  {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
+                  Exportar Relatórios
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-white z-[99999]">
+                <DropdownMenuLabel>Catálogo Principal</DropdownMenuLabel>
+                <DropdownMenuItem 
+                  onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'excel', dados: getDadosExportacao() })}
+                  className="cursor-pointer gap-2"
+                >
+                  <TableIcon className="w-4 h-4 text-emerald-600"/> Excel {selecionados.length > 0 && `(${selecionados.length})`}
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => dispararExportacao({ modulo: 'Catálogo de Produtos', tipo: 'pdf', dados: getDadosExportacao() })}
+                  className="cursor-pointer gap-2"
+                >
+                  <FileDown className="w-4 h-4 text-rose-600"/> PDF {selecionados.length > 0 && `(${selecionados.length})`}
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+                
+                <DropdownMenuLabel>Cadastros Auxiliares</DropdownMenuLabel>
+                <DropdownMenuItem 
+                  onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })}
+                  className="cursor-pointer gap-2 text-slate-600"
+                >
+                  <Database className="w-4 h-4 text-slate-400"/> Bases e Famílias (Excel)
+                </DropdownMenuItem>
+                
+                <DropdownMenuSeparator />
+
+                <DropdownMenuLabel className="text-slate-400">Performance (Em breve)</DropdownMenuLabel>
+                <DropdownMenuItem disabled className="gap-2 text-slate-400">
+                  <Activity className="w-4 h-4"/> Curva ABC
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled className="gap-2 text-slate-400">
+                  <RefreshCcw className="w-4 h-4"/> Giro de Estoque
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button onClick={onNovo} className="gap-2 bg-stone-700 hover:bg-stone-800"><Plus className="w-4 h-4" /> Novo Produto</Button>
           </div>
         ) : (
@@ -251,13 +217,8 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
 
       {!modoLote && (
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          <div className="bg-stone-50 border-b p-3 px-4 flex justify-between items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2"><Database className="w-4 h-4 text-stone-500" /><span className="text-sm font-semibold text-stone-700">Relatórios Auxiliares:</span></div>
-            <div className="flex gap-2 flex-wrap">
-              <Button onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'pdf', dados: produtosFiltrados })} disabled={exportando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><FileDown className="w-4 h-4"/> PDF</Button>
-              <Button onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })} disabled={exportando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200 hover:bg-slate-100"><TableIcon className="w-4 h-4"/> Excel</Button>
-            </div>
-          </div>
+          
+          {/* 4. A barra cinza de "Relatórios Auxiliares" foi completamente removida daqui! */}
 
           {selecionados.length > 0 && (
             <div className="bg-blue-50 border-b border-blue-100 p-3 px-6 flex justify-between items-center animate-in slide-in-from-top-2">
