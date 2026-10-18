@@ -123,7 +123,7 @@ export default function QuadroColaboradores() {
       </div>
 
       {mostrarForm && (
-        <div className="p-6 bg-sky-50/50 border-b border-sky-100 space-y-6">
+        <div className="p-6 bg-sky-50/50 border-b border-sky-100 space-y-6 relative z-10">
           <h3 className="font-bold text-sky-800 flex items-center gap-2 border-b border-sky-100 pb-2">
             <UserPlus className="w-5 h-5"/> {editandoId ? 'Editar Ficha do Colaborador' : 'Nova Ficha de Admissão'}
           </h3>
@@ -133,12 +133,12 @@ export default function QuadroColaboradores() {
             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CPF</label><Input value={cpf} onChange={e => setCpf(e.target.value)} className="bg-white" placeholder="xxx.xxx.xxx-xx" /></div>
             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data de Admissão *</label><Input type="date" value={dataAdmissao} onChange={e => setDataAdmissao(e.target.value)} className="bg-white" /></div>
 
-            {/* Novo Campo: Vínculo do Colaborador */}
-            <div className="space-y-2 md:col-span-1">
+            {/* Novo Campo: Vínculo do Colaborador com Select do Shadcn e z-index alto */}
+            <div className="space-y-2 md:col-span-1 relative z-50">
               <label className="text-xs font-bold text-slate-500 uppercase">Vínculo / Contrato *</label>
               <Select value={tipoContrato} onValueChange={setTipoContrato}>
-                <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                <SelectContent className="z-[99999]">
+                <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o vínculo"/></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
                   <SelectItem value="CLT">CLT (Registro)</SelectItem>
                   <SelectItem value="PJ">PJ / Prestador</SelectItem>
                   <SelectItem value="Estagiário">Estagiário</SelectItem>
@@ -148,22 +148,25 @@ export default function QuadroColaboradores() {
 
             <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Setor Interno *</label><Input value={setor} onChange={e => setSetor(e.target.value)} placeholder="Ex: Comercial" className="bg-white" /></div>
             <div className="space-y-2 md:col-span-1"><label className="text-xs font-bold text-slate-500 uppercase">Cargo Interno *</label><Input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Ex: Analista N1" className="bg-white" /></div>
-            <div className="space-y-2 md:col-span-1">
+            
+            <div className="space-y-2 md:col-span-1 relative z-50">
               <label className="text-xs font-bold text-slate-500 uppercase">Status</label>
               <Select value={statusColab} onValueChange={setStatusColab}>
-                <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                <SelectContent className="z-[99999]">
-                  <SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Férias">Férias</SelectItem><SelectItem value="Desligado">Desligado</SelectItem>
+                <SelectTrigger className="bg-white"><SelectValue placeholder="Status"/></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
+                  <SelectItem value="Ativo">Ativo</SelectItem>
+                  <SelectItem value="Férias">Férias</SelectItem>
+                  <SelectItem value="Desligado">Desligado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Perfil Operacional no ERP */}
-            <div className="space-y-2 md:col-span-1">
+            {/* Perfil Operacional no ERP com Select do Shadcn e z-index alto */}
+            <div className="space-y-2 md:col-span-1 relative z-50">
               <label className="text-xs font-bold text-indigo-600 uppercase" title="Define em quais telas este colaborador aparecerá">Perfil Operacional (ERP) *</label>
               <Select value={perfilOperacional} onValueChange={setPerfilOperacional}>
-                <SelectTrigger className="bg-white border-indigo-200"><SelectValue/></SelectTrigger>
-                <SelectContent className="z-[99999]">
+                <SelectTrigger className="bg-white border-indigo-200"><SelectValue placeholder="Selecione o perfil"/></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
                   <SelectItem value="Geral">Geral (DP / Logística Livre)</SelectItem>
                   <SelectItem value="Técnico">Técnico de Campo / Lab</SelectItem>
                   <SelectItem value="Operador Gráfico">Operador Gráfico</SelectItem>
@@ -172,7 +175,7 @@ export default function QuadroColaboradores() {
               </Select>
             </div>
 
-            {/* Atributos Gerais (Agora liberados para todos) */}
+            {/* Atributos Gerais */}
             <div className="space-y-2 md:col-span-1">
               <label className="text-xs font-bold text-emerald-600 uppercase">Salário Base (R$)</label>
               <Input value={salarioBase} onChange={e => setSalarioBase(e.target.value)} placeholder="Ex: 1500,00" className="bg-white border-emerald-100" />
@@ -182,11 +185,16 @@ export default function QuadroColaboradores() {
               <Input value={valorHora} onChange={e => setValorHora(e.target.value)} placeholder="Ex: 6,82" className="bg-white border-indigo-100 font-bold text-indigo-700" />
             </div>
             
-            <div className="space-y-2 md:col-span-1">
+            <div className="space-y-2 md:col-span-1 relative z-50">
                 <label className="text-xs font-bold text-slate-500 uppercase">Tipo CNH</label>
                 <Select value={tipoCnh} onValueChange={setTipoCnh}>
-                <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger>
-                <SelectContent className="z-[99999]"><SelectItem value="A">A (Moto)</SelectItem><SelectItem value="B">B (Carro)</SelectItem><SelectItem value="AB">AB</SelectItem><SelectItem value="Nenhuma">Nenhuma</SelectItem></SelectContent>
+                <SelectTrigger className="bg-white"><SelectValue placeholder="CNH"/></SelectTrigger>
+                <SelectContent className="bg-white z-[99999]">
+                    <SelectItem value="A">A (Moto)</SelectItem>
+                    <SelectItem value="B">B (Carro)</SelectItem>
+                    <SelectItem value="AB">AB</SelectItem>
+                    <SelectItem value="Nenhuma">Nenhuma</SelectItem>
+                </SelectContent>
                 </Select>
             </div>
              <div className="space-y-2 md:col-span-4">
