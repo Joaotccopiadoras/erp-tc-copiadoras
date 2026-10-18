@@ -180,14 +180,14 @@ export default function QuadroColaboradores() {
 
             {/* Perfil Operacional no ERP com Select Shadcn */}
             <div className="space-y-2 md:col-span-1 relative z-50">
-              <label className="text-xs font-bold text-indigo-600 uppercase" title="Define em quais telas este colaborador aparecerá">Perfil Operacional (ERP) *</label>
+              <label className="text-xs font-bold text-indigo-600 uppercase" title="Define em quais telas este colaborador aparecerá">Perfil Operacional *</label>
               <Select value={perfilOperacional} onValueChange={setPerfilOperacional}>
                 <SelectTrigger className="bg-white border-indigo-200"><SelectValue placeholder="Selecione o perfil"/></SelectTrigger>
                 <SelectContent className="bg-white z-[99999]">
-                  <SelectItem value="Geral">Geral (DP / Logística Livre)</SelectItem>
-                  <SelectItem value="Técnico">Técnico de Campo / Lab</SelectItem>
+                  <SelectItem value="Geral">Geral (Administrativo)</SelectItem>
+                  <SelectItem value="Técnico">Técnico</SelectItem>
                   <SelectItem value="Operador Gráfico">Operador Gráfico</SelectItem>
-                  <SelectItem value="Vendedor">Vendedor / Licitações</SelectItem>
+                  <SelectItem value="Vendedor">Vendedor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
