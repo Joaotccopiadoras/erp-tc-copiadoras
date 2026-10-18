@@ -484,8 +484,8 @@ export default function Grafica() {
       )}
       {modalOperadorOpen && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col h-[85vh]">
-            <div className="p-4 border-b flex justify-between bg-slate-50"><h3 className="font-bold flex gap-2"><UserCheck className="w-5 h-5 text-indigo-600"/> Localizar Operador</h3><Button variant="ghost" onClick={() => setModalOperadorOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="m-4" placeholder="Pesquisar..." value={buscaModalOperador} onChange={e => setBuscaModalOperador(e.target.value)} autoFocus />
+            <div className="px-5 py-3 border-b border-slate-100 w-full overflow-hidden bg-white"><h3 className="font-bold flex gap-2"><UserCheck className="w-5 h-5 text-indigo-600"/> Localizar Operador</h3><Button variant="ghost" onClick={() => setModalOperadorOpen(false)}><X className="w-5 h-5"/></Button></div>
+            <Input className="w-full max-w-full focus-visible:ring-1 focus-visible:ring-indigo-500 shadow-sm" placeholder="Pesquisar..." value={buscaModalOperador} onChange={e => setBuscaModalOperador(e.target.value)} autoFocus />
             <div className="flex-1 overflow-auto"><table className="w-full text-sm"><tbody>
                 {operadoresBD.filter(o => (o.nome||"").toLowerCase().includes(buscaModalOperador.toLowerCase())).map(o => <tr key={o.id} className="hover:bg-indigo-50"><td className="p-3 font-bold">{o.nome}</td><td className="p-3"><Button size="sm" onClick={() => { modoSelecaoOperador === "criacao" ? setOperadorNome(o.nome) : setEditOperadorNome(o.nome); setModalOperadorOpen(false); }}>Selecionar</Button></td></tr>)}
             </tbody></table></div>
@@ -493,8 +493,8 @@ export default function Grafica() {
       )}
       {modalEquipamentoOpen && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-4xl flex flex-col h-[85vh]">
-            <div className="p-4 border-b flex justify-between bg-slate-50"><h3 className="font-bold flex gap-2"><Printer className="w-5 h-5 text-blue-600"/> Localizar Equipamento</h3><Button variant="ghost" onClick={() => setModalEquipamentoOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="m-4" placeholder="Pesquisar..." value={buscaModalEquipamento} onChange={e => setBuscaModalEquipamento(e.target.value)} autoFocus />
+            <div className="px-5 py-3 border-b border-slate-100 w-full overflow-hidden bg-white"><h3 className="font-bold flex gap-2"><Printer className="w-5 h-5 text-blue-600"/> Localizar Equipamento</h3><Button variant="ghost" onClick={() => setModalEquipamentoOpen(false)}><X className="w-5 h-5"/></Button></div>
+            <Input className="w-full max-w-full focus-visible:ring-1 focus-visible:ring-indigo-500 shadow-sm" placeholder="Pesquisar..." value={buscaModalEquipamento} onChange={e => setBuscaModalEquipamento(e.target.value)} autoFocus />
             <div className="flex-1 overflow-auto"><table className="w-full text-sm"><tbody>
                 {equipamentosTC.filter(eq => (eq.log_produtos?.nome||"").toLowerCase().includes(buscaModalEquipamento.toLowerCase())).slice(0,50).map(eq => <tr key={eq.id} className="hover:bg-blue-50"><td className="p-3 font-bold">{eq.log_produtos?.nome} ({eq.numero_serie})</td><td className="p-3"><Button size="sm" onClick={() => { setEquipImpressaoId(eq.id); setModalEquipamentoOpen(false); }}>Selecionar</Button></td></tr>)}
             </tbody></table></div>
@@ -502,8 +502,8 @@ export default function Grafica() {
       )}
       {modalInsumoOpen && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-3xl flex flex-col h-[85vh]">
-            <div className="p-4 border-b flex justify-between bg-slate-50"><h3 className="font-bold flex gap-2"><PaintBucket className="w-5 h-5 text-purple-600"/> Localizar Insumo</h3><Button variant="ghost" onClick={() => setModalInsumoOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="m-4" placeholder="Pesquise por Nome ou Código SKU..." value={buscaModalInsumo} onChange={e => setBuscaModalInsumo(e.target.value)} autoFocus />
+            <div className="px-5 py-3 border-b border-slate-100 w-full overflow-hidden bg-white"><h3 className="font-bold flex gap-2"><PaintBucket className="w-5 h-5 text-purple-600"/> Localizar Insumo</h3><Button variant="ghost" onClick={() => setModalInsumoOpen(false)}><X className="w-5 h-5"/></Button></div>
+            <Input className="w-full max-w-full focus-visible:ring-1 focus-visible:ring-indigo-500 shadow-sm" placeholder="Pesquise por Nome ou Código SKU..." value={buscaModalInsumo} onChange={e => setBuscaModalInsumo(e.target.value)} autoFocus />
             <div className="flex-1 overflow-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-[10px] uppercase"><tr><th className="p-3">SKU</th><th className="p-3">Nome</th><th className="p-3">Ação</th></tr></thead><tbody>
                 {produtosBD.filter(p => (p.nome||"").toLowerCase().includes(buscaModalInsumo.toLowerCase())).slice(0,50).map(p => <tr key={p.id} className="hover:bg-purple-50"><td className="p-3 text-xs font-mono text-slate-500">{p.sku||'S/N'}</td><td className="p-3 font-bold">{p.nome}</td><td className="p-3"><Button size="sm" onClick={() => selecionarInsumo(p)}>Adicionar</Button></td></tr>)}
             </tbody></table></div>
