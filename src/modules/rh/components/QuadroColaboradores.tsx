@@ -17,7 +17,7 @@ export default function QuadroColaboradores() {
 
   // Estados do Formulário
   const [nome, setNome] = useState("");
-  const [cpf, setCpf] = useState("");
+  const [cpf, setCpf] = useState(""); // Sem texto fixo de máscara no state
   const [cargo, setCargo] = useState("");
   const [setor, setSetor] = useState("");
   const [dataAdmissao, setDataAdmissao] = useState("");
@@ -72,11 +72,17 @@ export default function QuadroColaboradores() {
 
   const salvarColaborador = async () => {
     if (!nome || !cargo || !setor || !dataAdmissao) {
-      return toast({ title: "Atenção", description: "Preencha os campos obrigatórios (*).", variant: "destructive" });
+      return toast({ title: "Atenção", description: "Preencha os campos obrigatórios (*).", variant: "warning" });
     }
     setSalvando(true);
+    
+    // Tratamento de CPF: se estiver em branco ou for a máscara, envia null para não gerar conflito de unique
+    const cpfLimpo = cpf.trim() === "" || cpf.includes("xxx") ? null : cpf.trim();
+
     const payload = {
-      nome, cpf, cargo, setor, status: statusColab, data_admissao: dataAdmissao,
+      nome, 
+      cpf: cpfLimpo, 
+      cargo, setor, status: statusColab, data_admissao: dataAdmissao,
       salario_base: parseFloat(salarioBase.replace(',', '.')) || 0, 
       tipo_contrato: tipoContrato,
       perfil_operacional: perfilOperacional,
@@ -85,16 +91,27 @@ export default function QuadroColaboradores() {
     };
 
     if (editandoId) {
-      const {error} = await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
-      if(error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else toast({ title: "Sucesso", description: "Colaborador atualizado!" });
+      const { error } = await supabase.from('rh_colaboradores').update(payload).eq('id', editandoId);
+      if (error) {
+         if (error.code === '23505') toast({ title: "Atenção", description: "Este CPF já está cadastrado no sistema para outro colaborador.", variant: "destructive" });
+         else toast({ title: "Erro", description: error.message, variant: "destructive" });
+      } else {
+         toast({ title: "Sucesso", description: "Colaborador atualizado!" });
+         limparForm(); 
+         fetchColaboradores();
+      }
     } else {
-      const {error} = await supabase.from('rh_colaboradores').insert([payload]);
-      if(error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else toast({ title: "Sucesso", description: "Novo colaborador cadastrado!" });
+      const { error } = await supabase.from('rh_colaboradores').insert([payload]);
+      if (error) {
+         if (error.code === '23505') toast({ title: "Atenção", description: "Este CPF já está cadastrado no sistema.", variant: "destructive" });
+         else toast({ title: "Erro", description: error.message, variant: "destructive" });
+      } else {
+         toast({ title: "Sucesso", description: "Novo colaborador cadastrado!" });
+         limparForm(); 
+         fetchColaboradores();
+      }
     }
-    
-    limparForm(); fetchColaboradores(); setSalvando(false);
+    setSalvando(false);
   };
 
   const excluirColaborador = async (id: string) => {
@@ -130,10 +147,10 @@ export default function QuadroColaboradores() {
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2 md:col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">Nome Completo *</label><Input value={nome} onChange={e => setNome(e.target.value)} className="bg-white" /></div>
-            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CPF</label><Input value={cpf} onChange={e => setCpf(e.target.value)} className="bg-white" placeholder="xxx.xxx.xxx-xx" /></div>
+            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">CPF</label><Input value={cpf} onChange={e => setCpf(e.target.value)} className="bg-white" placeholder="000.000.000-00" /></div>
             <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Data de Admissão *</label><Input type="date" value={dataAdmissao} onChange={e => setDataAdmissao(e.target.value)} className="bg-white" /></div>
 
-            {/* Novo Campo: Vínculo do Colaborador com Select do Shadcn e z-index alto */}
+            {/* Vínculo com Select Shadcn */}
             <div className="space-y-2 md:col-span-1 relative z-50">
               <label className="text-xs font-bold text-slate-500 uppercase">Vínculo / Contrato *</label>
               <Select value={tipoContrato} onValueChange={setTipoContrato}>
@@ -161,7 +178,7 @@ export default function QuadroColaboradores() {
               </Select>
             </div>
 
-            {/* Perfil Operacional no ERP com Select do Shadcn e z-index alto */}
+            {/* Perfil Operacional no ERP com Select Shadcn */}
             <div className="space-y-2 md:col-span-1 relative z-50">
               <label className="text-xs font-bold text-indigo-600 uppercase" title="Define em quais telas este colaborador aparecerá">Perfil Operacional (ERP) *</label>
               <Select value={perfilOperacional} onValueChange={setPerfilOperacional}>
