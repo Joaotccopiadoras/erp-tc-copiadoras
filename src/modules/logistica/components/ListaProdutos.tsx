@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; 
+} from "@/shared/components/ui/dropdown-menu"; 
 
 import { 
   Package, Plus, Search, Loader2, ListChecks, FileDown, 
@@ -18,7 +18,7 @@ import {
   Activity, RefreshCcw 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N";
+import { useExportacaoN8N } from "@/shared/hooks/useExport  N8N";
 
 interface ListaProdutosProps {
   produtos: any[];
