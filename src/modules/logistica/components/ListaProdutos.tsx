@@ -7,6 +7,14 @@ import {
   Table as TableIcon, Database, Edit, ArrowLeftRight, Trash2, X 
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/shared/components/ui/dropdown-menu"; 
 import { useExportacaoN8N } from "@/shared/hooks/useExportN8N"; 
 
 interface ListaProdutosProps {
@@ -101,6 +109,66 @@ export default function ListaProdutos({ produtos, carregando, onNovo, onEditar, 
           </h1>
           <p className="text-slate-500">Gestão unificada de equipamentos, peças e insumos.</p>
         </div>
+        <div className="flex gap-2 flex-wrap justify-end">
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button disabled={exportando || carregando} variant="outline" size="sm" className="gap-2 text-slate-700 border-slate-200">
+        {exportando ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileDown className="w-4 h-4"/>} 
+        Exportar Relatórios
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-56 bg-white z-50">
+      <DropdownMenuLabel>Catálogo Principal</DropdownMenuLabel>
+      <DropdownMenuItem 
+        onClick={() => dispararExportacao({ 
+          modulo: 'Catálogo de Produtos', 
+          tipo: 'excel', 
+          dados: selecionados.length > 0 ? produtosFiltrados.filter(p => selecionados.includes(p.id)) : produtosFiltrados 
+        })}
+        className="cursor-pointer gap-2"
+      >
+        <TableIcon className="w-4 h-4 text-emerald-600"/> Excel {selecionados.length > 0 && `(${selecionados.length})`}
+      </DropdownMenuItem>
+      <DropdownMenuItem 
+        onClick={() => dispararExportacao({ 
+          modulo: 'Catálogo de Produtos', 
+          tipo: 'pdf', 
+          dados: selecionados.length > 0 ? produtosFiltrados.filter(p => selecionados.includes(p.id)) : produtosFiltrados 
+        })}
+        className="cursor-pointer gap-2"
+      >
+        <FileDown className="w-4 h-4 text-rose-600"/> PDF {selecionados.length > 0 && `(${selecionados.length})`}
+      </DropdownMenuItem>
+
+      <DropdownMenuSeparator />
+      
+      <DropdownMenuLabel>Cadastros Auxiliares</DropdownMenuLabel>
+      <DropdownMenuItem 
+        onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'excel', dados: produtosFiltrados })}
+        className="cursor-pointer gap-2"
+      >
+        <TableIcon className="w-4 h-4 text-slate-500"/> Excel (Bases)
+      </DropdownMenuItem>
+      <DropdownMenuItem 
+        onClick={() => dispararExportacao({ modulo: 'Catálogo Auxiliares', tipo: 'pdf', dados: produtosFiltrados })}
+        className="cursor-pointer gap-2"
+      >
+        <FileDown className="w-4 h-4 text-slate-500"/> PDF (Bases)
+      </DropdownMenuItem>
+
+      {/* No futuro, adicionaremos aqui:
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel>Performance (Em breve)</DropdownMenuLabel>
+      <DropdownMenuItem disabled className="gap-2"><Activity className="w-4 h-4"/> Curva ABC (Excel)</DropdownMenuItem>
+      <DropdownMenuItem disabled className="gap-2"><RefreshCcw className="w-4 h-4"/> Giro de Estoque</DropdownMenuItem>
+      */}
+    </DropdownMenuContent>
+  </DropdownMenu>
+
+  <Button onClick={onNovo} className="gap-2 bg-stone-700 hover:bg-stone-800">
+    <Plus className="w-4 h-4" /> Novo Produto
+  </Button>
+</div>
         {!modoLote ? (
           <div className="flex gap-2 flex-wrap justify-end">
             <Button 
