@@ -3,7 +3,7 @@ import AppLayout from "@/shared/components/layout/AppLayout";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, MessageSquare, Edit2, Ban, X, Send, Mail } from "lucide-react";
+import { Printer, Layers, CheckCircle2, Plus, Search, Trash2, ArrowLeft, PaintBucket, FileOutput, PlayCircle, AlertCircle, Save, Paperclip, Download, Loader2, Landmark, DollarSign, Activity, User, CalendarDays, UserCheck, FileText, MessageSquare, Edit2, Ban, X, Send, Mail, Building2, Package } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -329,9 +329,9 @@ export default function Grafica() {
     setHistoricoProducao(novoHistorico);
     await supabase.from('prd_ordens_producao' as any).update({ historico_producao: novoHistorico }).eq('id', osSelecionada.id);
     setStatusImpressao("pendente"); setContadorInicial(""); setContadorFinal("");
-    const tProd = novoHistorico.filter(h => h.status === 'concluido').reduce((a, c) => a + (c.producaoValida || 0), 0);
+    const totalProd = novoHistorico.filter(h => h.status === 'concluido').reduce((a, c) => a + (c.producaoValida || 0), 0);
     const qtdNecessaria = editProdutosOSG.filter((p: any) => p.possuiImpressao === "Sim").reduce((acc, p) => acc + p.quantidade, 0);
-    setQtdImprimirServico(Math.max(0, qtdNecessaria - tProd));
+    setQtdImprimirServico(Math.max(0, qtdNecessaria - totalProd));
   };
 
   const getBase64ImageFromUrl = async (u: string) => { try { const r = await fetch(u); const b = await r.blob(); return new Promise<string>((res) => { const reader = new FileReader(); reader.onloadend = () => res(reader.result as string); reader.readAsDataURL(b); }); } catch { return null; } };
@@ -465,62 +465,193 @@ export default function Grafica() {
 
   return (
     <AppLayout>
+      
+      {/* ========================================================================= */}
+      {/* MODAIS "SPOTLIGHT" (COMMAND PALETTE STYLE) - ESTETICAMENTE IMPECÁVEIS     */}
+      {/* ========================================================================= */}
+
+      {/* MODAL: LOCALIZAR CLIENTE */}
       {modalClienteOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-3xl flex flex-col h-[85vh]">
-            <div className="p-4 border-b flex justify-between bg-slate-50"><h3 className="font-bold flex gap-2"><Search className="w-5 h-5 text-purple-600"/> Localizar Cliente</h3><Button variant="ghost" onClick={() => setModalClienteOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="m-4 border-purple-200" placeholder="Pesquise por Razão Social, Nome Fantasia ou CNPJ..." value={buscaModalCliente} onChange={e => setBuscaModalCliente(e.target.value)} autoFocus />
-            <div className="flex-1 overflow-auto"><table className="w-full text-sm text-left">
-                <thead className="bg-slate-100 text-slate-500 text-[10px] uppercase"><tr><th className="p-3">Cliente</th><th className="p-3">CNPJ / CPF</th><th className="p-3">Ação</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                {clientesBD.filter(c => (c.nome_fantasia||"").toLowerCase().includes(buscaModalCliente.toLowerCase()) || (c.razao_social||"").toLowerCase().includes(buscaModalCliente.toLowerCase()) || (c.cnpj_cpf||"").includes(buscaModalCliente)).slice(0,50).map(c => 
-                    <tr key={c.id} className="hover:bg-purple-50">
-                        <td className="p-3"><p className="font-bold text-slate-800">{c.nome_fantasia || c.razao_social}</p>{c.nome_fantasia && c.razao_social !== c.nome_fantasia && <p className="text-[10px] text-slate-500">{c.razao_social}</p>}</td>
-                        <td className="p-3 font-mono text-xs text-slate-600">{c.cnpj_cpf || '-'}</td>
-                        <td className="p-3"><Button size="sm" onClick={() => { setClienteBusca(c.nome_fantasia || c.razao_social); setModalClienteOpen(false); }}>Selecionar</Button></td>
-                    </tr>
-                )}
-            </tbody></table></div>
-        </div></div>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200">
+            <div className="bg-white p-2 flex items-center gap-3 border-b border-slate-100 shrink-0">
+              <Search className="w-5 h-5 text-slate-400 ml-3 shrink-0" />
+              <input 
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-slate-800 placeholder:text-slate-400 outline-none text-base h-10" 
+                placeholder="Pesquisar por Razão Social, Nome Fantasia ou CNPJ..." 
+                value={buscaModalCliente} 
+                onChange={e => setBuscaModalCliente(e.target.value)} 
+                autoFocus 
+              />
+              <Button variant="ghost" size="icon" onClick={() => setModalClienteOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-full shrink-0 mr-1">
+                <X className="w-5 h-5"/>
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Selecione um Cliente</div>
+              {clientesBD.filter(c => (c.nome_fantasia||"").toLowerCase().includes(buscaModalCliente.toLowerCase()) || (c.razao_social||"").toLowerCase().includes(buscaModalCliente.toLowerCase()) || (c.cnpj_cpf||"").includes(buscaModalCliente)).slice(0,50).map(c => (
+                <div key={c.id} onClick={() => { setClienteBusca(c.nome_fantasia || c.razao_social); setModalClienteOpen(false); }} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-300 hover:ring-1 hover:ring-purple-100 transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm shrink-0">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-purple-700 transition-colors">{c.nome_fantasia || c.razao_social}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {c.nome_fantasia && c.razao_social !== c.nome_fantasia && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{c.razao_social}</span>}
+                        <span className="text-[10px] font-mono font-medium text-slate-500">{c.cnpj_cpf || 'Sem CNPJ'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-3 py-1.5 rounded-full uppercase tracking-wider">Selecionar</span>
+                  </div>
+                </div>
+              ))}
+              {clientesBD.length === 0 && <p className="text-center text-sm text-slate-500 py-8">Nenhum cliente encontrado.</p>}
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* MODAL: LOCALIZAR OPERADOR */}
       {modalOperadorOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col h-[85vh]">
-            <div className="px-5 py-3 border-b border-slate-100 w-full overflow-hidden bg-white"><h3 className="font-bold flex gap-2"><UserCheck className="w-5 h-5 text-indigo-600"/> Localizar Operador</h3><Button variant="ghost" onClick={() => setModalOperadorOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="w-full max-w-full focus-visible:ring-1 focus-visible:ring-indigo-500 shadow-sm" placeholder="Pesquisar..." value={buscaModalOperador} onChange={e => setBuscaModalOperador(e.target.value)} autoFocus />
-            <div className="flex-1 overflow-auto"><table className="w-full text-sm"><tbody>
-                {operadoresBD.filter(o => (o.nome||"").toLowerCase().includes(buscaModalOperador.toLowerCase())).map(o => <tr key={o.id} className="hover:bg-indigo-50"><td className="p-3 font-bold">{o.nome}</td><td className="p-3"><Button size="sm" onClick={() => { modoSelecaoOperador === "criacao" ? setOperadorNome(o.nome) : setEditOperadorNome(o.nome); setModalOperadorOpen(false); }}>Selecionar</Button></td></tr>)}
-            </tbody></table></div>
-        </div></div>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200">
+            <div className="bg-white p-2 flex items-center gap-3 border-b border-slate-100 shrink-0">
+              <Search className="w-5 h-5 text-slate-400 ml-3 shrink-0" />
+              <input 
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-slate-800 placeholder:text-slate-400 outline-none text-base h-10" 
+                placeholder="Pesquisar Operador..." 
+                value={buscaModalOperador} 
+                onChange={e => setBuscaModalOperador(e.target.value)} 
+                autoFocus 
+              />
+              <Button variant="ghost" size="icon" onClick={() => setModalOperadorOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-full shrink-0 mr-1">
+                <X className="w-5 h-5"/>
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Operadores Disponíveis</div>
+              {operadoresBD.filter(o => (o.nome||"").toLowerCase().includes(buscaModalOperador.toLowerCase())).map(o => (
+                <div key={o.id} onClick={() => { modoSelecaoOperador === "criacao" ? setOperadorNome(o.nome) : setEditOperadorNome(o.nome); setModalOperadorOpen(false); }} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-indigo-300 hover:ring-1 hover:ring-indigo-100 transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">{o.nome}</p>
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-full uppercase tracking-wider">Selecionar</span>
+                  </div>
+                </div>
+              ))}
+              {operadoresBD.length === 0 && <p className="text-center text-sm text-slate-500 py-8">Nenhum operador encontrado.</p>}
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* MODAL: LOCALIZAR EQUIPAMENTO */}
       {modalEquipamentoOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-4xl flex flex-col h-[85vh]">
-            <div className="px-5 py-3 border-b border-slate-100 w-full overflow-hidden bg-white"><h3 className="font-bold flex gap-2"><Printer className="w-5 h-5 text-blue-600"/> Localizar Equipamento</h3><Button variant="ghost" onClick={() => setModalEquipamentoOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="w-full max-w-full focus-visible:ring-1 focus-visible:ring-indigo-500 shadow-sm" placeholder="Pesquisar..." value={buscaModalEquipamento} onChange={e => setBuscaModalEquipamento(e.target.value)} autoFocus />
-            <div className="flex-1 overflow-auto"><table className="w-full text-sm"><tbody>
-                {equipamentosTC.filter(eq => (eq.log_produtos?.nome||"").toLowerCase().includes(buscaModalEquipamento.toLowerCase())).slice(0,50).map(eq => <tr key={eq.id} className="hover:bg-blue-50"><td className="p-3 font-bold">{eq.log_produtos?.nome} ({eq.numero_serie})</td><td className="p-3"><Button size="sm" onClick={() => { setEquipImpressaoId(eq.id); setModalEquipamentoOpen(false); }}>Selecionar</Button></td></tr>)}
-            </tbody></table></div>
-        </div></div>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200">
+            <div className="bg-white p-2 flex items-center gap-3 border-b border-slate-100 shrink-0">
+              <Search className="w-5 h-5 text-slate-400 ml-3 shrink-0" />
+              <input 
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-slate-800 placeholder:text-slate-400 outline-none text-base h-10" 
+                placeholder="Pesquisar Modelo ou S/N..." 
+                value={buscaModalEquipamento} 
+                onChange={e => setBuscaModalEquipamento(e.target.value)} 
+                autoFocus 
+              />
+              <Button variant="ghost" size="icon" onClick={() => setModalEquipamentoOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-full shrink-0 mr-1">
+                <X className="w-5 h-5"/>
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Equipamentos da Empresa</div>
+              {equipamentosTC.filter(eq => (eq.log_produtos?.nome||"").toLowerCase().includes(buscaModalEquipamento.toLowerCase()) || (eq.numero_serie||"").toLowerCase().includes(buscaModalEquipamento.toLowerCase())).slice(0,50).map(eq => (
+                <div key={eq.id} onClick={() => { setEquipImpressaoId(eq.id); setModalEquipamentoOpen(false); }} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 hover:ring-1 hover:ring-blue-100 transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                      <Printer className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{eq.log_produtos?.nome || 'Equipamento S/ Modelo'}</p>
+                      <p className="text-[10px] font-mono text-slate-500 mt-0.5">S/N: {eq.numero_serie}</p>
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full uppercase tracking-wider">Selecionar</span>
+                  </div>
+                </div>
+              ))}
+              {equipamentosTC.length === 0 && <p className="text-center text-sm text-slate-500 py-8">Nenhum equipamento encontrado.</p>}
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* MODAL: LOCALIZAR INSUMO */}
       {modalInsumoOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 p-4"><div className="bg-white rounded-xl shadow-xl w-full max-w-3xl flex flex-col h-[85vh]">
-            <div className="px-5 py-3 border-b border-slate-100 w-full overflow-hidden bg-white"><h3 className="font-bold flex gap-2"><PaintBucket className="w-5 h-5 text-purple-600"/> Localizar Insumo</h3><Button variant="ghost" onClick={() => setModalInsumoOpen(false)}><X className="w-5 h-5"/></Button></div>
-            <Input className="w-full max-w-full focus-visible:ring-1 focus-visible:ring-indigo-500 shadow-sm" placeholder="Pesquise por Nome ou Código SKU..." value={buscaModalInsumo} onChange={e => setBuscaModalInsumo(e.target.value)} autoFocus />
-            <div className="flex-1 overflow-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-[10px] uppercase"><tr><th className="p-3">SKU</th><th className="p-3">Nome</th><th className="p-3">Ação</th></tr></thead><tbody>
-                {produtosBD.filter(p => (p.nome||"").toLowerCase().includes(buscaModalInsumo.toLowerCase())).slice(0,50).map(p => <tr key={p.id} className="hover:bg-purple-50"><td className="p-3 text-xs font-mono text-slate-500">{p.sku||'S/N'}</td><td className="p-3 font-bold">{p.nome}</td><td className="p-3"><Button size="sm" onClick={() => selecionarInsumo(p)}>Adicionar</Button></td></tr>)}
-            </tbody></table></div>
-        </div></div>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-200">
+            <div className="bg-white p-2 flex items-center gap-3 border-b border-slate-100 shrink-0">
+              <Search className="w-5 h-5 text-slate-400 ml-3 shrink-0" />
+              <input 
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-slate-800 placeholder:text-slate-400 outline-none text-base h-10" 
+                placeholder="Pesquise por Nome ou SKU..." 
+                value={buscaModalInsumo} 
+                onChange={e => setBuscaModalInsumo(e.target.value)} 
+                autoFocus 
+              />
+              <Button variant="ghost" size="icon" onClick={() => setModalInsumoOpen(false)} className="text-slate-400 hover:text-slate-600 rounded-full shrink-0 mr-1">
+                <X className="w-5 h-5"/>
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Catálogo de Insumos</div>
+              {produtosBD.filter(p => (p.nome||"").toLowerCase().includes(buscaModalInsumo.toLowerCase()) || (p.sku||"").toLowerCase().includes(buscaModalInsumo.toLowerCase())).slice(0,50).map(p => (
+                <div key={p.id} onClick={() => selecionarInsumo(p)} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-300 hover:ring-1 hover:ring-emerald-100 transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                      <Package className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">{p.nome}</p>
+                      <p className="text-[10px] font-mono text-slate-500 mt-0.5">SKU: {p.sku || 'S/N'}</p>
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full uppercase tracking-wider">Adicionar</span>
+                  </div>
+                </div>
+              ))}
+              {produtosBD.length === 0 && <p className="text-center text-sm text-slate-500 py-8">Nenhum insumo encontrado.</p>}
+            </div>
+          </div>
+        </div>
       )}
+      {/* ========================================================================= */}
+
 
       {abaAtiva === "abrir" ? (
         <div className="max-w-4xl mx-auto mt-6 mb-12 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white p-8 rounded-xl border shadow-sm space-y-6">
             <div className="text-center border-b pb-6"><div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 text-purple-600 mb-3"><FileOutput className="w-6 h-6"/></div><h2 className="text-xl font-bold text-slate-800">Gerar Ordem de Serviço (OSG)</h2></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-2 md:col-span-2"><label className="text-sm font-bold text-slate-700">Cliente *</label><div onClick={() => setModalClienteOpen(true)} className="bg-slate-50 border p-2.5 rounded-md cursor-pointer hover:border-purple-300">{clienteBusca || "Selecionar Cliente..."}</div></div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold text-slate-700">Cliente *</label>
+                <div onClick={() => setModalClienteOpen(true)} className="bg-slate-50 border p-2.5 rounded-md cursor-pointer hover:border-purple-300 transition-colors">{clienteBusca || "Selecionar Cliente..."}</div>
+              </div>
               <div className="space-y-2"><label className="text-sm font-bold text-slate-700 flex items-center gap-2"><User className="w-4 h-4 text-slate-400"/> Solicitante *</label><Input value={solicitante} onChange={e => setSolicitante(e.target.value)} placeholder="Ex: Tais Santos" /></div>
               <div className="space-y-2"><label className="text-sm font-bold text-slate-700">Telefone de Contato</label><Input value={telefoneClienteOS} onChange={e => setTelefoneClienteOS(e.target.value)} placeholder="Ex: (91) 98123-4567" /></div>
               <div className="space-y-2"><label className="text-sm font-bold text-slate-700">E-mail de Contato</label><Input type="email" value={emailClienteOS} onChange={e => setEmailClienteOS(e.target.value)} placeholder="Ex: cliente@empresa.com" /></div>
               <div className="space-y-2"><label className="text-sm font-bold text-slate-700 flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400"/> Data Solicitação *</label><Input type="date" value={dataSolicitacao} onChange={e => setDataSolicitacao(e.target.value)} /></div>
-              <div className="space-y-2"><label className="text-sm font-bold text-slate-700 flex items-center gap-2"><UserCheck className="w-4 h-4 text-indigo-400"/> Operador *</label><div onClick={() => { setModoSelecaoOperador("criacao"); setModalOperadorOpen(true); }} className="bg-slate-50 border p-2.5 rounded-md cursor-pointer hover:border-indigo-300">{operadorNome || "Selecionar Operador..."}</div></div>
+              <div className="space-y-2"><label className="text-sm font-bold text-slate-700 flex items-center gap-2"><UserCheck className="w-4 h-4 text-indigo-400"/> Operador *</label><div onClick={() => { setModoSelecaoOperador("criacao"); setModalOperadorOpen(true); }} className="bg-slate-50 border p-2.5 rounded-md cursor-pointer hover:border-indigo-300 transition-colors">{operadorNome || "Selecionar Operador..."}</div></div>
               <div className="space-y-2"><label className="text-sm font-bold text-slate-700">Data Prevista *</label><Input type="date" value={dataPrevista} onChange={e => setDataPrevista(e.target.value)} /></div>
               
               <div className="space-y-2 md:col-span-2 mt-2 pt-4 border-t border-slate-100">
@@ -536,7 +667,7 @@ export default function Grafica() {
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                               <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-slate-600">Descrição do Serviço</label><Input value={prod.descricao} onChange={e => setProdutosOSG(produtosOSG.map(p => p.id === prod.id ? { ...p, descricao: e.target.value } : p))} /></div>
                               <div className="space-y-1"><label className="text-xs font-bold text-slate-600">Quantidade</label><Input type="number" min="1" value={prod.quantidade} onChange={e => setProdutosOSG(produtosOSG.map(p => p.id === prod.id ? { ...p, quantidade: Number(e.target.value) } : p))} /></div>
-                              <div className="space-y-1"><label className="text-xs font-bold text-slate-600">Impressão?</label>
+                              <div className="space-y-1 relative z-50"><label className="text-xs font-bold text-slate-600">Impressão?</label>
                                   <Select value={prod.possuiImpressao} onValueChange={v => setProdutosOSG(produtosOSG.map(p => p.id === prod.id ? { ...p, possuiImpressao: v as "Sim"|"Não" } : p))}>
                                       <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Não">Não</SelectItem><SelectItem value="Sim">Sim</SelectItem></SelectContent>
                                   </Select>
@@ -545,7 +676,7 @@ export default function Grafica() {
                                   <>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-700">Págs p/ Produto</label><Input type="number" min="1" value={prod.paginasPorProduto} onChange={e => setProdutosOSG(produtosOSG.map(p => p.id === prod.id ? { ...p, paginasPorProduto: Number(e.target.value) } : p))} /></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-700">Valor Un. Pág</label><Input type="number" step="0.01" value={prod.valorUnitario} onChange={e => setProdutosOSG(produtosOSG.map(p => p.id === prod.id ? { ...p, valorUnitario: parseFloat(e.target.value)||0 } : p))} /></div>
-                                      <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-blue-700">Modo</label>
+                                      <div className="space-y-1 md:col-span-2 relative z-50"><label className="text-xs font-bold text-blue-700">Modo</label>
                                           <Select value={prod.modoImpressao} onValueChange={v => setProdutosOSG(produtosOSG.map(p => p.id === prod.id ? { ...p, modoImpressao: v as "Simplex"|"Duplex" } : p))}>
                                               <SelectTrigger className="bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Simplex">Simplex</SelectItem><SelectItem value="Duplex">Duplex</SelectItem></SelectContent>
                                           </Select>
@@ -643,7 +774,9 @@ export default function Grafica() {
                       <div className="flex flex-wrap items-center gap-3">
                           <Button variant="outline" size="sm" onClick={() => gerarComprovantePDF([osSelecionada])}>Comprovante</Button>
                           <Button variant="outline" size="sm" className="text-emerald-700" onClick={() => gerarExtratoFaturamentoPDF([osSelecionada])}>Extrato</Button>
-                          <Select value={statusOS} onValueChange={setStatusOS}><SelectTrigger className="w-48 bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]">{STATUS_FLUXO_GRAFICA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}<SelectItem value="Cancelado" className="text-red-600 font-bold"><Ban className="w-4 h-4 inline mr-1"/> Cancelado</SelectItem></SelectContent></Select>
+                          <div className="relative z-50">
+                            <Select value={statusOS} onValueChange={setStatusOS}><SelectTrigger className="w-48 bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]">{STATUS_FLUXO_GRAFICA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}<SelectItem value="Cancelado" className="text-red-600 font-bold"><Ban className="w-4 h-4 inline mr-1"/> Cancelado</SelectItem></SelectContent></Select>
+                          </div>
                           <Button onClick={() => salvarAndamento()} disabled={salvandoOS} className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm">Salvar</Button>
                       </div>
                   </div>
@@ -655,7 +788,7 @@ export default function Grafica() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Previsão</label><Input type="date" value={editDataPrevista} onChange={e => setEditDataPrevista(e.target.value)} className="h-8 text-sm" /></div>
                               <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Solicitante</label><Input value={editSolicitante} onChange={e => setEditSolicitante(e.target.value)} className="h-8 text-sm" /></div>
-                              <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Operador</label><div onClick={() => { setModoSelecaoOperador("edicao"); setModalOperadorOpen(true); }} className="bg-slate-50 border border-slate-200 h-8 px-3 rounded flex items-center text-sm cursor-pointer hover:border-blue-300">{editOperadorNome || "Selecionar"}</div></div>
+                              <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Operador</label><div onClick={() => { setModoSelecaoOperador("edicao"); setModalOperadorOpen(true); }} className="bg-slate-50 border border-slate-200 h-8 px-3 rounded flex items-center text-sm cursor-pointer hover:border-blue-300 transition-colors">{editOperadorNome || "Selecionar"}</div></div>
                               <div className="space-y-1"><label className="text-xs font-bold text-slate-500">Telefone do Cliente</label><Input value={editTelefoneCliente} onChange={e => setEditTelefoneCliente(e.target.value)} className="h-8 text-sm" /></div>
                               <div className="space-y-1"><label className="text-xs font-bold text-slate-500">E-mail do Cliente</label><Input type="email" value={editEmailCliente} onChange={e => setEditEmailCliente(e.target.value)} className="h-8 text-sm" /></div>
                           </div>
@@ -668,13 +801,13 @@ export default function Grafica() {
                                       <div className="grid grid-cols-4 gap-2">
                                           <div className="col-span-2 space-y-1"><label className="text-[10px] font-bold uppercase">Descrição</label><Input value={prod.descricao} onChange={e => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, descricao: e.target.value } : p))} className="h-7 text-xs" /></div>
                                           <div className="space-y-1"><label className="text-[10px] font-bold uppercase">Qtd</label><Input type="number" min="1" value={prod.quantidade} onChange={e => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, quantidade: Number(e.target.value) } : p))} className="h-7 text-xs" /></div>
-                                          <div className="space-y-1"><label className="text-[10px] font-bold uppercase">Impressão?</label><Select value={prod.possuiImpressao} onValueChange={v => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, possuiImpressao: v as "Sim"|"Não" } : p))}><SelectTrigger className="h-7 text-xs bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Não">Não</SelectItem><SelectItem value="Sim">Sim</SelectItem></SelectContent></Select></div>
+                                          <div className="space-y-1 relative z-50"><label className="text-[10px] font-bold uppercase">Impressão?</label><Select value={prod.possuiImpressao} onValueChange={v => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, possuiImpressao: v as "Sim"|"Não" } : p))}><SelectTrigger className="h-7 text-xs bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Não">Não</SelectItem><SelectItem value="Sim">Sim</SelectItem></SelectContent></Select></div>
                                           
                                           {prod.possuiImpressao === "Sim" && (
                                               <>
                                                   <div className="space-y-1"><label className="text-[10px] font-bold text-blue-700 uppercase">Págs/Prod</label><Input type="number" min="1" value={prod.paginasPorProduto} onChange={e => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, paginasPorProduto: Number(e.target.value) } : p))} className="h-7 text-xs border-blue-200" /></div>
                                                   <div className="space-y-1"><label className="text-[10px] font-bold text-blue-700 uppercase">Valor Un</label><Input type="number" step="0.01" value={prod.valorUnitario} onChange={e => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, valorUnitario: parseFloat(e.target.value)||0 } : p))} className="h-7 text-xs border-blue-200" /></div>
-                                                  <div className="col-span-2 space-y-1"><label className="text-[10px] font-bold text-blue-700 uppercase">Modo</label><Select value={prod.modoImpressao} onValueChange={v => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, modoImpressao: v as "Simplex"|"Duplex" } : p))}><SelectTrigger className="h-7 text-xs border-blue-200 bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Simplex">Simplex</SelectItem><SelectItem value="Duplex">Duplex</SelectItem></SelectContent></Select></div>
+                                                  <div className="col-span-2 space-y-1 relative z-50"><label className="text-[10px] font-bold text-blue-700 uppercase">Modo</label><Select value={prod.modoImpressao} onValueChange={v => setEditProdutosOSG(editProdutosOSG.map(p => p.id === prod.id ? { ...p, modoImpressao: v as "Simplex"|"Duplex" } : p))}><SelectTrigger className="h-7 text-xs border-blue-200 bg-white"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Simplex">Simplex</SelectItem><SelectItem value="Duplex">Duplex</SelectItem></SelectContent></Select></div>
                                               </>
                                           )}
                                       </div>
@@ -695,11 +828,11 @@ export default function Grafica() {
 
                               {statusImpressao === "pendente" && totalProd < qtdNecessariaGeral && (
                                   <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-1 col-span-2"><label className="text-xs font-bold text-blue-800">Equipamento</label><div onClick={() => setModalEquipamentoOpen(true)} className="bg-white border-blue-300 h-9 px-3 rounded flex items-center cursor-pointer">{equipImpressaoId ? equipamentosTC.find(x => x.id === equipImpressaoId)?.log_produtos?.nome : "Pesquisar..."}</div></div>
+                                      <div className="space-y-1 col-span-2"><label className="text-xs font-bold text-blue-800">Equipamento</label><div onClick={() => setModalEquipamentoOpen(true)} className="bg-white border-blue-300 h-9 px-3 rounded flex items-center cursor-pointer transition-colors hover:border-blue-400">{equipImpressaoId ? equipamentosTC.find(x => x.id === equipImpressaoId)?.log_produtos?.nome : "Pesquisar..."}</div></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Qtd a Imprimir</label><Input type="number" max={Math.max(0, qtdNecessariaGeral - totalProd)} value={qtdImprimirServico} onChange={e => setQtdImprimirServico(Number(e.target.value))} className="h-9" /></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Páginas/Prod (Média)</label><Input type="number" value={paginasPorProduto} onChange={e => setPaginasPorProduto(Number(e.target.value))} className="h-9" /></div>
                                       <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Valor Un.</label><Input type="number" step="0.01" value={valorUnitarioPagina} onChange={e => setValorUnitarioPagina(e.target.value)} className="h-9" /></div>
-                                      <div className="space-y-1"><label className="text-xs font-bold text-blue-800">Modo</label><Select value={modoImpressao} onValueChange={setModoImpressao}><SelectTrigger className="h-9 bg-white z-[99999]"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Simplex">Simplex</SelectItem><SelectItem value="Duplex">Duplex</SelectItem></SelectContent></Select></div>
+                                      <div className="space-y-1 relative z-50"><label className="text-xs font-bold text-blue-800">Modo</label><Select value={modoImpressao} onValueChange={setModoImpressao}><SelectTrigger className="h-9 bg-white z-[99999]"><SelectValue/></SelectTrigger><SelectContent className="bg-white z-[99999]"><SelectItem value="Simplex">Simplex</SelectItem><SelectItem value="Duplex">Duplex</SelectItem></SelectContent></Select></div>
                                       <div className="space-y-1 col-span-2"><label className="text-xs font-bold text-rose-600">Contador Inicial</label><div className="flex gap-2"><Input type="number" value={contadorInicial} onChange={e => setContadorInicial(e.target.value)} className="h-10 border-rose-300 font-bold" /><Button onClick={iniciarImpressao} className="bg-blue-600 text-white h-10 px-6 hover:bg-blue-700">Iniciar</Button></div></div>
                                   </div>
                               )}
