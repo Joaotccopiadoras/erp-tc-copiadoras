@@ -298,6 +298,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
       </Tabs>
 
       {/* 4. Modais Ocultos do tipo Spotlight Flutuante */}
+      {/* MODAL FABRICANTE */}
       <SearchModal
         isOpen={modalBuscaFabricante}
         onClose={() => setModalBuscaFabricante(false)}
@@ -306,6 +307,20 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
         searchValue={buscaTermoFabricante}
         onSearchChange={setBuscaTermoFabricante}
       >
+        {/* Lógica Mágica: Se o que o usuário digitou não existe na lista, mostra o botão de adicionar */}
+        {buscaTermoFabricante.trim() !== "" && !fabricantesUnicos.some(fab => String(fab).toLowerCase() === buscaTermoFabricante.toLowerCase()) && (
+          <SearchModalItem
+            title={`+ Adicionar marca: "${buscaTermoFabricante}"`}
+            colorClass="emerald"
+            onClick={() => {
+              setFabricante(buscaTermoFabricante);
+              setModalBuscaFabricante(false);
+              setBuscaTermoFabricante("");
+            }}
+          />
+        )}
+
+        {/* Lista de itens que já existem no banco */}
         {fabricantesUnicos
           .filter((fab) => String(fab).toLowerCase().includes(buscaTermoFabricante.toLowerCase()))
           .map((fab, idx) => (
@@ -322,6 +337,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
           ))}
       </SearchModal>
 
+      {/* MODAL FAMÍLIA */}
       <SearchModal
         isOpen={modalBuscaFamilia}
         onClose={() => setModalBuscaFamilia(false)}
@@ -330,6 +346,20 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
         searchValue={buscaTermoFamilia}
         onSearchChange={setBuscaTermoFamilia}
       >
+        {/* Lógica Mágica: Adicionar Novo */}
+        {buscaTermoFamilia.trim() !== "" && !familiasUnicas.some(fam => String(fam).toLowerCase() === buscaTermoFamilia.toLowerCase()) && (
+          <SearchModalItem
+            title={`+ Adicionar família: "${buscaTermoFamilia}"`}
+            colorClass="emerald"
+            onClick={() => {
+              setFamilia(buscaTermoFamilia);
+              setModalBuscaFamilia(false);
+              setBuscaTermoFamilia("");
+            }}
+          />
+        )}
+
+        {/* Lista de itens que já existem no banco */}
         {familiasUnicas
           .filter((fam) => String(fam).toLowerCase().includes(buscaTermoFamilia.toLowerCase()))
           .map((fam, idx) => (
@@ -346,6 +376,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
           ))}
       </SearchModal>
 
+      {/* MODAL PERFIL */}
       <SearchModal
         isOpen={modalBuscaPerfil}
         onClose={() => setModalBuscaPerfil(false)}
@@ -354,6 +385,20 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
         searchValue={buscaTermoPerfil}
         onSearchChange={setBuscaTermoPerfil}
       >
+        {/* Lógica Mágica: Adicionar Novo */}
+        {buscaTermoPerfil.trim() !== "" && !perfisUnicos.some(perf => String(perf).toLowerCase() === buscaTermoPerfil.toLowerCase()) && (
+          <SearchModalItem
+            title={`+ Adicionar perfil: "${buscaTermoPerfil}"`}
+            colorClass="emerald"
+            onClick={() => {
+              setPerfil(buscaTermoPerfil);
+              setModalBuscaPerfil(false);
+              setBuscaTermoPerfil("");
+            }}
+          />
+        )}
+
+        {/* Lista de itens que já existem no banco */}
         {perfisUnicos
           .filter((perf) => String(perf).toLowerCase().includes(buscaTermoPerfil.toLowerCase()))
           .map((perf, idx) => (
