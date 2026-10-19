@@ -3,9 +3,12 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { Package, DollarSign, Settings2, Image as ImageIcon, Sparkles, Loader2, CheckCircle2, Barcode } from "lucide-react";
+import { Package, DollarSign, Settings2, Image as ImageIcon, Sparkles, Loader2, CheckCircle2, Barcode, Search } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 import { useToast } from "@/shared/hooks/use-toast";
+
+// 1. Importando o Componente de Modal Flutuante
+import { SearchModal, SearchModalItem } from "@/shared/components/ui/SearchModal";
 
 interface FormProdutoProps {
   produtoInicial: any | null;
@@ -18,9 +21,11 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
   const [produtoId, setProdutoId] = useState<string | null>(null);
   const [sku, setSku] = useState("");
   const [nome, setNome] = useState("");
+  
   const [fabricante, setFabricante] = useState("");
   const [familia, setFamilia] = useState(""); 
   const [perfil, setPerfil] = useState(""); 
+  
   const [modelo, setModelo] = useState("");
   const [categoria, setCategoria] = useState("Peça");
   const [condicao, setCondicao] = useState("");
@@ -50,6 +55,16 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
   const [perfisUnicos, setPerfisUnicos] = useState<string[]>([]);
   const [ncmUnicos, setNcmUnicos] = useState<string[]>([]);
   const [cestUnicos, setCestUnicos] = useState<string[]>([]);
+
+  // 2. Estados para controlar a abertura e busca dos novos Modais (Spotlight)
+  const [modalBuscaFabricante, setModalBuscaFabricante] = useState(false);
+  const [buscaTermoFabricante, setBuscaTermoFabricante] = useState("");
+
+  const [modalBuscaFamilia, setModalBuscaFamilia] = useState(false);
+  const [buscaTermoFamilia, setBuscaTermoFamilia] = useState("");
+
+  const [modalBuscaPerfil, setModalBuscaPerfil] = useState(false);
+  const [buscaTermoPerfil, setBuscaTermoPerfil] = useState("");
 
   useEffect(() => {
     const fetchUnicos = async () => {
@@ -126,9 +141,6 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
 
   return (
     <div className="bg-white rounded-xl border shadow-sm">
-      <datalist id="lista-fabricantes">{fabricantesUnicos.map((f, i) => <option key={i} value={f} />)}</datalist>
-      <datalist id="lista-familias">{familiasUnicas.map((f, i) => <option key={i} value={f} />)}</datalist>
-      <datalist id="lista-perfis">{perfisUnicos.map((f, i) => <option key={i} value={f} />)}</datalist>
       <datalist id="lista-ncm">{ncmUnicos.map((f, i) => <option key={i} value={f} />)}</datalist>
       <datalist id="lista-cest">{cestUnicos.map((f, i) => <option key={i} value={f} />)}</datalist>
 
@@ -164,9 +176,40 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
                     <SelectContent className="bg-white z-50"><SelectItem value="Equipamento">Equipamento</SelectItem><SelectItem value="Peça">Peça</SelectItem><SelectItem value="Suprimento">Suprimento</SelectItem></SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2"><label className="text-sm font-medium">Família de Produto</label><Input list="lista-familias" value={familia} onChange={e => setFamilia(e.target.value)} /></div>
-                <div className="space-y-2"><label className="text-sm font-medium">Perfil de Produto</label><Input list="lista-perfis" value={perfil} onChange={e => setPerfil(e.target.value)} /></div>
-                <div className="space-y-2"><label className="text-sm font-medium">Fabricante / Marca</label><Input list="lista-fabricantes" value={fabricante} onChange={e => setFabricante(e.target.value)} /></div>
+                
+                {/* 3. Campos Refatorados com Acionadores do Modal Spotlight */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Família de Produto</label>
+                  <div 
+                    onClick={() => setModalBuscaFamilia(true)}
+                    className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-indigo-400 hover:ring-1 hover:ring-indigo-100 transition-all"
+                  >
+                    <span className={familia ? "font-medium" : "text-slate-400"}>{familia || "Selecionar Família..."}</span>
+                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Perfil de Produto</label>
+                  <div 
+                    onClick={() => setModalBuscaPerfil(true)}
+                    className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-indigo-400 hover:ring-1 hover:ring-indigo-100 transition-all"
+                  >
+                    <span className={perfil ? "font-medium" : "text-slate-400"}>{perfil || "Selecionar Perfil..."}</span>
+                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fabricante / Marca</label>
+                  <div 
+                    onClick={() => setModalBuscaFabricante(true)}
+                    className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-indigo-400 hover:ring-1 hover:ring-indigo-100 transition-all"
+                  >
+                    <span className={fabricante ? "font-medium" : "text-slate-400"}>{fabricante || "Selecionar Fabricante..."}</span>
+                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  </div>
+                </div>
 
                 {categoria === "Suprimento" && (
                   <div className="space-y-2">
@@ -253,6 +296,80 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
           </div>
         </div>
       </Tabs>
+
+      {/* 4. Modais Ocultos do tipo Spotlight Flutuante */}
+      <SearchModal
+        isOpen={modalBuscaFabricante}
+        onClose={() => setModalBuscaFabricante(false)}
+        title="Selecionar Fabricante/Marca"
+        placeholder="Digite a marca do equipamento..."
+        searchValue={buscaTermoFabricante}
+        onSearchChange={setBuscaTermoFabricante}
+      >
+        {fabricantesUnicos
+          .filter((fab) => String(fab).toLowerCase().includes(buscaTermoFabricante.toLowerCase()))
+          .map((fab, idx) => (
+            <SearchModalItem
+              key={idx}
+              title={String(fab)}
+              colorClass="indigo"
+              onClick={() => {
+                setFabricante(String(fab));
+                setModalBuscaFabricante(false);
+                setBuscaTermoFabricante("");
+              }}
+            />
+          ))}
+      </SearchModal>
+
+      <SearchModal
+        isOpen={modalBuscaFamilia}
+        onClose={() => setModalBuscaFamilia(false)}
+        title="Selecionar Família"
+        placeholder="Ex: Jato de Tinta, Laser, Ferramentas..."
+        searchValue={buscaTermoFamilia}
+        onSearchChange={setBuscaTermoFamilia}
+      >
+        {familiasUnicas
+          .filter((fam) => String(fam).toLowerCase().includes(buscaTermoFamilia.toLowerCase()))
+          .map((fam, idx) => (
+            <SearchModalItem
+              key={idx}
+              title={String(fam)}
+              colorClass="purple"
+              onClick={() => {
+                setFamilia(String(fam));
+                setModalBuscaFamilia(false);
+                setBuscaTermoFamilia("");
+              }}
+            />
+          ))}
+      </SearchModal>
+
+      <SearchModal
+        isOpen={modalBuscaPerfil}
+        onClose={() => setModalBuscaPerfil(false)}
+        title="Selecionar Perfil"
+        placeholder="Ex: Monocromática, Policromática..."
+        searchValue={buscaTermoPerfil}
+        onSearchChange={setBuscaTermoPerfil}
+      >
+        {perfisUnicos
+          .filter((perf) => String(perf).toLowerCase().includes(buscaTermoPerfil.toLowerCase()))
+          .map((perf, idx) => (
+            <SearchModalItem
+              key={idx}
+              title={String(perf)}
+              colorClass="emerald"
+              onClick={() => {
+                setPerfil(String(perf));
+                setModalBuscaPerfil(false);
+                setBuscaTermoPerfil("");
+              }}
+            />
+          ))}
+      </SearchModal>
+      
     </div>
   );
 }
