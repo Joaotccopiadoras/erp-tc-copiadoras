@@ -7,7 +7,7 @@ import {
   Table as TableIcon, Database, Edit, ArrowLeftRight, FileText, X, MapPin, CheckCircle2, Activity, RefreshCcw
 } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
-import { useExportacaoN8N } from "@/shared/hooks/useExportacaoN8N";
+import { useExportacaoN8N } from "@/shared/hooks/useExportN8N";
 import { SearchModal, SearchModalItem } from "@/shared/components/ui/SearchModal";
 
 interface ListaProdutosProps {
