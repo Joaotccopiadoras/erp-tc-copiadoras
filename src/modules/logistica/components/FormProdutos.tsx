@@ -3,11 +3,10 @@ import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
-import { Package, DollarSign, Settings2, Image as ImageIcon, Sparkles, Loader2, CheckCircle2, Barcode, Search } from "lucide-react";
+import { Package, DollarSign, Settings2, Image as ImageIcon, Sparkles, Loader2, CheckCircle2, Barcode, Search, FileDigit } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/client";
 import { useToast } from "@/shared/hooks/use-toast";
 
-// 1. Importando o Componente de Modal Flutuante
 import { SearchModal, SearchModalItem } from "@/shared/components/ui/SearchModal";
 
 interface FormProdutoProps {
@@ -44,6 +43,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
   const [precoVenda, setPrecoVenda] = useState("");
   const [estoqueMinimo, setEstoqueMinimo] = useState("");
   const [pontoPedido, setPontoPedido] = useState("");
+  
   const [ncm, setNcm] = useState("");
   const [cest, setCest] = useState("");
 
@@ -56,7 +56,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
   const [ncmUnicos, setNcmUnicos] = useState<string[]>([]);
   const [cestUnicos, setCestUnicos] = useState<string[]>([]);
 
-  // 2. Estados para controlar a abertura e busca dos novos Modais (Spotlight)
+  // Estados dos modais
   const [modalBuscaFabricante, setModalBuscaFabricante] = useState(false);
   const [buscaTermoFabricante, setBuscaTermoFabricante] = useState("");
 
@@ -65,6 +65,13 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
 
   const [modalBuscaPerfil, setModalBuscaPerfil] = useState(false);
   const [buscaTermoPerfil, setBuscaTermoPerfil] = useState("");
+  
+  // 1. Estados para os Novos Modais de NCM e CEST
+  const [modalBuscaNcm, setModalBuscaNcm] = useState(false);
+  const [buscaTermoNcm, setBuscaTermoNcm] = useState("");
+
+  const [modalBuscaCest, setModalBuscaCest] = useState(false);
+  const [buscaTermoCest, setBuscaTermoCest] = useState("");
 
   useEffect(() => {
     const fetchUnicos = async () => {
@@ -141,8 +148,6 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
 
   return (
     <div className="bg-white rounded-xl border shadow-sm">
-      <datalist id="lista-ncm">{ncmUnicos.map((f, i) => <option key={i} value={f} />)}</datalist>
-      <datalist id="lista-cest">{cestUnicos.map((f, i) => <option key={i} value={f} />)}</datalist>
 
       <Tabs defaultValue="geral" className="w-full">
         <div className="border-b px-4 py-2 bg-slate-50 rounded-t-xl">
@@ -177,14 +182,13 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
                   </Select>
                 </div>
                 
-                {/* 3. Campos Refatorados com Acionadores do Modal Spotlight */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Família de Produto</label>
                   <div 
                     onClick={() => setModalBuscaFamilia(true)}
                     className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-indigo-400 hover:ring-1 hover:ring-indigo-100 transition-all"
                   >
-                    <span className={familia ? "font-medium" : "text-slate-400"}>{familia || "Selecionar Família..."}</span>
+                    <span className={familia ? "font-medium" : "text-slate-400 truncate"}>{familia || "Selecionar Família..."}</span>
                     <Search className="w-4 h-4 text-slate-400 shrink-0" />
                   </div>
                 </div>
@@ -195,7 +199,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
                     onClick={() => setModalBuscaPerfil(true)}
                     className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-indigo-400 hover:ring-1 hover:ring-indigo-100 transition-all"
                   >
-                    <span className={perfil ? "font-medium" : "text-slate-400"}>{perfil || "Selecionar Perfil..."}</span>
+                    <span className={perfil ? "font-medium" : "text-slate-400 truncate"}>{perfil || "Selecionar Perfil..."}</span>
                     <Search className="w-4 h-4 text-slate-400 shrink-0" />
                   </div>
                 </div>
@@ -206,7 +210,7 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
                     onClick={() => setModalBuscaFabricante(true)}
                     className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-indigo-400 hover:ring-1 hover:ring-indigo-100 transition-all"
                   >
-                    <span className={fabricante ? "font-medium" : "text-slate-400"}>{fabricante || "Selecionar Fabricante..."}</span>
+                    <span className={fabricante ? "font-medium" : "text-slate-400 truncate"}>{fabricante || "Selecionar Fabricante..."}</span>
                     <Search className="w-4 h-4 text-slate-400 shrink-0" />
                   </div>
                 </div>
@@ -267,9 +271,40 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
           <TabsContent value="financeiro" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
-                <div className="flex justify-between items-center border-b pb-2"><h3 className="text-sm font-bold text-slate-800">Dados Fiscais</h3><Button type="button" size="sm" variant="outline" className="gap-2 text-violet-600 border-violet-200" onClick={sugerirFiscalComIA} disabled={carregandoIAFiscal}>{carregandoIAFiscal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Sugerir com IA</Button></div>
-                <div className="space-y-2"><label className="text-sm font-medium">NCM</label><Input list="lista-ncm" value={ncm} onChange={e => setNcm(e.target.value)} className="bg-white" /></div>
-                <div className="space-y-2"><label className="text-sm font-medium">CEST</label><Input list="lista-cest" value={cest} onChange={e => setCest(e.target.value)} className="bg-white" /></div>
+                <div className="flex justify-between items-center border-b pb-2">
+                  <h3 className="text-sm font-bold text-slate-800">Dados Fiscais</h3>
+                  <Button type="button" size="sm" variant="outline" className="gap-2 text-violet-600 border-violet-200" onClick={sugerirFiscalComIA} disabled={carregandoIAFiscal}>
+                    {carregandoIAFiscal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Sugerir com IA
+                  </Button>
+                </div>
+                
+                {/* 2. Campo NCM Mapeado para o Spotlight */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">NCM</label>
+                  <div 
+                    onClick={() => setModalBuscaNcm(true)}
+                    className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-violet-400 hover:ring-1 hover:ring-violet-100 transition-all"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <FileDigit className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className={ncm ? "font-medium truncate" : "text-slate-400"}>{ncm || "Selecionar NCM..."}</span>
+                    </div>
+                    <Search className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
+                  </div>
+                </div>
+                
+                {/* 3. Campo CEST Mapeado para o Spotlight */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">CEST</label>
+                  <div 
+                    onClick={() => setModalBuscaCest(true)}
+                    className="flex items-center justify-between h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 cursor-pointer hover:border-violet-400 hover:ring-1 hover:ring-violet-100 transition-all"
+                  >
+                    <span className={cest ? "font-medium truncate" : "text-slate-400"}>{cest || "Selecionar CEST..."}</span>
+                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  </div>
+                </div>
+                
               </div>
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
                 <div className="flex justify-between items-center border-b pb-2"><h3 className="text-sm font-bold text-slate-800">Precificação</h3></div>
@@ -298,6 +333,45 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
       </Tabs>
 
       {/* 4. Modais Ocultos do tipo Spotlight Flutuante */}
+      
+      {/* MODAL NCM */}
+      <SearchModal
+        isOpen={modalBuscaNcm}
+        onClose={() => setModalBuscaNcm(false)}
+        title="Selecionar NCM"
+        placeholder="Digite o código ou a descrição..."
+        searchValue={buscaTermoNcm}
+        onSearchChange={setBuscaTermoNcm}
+      >
+        {buscaTermoNcm.trim() !== "" && !ncmUnicos.some(n => String(n).toLowerCase() === buscaTermoNcm.toLowerCase()) && (
+          <SearchModalItem title={`+ Adicionar NCM: "${buscaTermoNcm}"`} colorClass="violet" onClick={() => { setNcm(buscaTermoNcm); setModalBuscaNcm(false); setBuscaTermoNcm(""); }} />
+        )}
+        {ncmUnicos
+          .filter((n) => String(n).toLowerCase().includes(buscaTermoNcm.toLowerCase()))
+          .map((n, idx) => (
+            <SearchModalItem key={idx} title={String(n)} colorClass="slate" onClick={() => { setNcm(String(n)); setModalBuscaNcm(false); setBuscaTermoNcm(""); }} />
+          ))}
+      </SearchModal>
+
+      {/* MODAL CEST */}
+      <SearchModal
+        isOpen={modalBuscaCest}
+        onClose={() => setModalBuscaCest(false)}
+        title="Selecionar CEST"
+        placeholder="Digite o código ou a descrição..."
+        searchValue={buscaTermoCest}
+        onSearchChange={setBuscaTermoCest}
+      >
+        {buscaTermoCest.trim() !== "" && !cestUnicos.some(c => String(c).toLowerCase() === buscaTermoCest.toLowerCase()) && (
+          <SearchModalItem title={`+ Adicionar CEST: "${buscaTermoCest}"`} colorClass="violet" onClick={() => { setCest(buscaTermoCest); setModalBuscaCest(false); setBuscaTermoCest(""); }} />
+        )}
+        {cestUnicos
+          .filter((c) => String(c).toLowerCase().includes(buscaTermoCest.toLowerCase()))
+          .map((c, idx) => (
+            <SearchModalItem key={idx} title={String(c)} colorClass="slate" onClick={() => { setCest(String(c)); setModalBuscaCest(false); setBuscaTermoCest(""); }} />
+          ))}
+      </SearchModal>
+
       {/* MODAL FABRICANTE */}
       <SearchModal
         isOpen={modalBuscaFabricante}
@@ -307,33 +381,13 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
         searchValue={buscaTermoFabricante}
         onSearchChange={setBuscaTermoFabricante}
       >
-        {/* Lógica Mágica: Se o que o usuário digitou não existe na lista, mostra o botão de adicionar */}
         {buscaTermoFabricante.trim() !== "" && !fabricantesUnicos.some(fab => String(fab).toLowerCase() === buscaTermoFabricante.toLowerCase()) && (
-          <SearchModalItem
-            title={`+ Adicionar marca: "${buscaTermoFabricante}"`}
-            colorClass="emerald"
-            onClick={() => {
-              setFabricante(buscaTermoFabricante);
-              setModalBuscaFabricante(false);
-              setBuscaTermoFabricante("");
-            }}
-          />
+          <SearchModalItem title={`+ Adicionar marca: "${buscaTermoFabricante}"`} colorClass="emerald" onClick={() => { setFabricante(buscaTermoFabricante); setModalBuscaFabricante(false); setBuscaTermoFabricante(""); }} />
         )}
-
-        {/* Lista de itens que já existem no banco */}
         {fabricantesUnicos
           .filter((fab) => String(fab).toLowerCase().includes(buscaTermoFabricante.toLowerCase()))
           .map((fab, idx) => (
-            <SearchModalItem
-              key={idx}
-              title={String(fab)}
-              colorClass="indigo"
-              onClick={() => {
-                setFabricante(String(fab));
-                setModalBuscaFabricante(false);
-                setBuscaTermoFabricante("");
-              }}
-            />
+            <SearchModalItem key={idx} title={String(fab)} colorClass="indigo" onClick={() => { setFabricante(String(fab)); setModalBuscaFabricante(false); setBuscaTermoFabricante(""); }} />
           ))}
       </SearchModal>
 
@@ -346,33 +400,13 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
         searchValue={buscaTermoFamilia}
         onSearchChange={setBuscaTermoFamilia}
       >
-        {/* Lógica Mágica: Adicionar Novo */}
         {buscaTermoFamilia.trim() !== "" && !familiasUnicas.some(fam => String(fam).toLowerCase() === buscaTermoFamilia.toLowerCase()) && (
-          <SearchModalItem
-            title={`+ Adicionar família: "${buscaTermoFamilia}"`}
-            colorClass="emerald"
-            onClick={() => {
-              setFamilia(buscaTermoFamilia);
-              setModalBuscaFamilia(false);
-              setBuscaTermoFamilia("");
-            }}
-          />
+          <SearchModalItem title={`+ Adicionar família: "${buscaTermoFamilia}"`} colorClass="emerald" onClick={() => { setFamilia(buscaTermoFamilia); setModalBuscaFamilia(false); setBuscaTermoFamilia(""); }} />
         )}
-
-        {/* Lista de itens que já existem no banco */}
         {familiasUnicas
           .filter((fam) => String(fam).toLowerCase().includes(buscaTermoFamilia.toLowerCase()))
           .map((fam, idx) => (
-            <SearchModalItem
-              key={idx}
-              title={String(fam)}
-              colorClass="purple"
-              onClick={() => {
-                setFamilia(String(fam));
-                setModalBuscaFamilia(false);
-                setBuscaTermoFamilia("");
-              }}
-            />
+            <SearchModalItem key={idx} title={String(fam)} colorClass="purple" onClick={() => { setFamilia(String(fam)); setModalBuscaFamilia(false); setBuscaTermoFamilia(""); }} />
           ))}
       </SearchModal>
 
@@ -385,33 +419,13 @@ export default function FormProduto({ produtoInicial, onVoltar }: FormProdutoPro
         searchValue={buscaTermoPerfil}
         onSearchChange={setBuscaTermoPerfil}
       >
-        {/* Lógica Mágica: Adicionar Novo */}
         {buscaTermoPerfil.trim() !== "" && !perfisUnicos.some(perf => String(perf).toLowerCase() === buscaTermoPerfil.toLowerCase()) && (
-          <SearchModalItem
-            title={`+ Adicionar perfil: "${buscaTermoPerfil}"`}
-            colorClass="emerald"
-            onClick={() => {
-              setPerfil(buscaTermoPerfil);
-              setModalBuscaPerfil(false);
-              setBuscaTermoPerfil("");
-            }}
-          />
+          <SearchModalItem title={`+ Adicionar perfil: "${buscaTermoPerfil}"`} colorClass="emerald" onClick={() => { setPerfil(buscaTermoPerfil); setModalBuscaPerfil(false); setBuscaTermoPerfil(""); }} />
         )}
-
-        {/* Lista de itens que já existem no banco */}
         {perfisUnicos
           .filter((perf) => String(perf).toLowerCase().includes(buscaTermoPerfil.toLowerCase()))
           .map((perf, idx) => (
-            <SearchModalItem
-              key={idx}
-              title={String(perf)}
-              colorClass="emerald"
-              onClick={() => {
-                setPerfil(String(perf));
-                setModalBuscaPerfil(false);
-                setBuscaTermoPerfil("");
-              }}
-            />
+            <SearchModalItem key={idx} title={String(perf)} colorClass="emerald" onClick={() => { setPerfil(String(perf)); setModalBuscaPerfil(false); setBuscaTermoPerfil(""); }} />
           ))}
       </SearchModal>
       
