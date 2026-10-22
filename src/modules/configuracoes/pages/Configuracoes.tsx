@@ -83,9 +83,7 @@ export default function Configuracoes() {
     if (data) setWebhooks(data);
   };
 
-  const adicionarUsuario = async (e?: React.MouseEvent | React.FormEvent) => {
-    if (e) e.preventDefault();
-
+  const adicionarUsuario = async () => {
     try {
       if (!novoEmail || !novoEmail.includes("@") || !novoNomeUsuario || !novoNomeUsuario.trim() || !novaSenha || !novaSenha.trim()) {
         window.alert("⚠️ Erro: Preencha todos os campos obrigatórios (Nome, E-mail válido e Senha).");
@@ -98,68 +96,60 @@ export default function Configuracoes() {
 
       setSalvandoSeguranca(true);
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      if (!supabaseUrl || !supabaseKey) {
-        window.alert("❌ Erro Crítico: Chaves do Supabase não encontradas.");
-        setSalvandoSeguranca(false);
-        return;
-      }
+      // 1. Pega diretamente a sessão atual do Supabase (substitui a variável inexistente 'usuarioAtual')
+      const { data: adminSessao } = await supabase.auth.getUser();
+      const adminEmail = adminSessao?.user?.email;
 
-      // Descobre o tenant_id do Administrador que está a fazer o cadastro
-      const { data: adminData } = await supabase
+      if (!adminEmail) throw new Error("Sessão inválida. Faça login novamente.");
+
+      // 2. Busca o tenant_id da sua empresa para atrelar ao novo funcionário
+      const { data: adminPermissao } = await supabase
         .from('permissoes')
         .select('tenant_id')
-        .or(`email.eq.${usuarioAtual},nome_usuario.eq.${usuarioAtual}`)
+        .eq('email', adminEmail)
         .limit(1)
         .single();
+
+      const adminTenantId = adminPermissao?.tenant_id;
+
+      // 3. Cria um pseudo-email único nos bastidores
+      const emailAutenticacao = `${novoNomeUsuario.toLowerCase().trim().replace(/\s+/g, '')}@sistema.local`;
       
-      const adminTenantId = adminData?.tenant_id;
-
-      if (!adminTenantId) {
-         throw new Error("Erro de Segurança: O seu utilizador não possui um Tenant ID atrelado. Impossível vincular o novo colaborador à sua empresa.");
-      }
-
-      // Cliente fantasma para criar o utilizador sem deslogar o Administrador
-      const authGhost = createClient(supabaseUrl, supabaseKey, { 
-        auth: { persistSession: false, autoRefreshToken: false } 
-      });
-
-      // Cadastra no Supabase Auth
-      const { error: authError } = await authGhost.auth.signUp({
-        email: novoEmail.toLowerCase().trim(),
+      // 4. Cadastra no Auth
+      const { error: authError } = await supabase.auth.signUp({
+        email: emailAutenticacao,
         password: novaSenha,
       });
 
-      if (authError) {
-        throw new Error(`Erro do Supabase: ${authError.message}`);
-      }
+      if (authError) throw new Error("Erro no Supabase Auth: " + authError.message);
 
-      // Salva a Ficha do Utilizador na Tabela de Permissões enviando o tenant_id da sua empresa
-      const { error: dbError } = await supabase.from("permissoes").insert([{ 
-        tenant_id: adminTenantId,
+      // 5. Prepara os dados para salvar na tabela de permissões
+      const payload: any = { 
         email: novoEmail.toLowerCase().trim(), 
+        email_auth: emailAutenticacao,
         nome_usuario: novoNomeUsuario.toLowerCase().trim(),
         acesso_financeiro: false, 
         is_admin: false, 
         departamento: 'Geral', 
         perfil_operacional: 'Nenhum' 
-      }]);
+      };
+
+      if (adminTenantId) payload.tenant_id = adminTenantId;
+
+      const { error: dbError } = await supabase.from("permissoes").insert([payload]);
       
       if (dbError) throw new Error("Erro na tabela de permissões: " + dbError.message);
 
-      window.alert("🎉 Utilizador cadastrado com sucesso!");
-      toast({ title: "Sucesso", description: "Utilizador criado com sucesso!" });
+      window.alert("🎉 Utilizador adicionado com sucesso!");
       
       setNovoEmail(""); 
       setNovoNomeUsuario(""); 
       setNovaSenha("");
-      carregarDadosSeguranca();
+      // Recarrega a tabela na tela (ajuste o nome da função se a sua for diferente)
+      if (typeof carregarDadosSeguranca === "function") carregarDadosSeguranca();
       
     } catch (erro: any) { 
       window.alert("❌ Falha ao cadastrar: " + erro.message);
-      toast({ title: "Erro no Cadastro", description: erro.message, variant: "destructive" }); 
     } finally {
       setSalvandoSeguranca(false);
     }
